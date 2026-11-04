@@ -1,0 +1,90 @@
+#!/bin/sh
+set -eu
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin LANG=C
+umask 077
+fail() { echo "Vult: $*" >&2; exit 1; }
+
+[ "$(/usr/bin/id -u)" = 0 ] || fail "Administrator installation is required."
+[ "${3:-/}" = / ] || fail "Install on the startup volume."
+base="/Library/Application Support/ai.vult.ledger"
+data="$base/data"
+binary=/Library/PrivilegedHelperTools/ai.vult.ledger/vult
+
+if ! /usr/bin/dscl . -read /Users/_vultledger >/dev/null 2>&1; then
+    selected=
+    number=400
+    while [ "$number" -lt 500 ]; do
+        if ! /usr/bin/dscl . -list /Users UniqueID | /usr/bin/awk '{print $2}' | /usr/bin/grep -qx "$number" &&
+           ! /usr/bin/dscl . -list /Groups PrimaryGroupID | /usr/bin/awk '{print $2}' | /usr/bin/grep -qx "$number"; then
+            selected=$number
+            break
+        fi
+        number=$((number + 1))
+    done
+    [ -n "$selected" ] || fail "No unused service identity is available."
+    /usr/bin/dscl . -create /Groups/_vultledger
+    /usr/bin/dscl . -create /Groups/_vultledger PrimaryGroupID "$selected"
+    /usr/bin/dscl . -create /Groups/_vultledger Password '*'
+    /usr/bin/dscl . -create /Users/_vultledger
+    /usr/bin/dscl . -create /Users/_vultledger UniqueID "$selected"
+    /usr/bin/dscl . -create /Users/_vultledger PrimaryGroupID "$selected"
+    /usr/bin/dscl . -create /Users/_vultledger RealName 'Vult Ledger'
+    /usr/bin/dscl . -create /Users/_vultledger NFSHomeDirectory /var/empty
+    /usr/bin/dscl . -create /Users/_vultledger UserShell /usr/bin/false
+    /usr/bin/dscl . -create /Users/_vultledger Password '*'
+    /usr/bin/dscl . -create /Users/_vultledger IsHidden 1
+    /usr/sbin/dseditgroup -o edit -a _vultledger -t user _vultledger
+fi
+uid=$(/usr/bin/dscl . -read /Users/_vultledger UniqueID | /usr/bin/awk '{print $2}')
+gid=$(/usr/bin/dscl . -read /Users/_vultledger PrimaryGroupID | /usr/bin/awk '{print $2}')
+[ "$uid" -gt 0 ] && [ "$gid" -gt 0 ] || fail "Invalid dedicated service identity."
+
+/bin/mkdir -p "$base"
+/usr/sbin/chown root:wheel "$base"
+/bin/chmod -N "$base"
+/bin/chmod 0755 "$base"
+if [ ! -e "$base/installation" ]; then
+    /usr/bin/printf 'vult-service-v1 %s %s\n' "$uid" "$gid" > "$base/installation"
+    /usr/sbin/chown root:wheel "$base/installation"
+    /bin/chmod 0644 "$base/installation"
+fi
+
+for path in "$data" "$base/socket"; do
+    [ ! -L "$path" ] || fail "A private service directory is a symbolic link."
+    if [ -e "$path" ]; then
+        [ -d "$path" ] && [ "$(/usr/bin/stat -f %u "$path")" = "$uid" ] || fail "A private service directory has an unexpected owner."
+    else
+        /bin/mkdir "$path"
+        /usr/sbin/chown "$uid:$gid" "$path"
+    fi
+    /bin/chmod -N "$path"
+done
+/bin/chmod 0700 "$data"
+/bin/chmod 0755 "$base/socket"
+"$binary" _install
+
+# Install a shell shortcut only into protected directories, never over a command.
+safe_shortcut=yes
+for path in /usr /usr/local /usr/local/bin; do
+    if [ ! -d "$path" ] || [ -L "$path" ]; then safe_shortcut=no; break; fi
+    if [ "$(/usr/bin/stat -f %u "$path")" != 0 ]; then safe_shortcut=no; fi
+    mode=$(/usr/bin/stat -f %Lp "$path")
+    if [ $((0$mode & 0022)) -ne 0 ]; then safe_shortcut=no; fi
+    if /bin/ls -lde "$path" | /usr/bin/tail -n +2 | /usr/bin/grep -q ' allow '; then safe_shortcut=no; fi
+done
+if [ "$safe_shortcut" = yes ] && [ ! -e /usr/local/bin/vult ] && [ ! -L /usr/local/bin/vult ]; then
+    /bin/ln -s "$binary" /usr/local/bin/vult
+fi
+
+/bin/launchctl bootstrap system /Library/LaunchDaemons/ai.vult.ledger.plist
+/bin/launchctl kickstart system/ai.vult.ledger
+attempt=0
+while [ "$attempt" -lt 30 ]; do
+    if "$binary" status >/dev/null 2>&1; then
+        echo "Vult installed. Run $binary init from your own terminal."
+        exit 0
+    fi
+    attempt=$((attempt + 1))
+    /bin/sleep 1
+done
+fail "The ledger did not become ready. Stored data was not reinitialized; inspect the service log."

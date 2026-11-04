@@ -1,0 +1,68 @@
+#!/bin/sh
+set -eu
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin LANG=C
+umask 077
+
+fail() { echo "Vult: $*" >&2; exit 1; }
+safe_root_directory() {
+    path=$1
+    [ ! -L "$path" ] || fail "A protected directory is a symbolic link."
+    [ ! -e "$path" ] && return
+    [ -d "$path" ] || fail "A protected directory is not a directory."
+    [ "$(/usr/bin/stat -f %u "$path")" = 0 ] || fail "A protected directory is not owned by root."
+    mode=$(/usr/bin/stat -f %Lp "$path")
+    [ $((0$mode & 0022)) -eq 0 ] || fail "A protected directory is writable by other users."
+    if /bin/ls -lde "$path" | /usr/bin/tail -n +2 | /usr/bin/grep -q ' allow '; then
+        fail "A protected directory has an unsupported access control list."
+    fi
+}
+
+[ "$(/usr/bin/id -u)" = 0 ] || fail "Administrator installation is required."
+[ "${3:-/}" = / ] || fail "Install on the startup volume."
+[ "$(/usr/bin/uname -m)" = arm64 ] || fail "Apple Silicon is required."
+major=$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d. -f1)
+[ "$major" -ge 26 ] || fail "macOS 26 or later is required."
+
+for path in /Library /Library/PrivilegedHelperTools /Library/PrivilegedHelperTools/ai.vult.ledger "/Library/Application Support" "/Library/Application Support/ai.vult.ledger" /Library/LaunchDaemons; do
+    safe_root_directory "$path"
+done
+
+marker="/Library/Application Support/ai.vult.ledger/installation"
+if /usr/bin/dscl . -read /Users/_vultledger >/dev/null 2>&1; then
+    [ -f "$marker" ] && [ ! -L "$marker" ] || fail "The service account already exists without an installation record."
+    [ "$(/usr/bin/stat -f %u "$marker")" = 0 ] || fail "Invalid installation record."
+    [ "$(/usr/bin/stat -f %Lp "$marker")" = 644 ] || fail "Invalid installation record permissions."
+    uid=$(/usr/bin/dscl . -read /Users/_vultledger UniqueID | /usr/bin/awk '{print $2}')
+    gid=$(/usr/bin/dscl . -read /Users/_vultledger PrimaryGroupID | /usr/bin/awk '{print $2}')
+    [ "$(/bin/cat "$marker")" = "vult-service-v1 $uid $gid" ] || fail "The service identity changed."
+    data="/Library/Application Support/ai.vult.ledger/data"
+    [ -d "$data" ] && [ ! -L "$data" ] || fail "Stored data is missing; recovery is required."
+    [ "$(/usr/bin/stat -f %u "$data")" = "$uid" ] || fail "Stored data has an unexpected owner."
+    config="$data/configuration.json"
+    [ -f "$config" ] && [ ! -L "$config" ] || fail "Stored configuration is missing; recovery is required."
+    [ "$(/usr/bin/stat -f %u "$config")" = "$uid" ] && [ "$(/usr/bin/stat -f %Lp "$config")" = 400 ] || fail "Stored configuration is not protected."
+elif [ -e "$marker" ] || /usr/bin/dscl . -read /Groups/_vultledger >/dev/null 2>&1; then
+    fail "An incomplete installation needs administrator inspection. No records were replaced."
+fi
+
+# Stop the prior daemon and its private PostgreSQL before replacing software.
+binary=/Library/PrivilegedHelperTools/ai.vult.ledger/vult
+if [ -e "$binary" ]; then
+    [ -f "$binary" ] && [ ! -L "$binary" ] && [ "$(/usr/bin/stat -f %u "$binary")" = 0 ] || fail "Invalid installed control program."
+    for file in "$binary" /Library/PrivilegedHelperTools/ai.vult.ledger/program-files.json; do
+        [ -f "$file" ] && [ ! -L "$file" ] || fail "Missing protected program inventory."
+        [ "$(/usr/bin/stat -f %u "$file")" = 0 ] && [ "$(/usr/bin/stat -f %l "$file")" = 1 ] || fail "Invalid installed program ownership."
+        mode=$(/usr/bin/stat -f %Lp "$file")
+        [ $((0$mode & 0022)) -eq 0 ] || fail "Installed program files are writable by other users."
+        if /bin/ls -lde "$file" | /usr/bin/tail -n +2 | /usr/bin/grep -q ' allow '; then
+            fail "Installed program files have an unsupported access control list."
+        fi
+    done
+    expected=$(/usr/bin/plutil -extract files.vult raw -o - /Library/PrivilegedHelperTools/ai.vult.ledger/program-files.json) || fail "Invalid installed program inventory."
+    [ "${#expected}" = 64 ] || fail "Invalid installed program checksum."
+    case "$expected" in *[!0-9a-f]*) fail "Invalid installed program checksum." ;; esac
+    /usr/bin/printf '%s  %s\n' "$expected" "$binary" | /usr/bin/shasum -a 256 -c - || fail "The installed control program changed."
+    "$binary" _stop || fail "Could not stop the installed ledger and database."
+elif /bin/launchctl print system/ai.vult.ledger >/dev/null 2>&1; then
+    fail "The running service has no control program; no files were replaced."
+fi

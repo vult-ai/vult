@@ -1,0 +1,43 @@
+#!/bin/sh
+# Vult @VERSION@ — https://vult.sh
+
+vult_install() {
+    set -eu
+    if [ "$#" -ne 0 ]; then
+        echo 'Vult: This installer does not take arguments.' >&2
+        return 1
+    fi
+    if [ "$(/usr/bin/uname -s)" != Darwin ]; then
+        echo 'Vult: This release requires macOS.' >&2
+        return 1
+    fi
+    case "$(/usr/bin/uname -m)" in
+        @ARCHITECTURES@) ;;
+        *) echo 'Vult: This release does not support this processor.' >&2; return 1 ;;
+    esac
+    major=$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d. -f1)
+    case "$major" in
+        ''|*[!0-9]*) echo 'Vult: Could not determine the macOS version.' >&2; return 1 ;;
+    esac
+    if [ "$major" -lt @MINIMUM_MAJOR@ ]; then
+        echo 'Vult: This release requires macOS @MINIMUM_MAJOR@ or later.' >&2
+        return 1
+    fi
+    if [ "$(/usr/bin/id -u)" -eq 0 ]; then
+        echo 'Vult: Run this command as yourself. macOS will ask for administrator approval.' >&2
+        return 1
+    fi
+    /usr/bin/printf '%s\n' 'Installing Vult @VERSION@. macOS will ask for administrator approval.'
+    /usr/bin/osascript <<'VULT_ADMIN'
+@ROOT_LINES@
+set previousDelimiters to AppleScript's text item delimiters
+set AppleScript's text item delimiters to linefeed
+set installScript to installLines as text
+set AppleScript's text item delimiters to previousDelimiters
+set installCommand to "/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin LANG=C LC_ALL=C /bin/sh -c " & quoted form of installScript
+do shell script installCommand with administrator privileges with prompt "Install Vult @VERSION@ and its protected local ledger."
+VULT_ADMIN
+}
+
+# Keep the entry point last: an incomplete download must not start installation.
+vult_install "$@"

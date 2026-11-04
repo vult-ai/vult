@@ -1,0 +1,7 @@
+/dist/
+/build/
+*.age
+*.sock
+.DS_Store
+__pycache__/
+*.py[cod]

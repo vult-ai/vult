@@ -1,0 +1,171 @@
+package daemon
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/vult-ai/vult/internal/local"
+	"github.com/vult-ai/vult/ledger"
+)
+
+func TestOwnerAuthorizationBindsActionPayloadAndPeer(t *testing.T) {
+	for _, variation := range []string{"valid", "peer", "action", "payload", "expired"} {
+		t.Run(variation, func(t *testing.T) {
+			s := &Server{}
+			payload := marshal(struct {
+				Book string `json:"book"`
+			}{"example"})
+			a := local.Authorization{Action: "export", Digest: local.Digest(json.RawMessage(payload)), UID: 501}
+			if _, e := s.authorize(501, marshal(a)); !errors.Is(e, ledger.ErrDenied) {
+				t.Fatal("non-root authorization succeeded")
+			}
+			out, e := s.authorize(0, marshal(a))
+			if e != nil {
+				t.Fatal(e)
+			}
+			var token struct {
+				Token string `json:"token"`
+			}
+			json.Unmarshal(out, &token)
+			q := local.Request{Method: "export", Authorization: token.Token, Payload: payload}
+			uid := uint32(501)
+			switch variation {
+			case "peer":
+				uid++
+			case "action":
+				q.Method = "backup"
+			case "payload":
+				q.Payload = marshal(struct{}{})
+			case "expired":
+				g := s.grants[tokenKey(token.Token)]
+				g.Expires = time.Now().Add(-time.Second)
+				s.grants[tokenKey(token.Token)] = g
+			}
+			if s.consume(uid, q) != (variation == "valid") {
+				t.Fatal("incorrect authorization verdict")
+			}
+			if s.consume(501, local.Request{Method: "export", Authorization: token.Token, Payload: payload}) {
+				t.Fatal("authorization was replayed")
+			}
+		})
+	}
+}
+
+func TestSessionsArePeerBoundAndBodyAdmissionIsBounded(t *testing.T) {
+	s := &Server{sessions: map[string]session{tokenKey("example"): {UID: 501, Expires: time.Now().Add(time.Hour), Scope: ledger.Scope{BookID: ledger.ID()}}}}
+	if !s.admit(501, local.Header{Method: "get_book", Authorization: "example", Size: 2}) {
+		t.Fatal("valid session denied")
+	}
+	for _, h := range []local.Header{
+		{Method: "authorize", Size: 2}, {Method: "backup", Authorization: "example", Size: 2},
+		{Method: "post_journal", Authorization: "example", Size: (1 << 20) + 1},
+		{Method: "get_book", Authorization: "example", Size: -1},
+		{Method: "unknown", Authorization: "example", Size: 2},
+	} {
+		if s.admit(501, h) {
+			t.Fatal("unapproved body admitted", h.Method)
+		}
+	}
+	if _, ok := s.scope(502, "example"); ok {
+		t.Fatal("session crossed peer boundary")
+	}
+	s.sessions[tokenKey("expired")] = session{UID: 501, Expires: time.Now().Add(-time.Second)}
+	if _, ok := s.scope(501, "expired"); ok {
+		t.Fatal("expired session accepted")
+	}
+	if _, ok := (&Server{}).scope(501, "example"); ok {
+		t.Fatal("restart revived a session")
+	}
+}
+
+func TestSyntheticSocketChecksActualPeerAndRejectsUnauthenticatedCalls(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Fatal("run socket coverage as a regular user")
+	}
+	dir, e := os.MkdirTemp("/tmp", "vult-socket-")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "service.sock")
+	l, e := Listen(path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	s := &Server{}
+	go func() { done <- s.Serve(ctx, l) }()
+	t.Cleanup(func() {
+		cancel()
+		l.Close()
+		select {
+		case e := <-done:
+			if e != nil {
+				t.Error(e)
+			}
+		case <-time.After(7 * time.Second):
+			t.Error("socket did not stop")
+		}
+	})
+	c := local.Client{Socket: path, ExpectedUID: uint32(os.Getuid())}
+	if _, e = c.Call(ctx, "status", "", struct{}{}); e != nil {
+		t.Fatal("real peer check failed", e)
+	}
+	if _, e = c.Call(ctx, "backup", "", struct{}{}); e == nil {
+		t.Fatal("backup lacked authorization")
+	}
+	if _, e = c.Call(ctx, "get_book", "invalid", struct{}{}); e == nil {
+		t.Fatal("unauthenticated financial read")
+	}
+	c.ExpectedUID++
+	if _, e = c.Call(ctx, "status", "", struct{}{}); e == nil {
+		t.Fatal("client trusted the wrong service identity")
+	}
+	// A large unauthenticated header is denied before its body is sent.
+	conn, e := net.Dial("unix", path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(2 * time.Second))
+	json.NewEncoder(conn).Encode(local.Header{Method: "restore", Size: local.MaxMessage})
+	response, e := local.ReadMessage(conn)
+	if e != nil || !strings.Contains(string(response), "access denied") {
+		t.Fatal("unauthenticated large body was not rejected promptly", e)
+	}
+}
+
+func TestEncryptedBackupAuthenticatesContentAndKey(t *testing.T) {
+	plain := []byte(`{"format":"example","amount_minor":"9007199254740993"}`)
+	key := secret()
+	encrypted, e := encryptBackup(plain, key)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if strings.Contains(string(encrypted), string(plain)) {
+		t.Fatal("backup contains plaintext")
+	}
+	decoded, e := decryptBackup(encrypted, key)
+	if e != nil || string(decoded) != string(plain) {
+		t.Fatal("backup round trip failed", e)
+	}
+	if _, e = decryptBackup(encrypted, secret()); e == nil {
+		t.Fatal("wrong key accepted")
+	}
+	corrupt := append([]byte(nil), encrypted...)
+	corrupt[len(corrupt)-1] ^= 1
+	if _, e = decryptBackup(corrupt, key); e == nil {
+		t.Fatal("corruption accepted")
+	}
+	if _, e = decryptBackup(encrypted[:len(encrypted)-8], key); e == nil {
+		t.Fatal("truncation accepted")
+	}
+}
