@@ -6,9 +6,11 @@ import (
 	"net/netip"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/vult-ai/vult/internal/fssecurity"
 	"github.com/vult-ai/vult/ledger"
 )
 
@@ -18,13 +20,16 @@ func ReadPrivateFile(path string, limit int64) ([]byte, error) {
 	if e != nil || !before.Mode().IsRegular() || before.Mode().Perm()&0077 != 0 {
 		return nil, ErrConfiguration
 	}
-	f, e := os.Open(path)
+	f, e := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if e != nil {
 		return nil, ErrConfiguration
 	}
 	defer f.Close()
 	after, e := f.Stat()
 	if e != nil || !os.SameFile(before, after) || !after.Mode().IsRegular() || after.Mode().Perm()&0077 != 0 || after.Size() > limit {
+		return nil, ErrConfiguration
+	}
+	if !fssecurity.NoExtendedACL(f) {
 		return nil, ErrConfiguration
 	}
 	b, e := io.ReadAll(io.LimitReader(f, limit+1))

@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vult-ai/vult/access"
+	"github.com/vult-ai/vult/documents"
 	"github.com/vult-ai/vult/internal/mcpserver"
 	"github.com/vult-ai/vult/internal/strictjson"
 	"github.com/vult-ai/vult/ledger"
@@ -22,8 +23,8 @@ import (
 var ErrResponseLimit = errors.New("response exceeds server limits; request a smaller journal page or contact your operator")
 var errOperation = errors.New("operation unavailable; for a lost write response, look up the original request key")
 
-// TransactionAdmission applies durable quotas only to a new financial request,
-// after retained-outcome lookup, inside the same financial transaction.
+// TransactionAdmission applies durable quotas only to a new write request,
+// after retained-outcome lookup, inside the same ledger transaction.
 // It receives the already-authorized scope and cannot expand ledger authority.
 type TransactionAdmission interface {
 	CheckTransaction(context.Context, pgx.Tx, ledger.Scope, string, json.RawMessage) error
@@ -33,7 +34,7 @@ type OwnerAdmission interface {
 	CheckOwnerTransaction(context.Context, pgx.Tx, string, string, json.RawMessage) error
 }
 
-func remoteCall(ctx context.Context, db *pgxpool.Pool, sessions *access.Service, token string, scope ledger.Scope, admission Admission, method string, input json.RawMessage) (json.RawMessage, error) {
+func remoteCall(ctx context.Context, db *pgxpool.Pool, sessions *access.Service, token string, scope ledger.Scope, admission Admission, transfers *documentTransfers, method string, input json.RawMessage) (json.RawMessage, error) {
 	if !ledger.Supported(method) {
 		return nil, ledger.ErrDenied
 	}
@@ -53,11 +54,39 @@ func remoteCall(ctx context.Context, db *pgxpool.Pool, sessions *access.Service,
 	if admission != nil && admission.Check(ctx, scope, method) != nil {
 		return nil, ledger.ErrDenied
 	}
-	store := ledger.Store{Runtime: db, Authorize: func(ctx context.Context, tx pgx.Tx, s ledger.Scope, m string, b json.RawMessage) error {
+	var vault *documents.Vault
+	if transfers != nil {
+		vault = transfers.vault
+	}
+	store := remoteStore(db, sessions, token, admission, vault)
+	result, e := store.Call(ctx, scope, method, input)
+	if e == nil && method == "get_document" && transfers != nil {
+		var inspection ledger.DocumentInspection
+		if strictjson.Decode(result, &inspection) != nil {
+			return nil, errOperation
+		}
+		result, e = transfers.issue(scope, token, inspection)
+	}
+	if e != nil {
+		for _, safe := range []error{ledger.ErrInvalid, ledger.ErrDenied, ledger.ErrConflict, ledger.ErrNotFound, ledger.ErrUncertain, ErrResponseLimit, documents.ErrIntegrity, documents.ErrUnavailable} {
+			if errors.Is(e, safe) {
+				return nil, safe
+			}
+		}
+		return nil, errOperation
+	}
+	if len(result) > 4<<20 {
+		return nil, ErrResponseLimit
+	}
+	return result, nil
+}
+
+func remoteStore(db *pgxpool.Pool, sessions *access.Service, token string, admission Admission, vault *documents.Vault) ledger.Store {
+	store := ledger.Store{Runtime: db, Documents: vault, Authorize: func(ctx context.Context, tx pgx.Tx, s ledger.Scope, m string, b json.RawMessage) error {
 		if e := sessions.AgentAuthorizer(token)(ctx, tx, s, m, b); e != nil {
 			return ledger.ErrDenied
 		}
-		if m == "list_accounts" || m == "get_trial_balance" || m == "get_balance" {
+		if m == "list_accounts" || m == "get_trial_balance" {
 			var tooMany bool
 			if e := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM public.accounts WHERE tenant_id=$1 AND book_id=$2 OFFSET 2000 LIMIT 1)", s.TenantID, s.BookID).Scan(&tooMany); e != nil {
 				return errOperation
@@ -76,22 +105,10 @@ func remoteCall(ctx context.Context, db *pgxpool.Pool, sessions *access.Service,
 			return nil
 		}
 	}
-	result, e := store.Call(ctx, scope, method, input)
-	if e != nil {
-		for _, safe := range []error{ledger.ErrInvalid, ledger.ErrDenied, ledger.ErrConflict, ledger.ErrNotFound, ledger.ErrUncertain, ErrResponseLimit} {
-			if errors.Is(e, safe) {
-				return nil, safe
-			}
-		}
-		return nil, errOperation
-	}
-	if len(result) > 4<<20 {
-		return nil, ErrResponseLimit
-	}
-	return result, nil
+	return store
 }
 
-func remoteMCP(db *pgxpool.Pool, sessions *access.Service, admission Admission) http.Handler {
+func remoteMCP(db *pgxpool.Pool, sessions *access.Service, admission Admission, transfers *documentTransfers) http.Handler {
 	slots := make(chan struct{}, 4)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if len(r.Header.Values("Cookie")) != 0 || r.URL.RawQuery != "" {
@@ -121,8 +138,8 @@ func remoteMCP(db *pgxpool.Pool, sessions *access.Service, admission Admission) 
 			return mcpserver.NewRemote(func(ctx context.Context, method string, input json.RawMessage) (json.RawMessage, error) {
 				ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 				defer cancel()
-				return remoteCall(ctx, db, sessions, token, scope, admission, method, input)
-			}, scope.Access)
+				return remoteCall(ctx, db, sessions, token, scope, admission, transfers, method, input)
+			}, scope.Access, mcpserver.Options{Documents: transfers != nil})
 		}, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 1 << 20, DisableLocalhostProtection: true, PropagateRequestCancellation: true, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 		// The enclosing ingress validates exact public Host/HTTPS and trusted proxy;
 		// this transport must therefore accept that proxy's loopback connection.

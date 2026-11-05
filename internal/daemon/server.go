@@ -13,12 +13,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vult-ai/vult/documents"
 	"github.com/vult-ai/vult/internal/local"
 	"github.com/vult-ai/vult/internal/strictjson"
 	"github.com/vult-ai/vult/ledger"
 )
 
-const Version = "0.2.0"
+const Version = "0.3.0"
 
 type grant struct {
 	Action, Digest string
@@ -31,12 +32,13 @@ type session struct {
 	Expires time.Time
 }
 type Server struct {
-	Admin       ledger.Admin
-	Ledger      ledger.Store
-	RecoveryKey string
-	mu          sync.Mutex
-	grants      map[string]grant
-	sessions    map[string]session
+	Admin         ledger.Admin
+	Ledger        ledger.Store
+	RecoveryKey   string
+	ProvisionKeys func(context.Context, string) error
+	mu            sync.Mutex
+	grants        map[string]grant
+	sessions      map[string]session
 }
 
 func (s *Server) initMaps() {
@@ -106,6 +108,19 @@ func (s *Server) admit(uid uint32, h local.Header) bool {
 	if h.Size < 2 || h.Size > local.MaxMessage {
 		return false
 	}
+	if h.Method == "document_upload" || h.Method == "document_download" {
+		scope, ok := s.scope(uid, h.Authorization)
+		if !ok || h.Size > 4096 || s.Ledger.Documents == nil {
+			return false
+		}
+		if h.Method == "document_upload" {
+			return scope.Access == "write" && h.StreamSize > 0 && h.StreamSize <= documents.MaxSize
+		}
+		return h.StreamSize == 0
+	}
+	if h.StreamSize != 0 && h.Method != "archive_restore" {
+		return false
+	}
 	if h.Method == "status" {
 		return h.Size <= 128
 	}
@@ -113,6 +128,12 @@ func (s *Server) admit(uid uint32, h local.Header) bool {
 		return uid == 0 && h.Size <= 4096
 	}
 	if local.OwnerAction(h.Method) {
+		if h.Method == "archive_backup" && h.Size > 4096 {
+			return false
+		}
+		if h.Method == "archive_restore" && (h.Size > 4096 || h.StreamSize < 1 || h.StreamSize > local.MaxEncryptedArchive) {
+			return false
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.initMaps()
@@ -291,7 +312,7 @@ func (s *Server) owner(ctx context.Context, uid uint32, method string, input []b
 		if strictjson.Decode(b, &snapshot) != nil {
 			return nil, ledger.ErrInvalid
 		}
-		if e = s.Admin.Restore(ctx, snapshot); e != nil {
+		if e = s.restoreLegacySnapshot(ctx, snapshot); e != nil {
 			return nil, e
 		}
 		s.mu.Lock()
@@ -302,10 +323,8 @@ func (s *Server) owner(ctx context.Context, uid uint32, method string, input []b
 			Connections string `json:"connections"`
 		}{"restored", "reauthorization_required"}), nil
 	case "open_session":
-		var q struct {
-			ConnectionID string `json:"connection_id"`
-		}
-		if decode(&q) != nil {
+		var q local.SessionRequest
+		if decode(&q) != nil || !q.Valid() {
 			return nil, ledger.ErrInvalid
 		}
 		c, e := s.Admin.Connection(ctx, q.ConnectionID)
@@ -337,7 +356,7 @@ func (s *Server) owner(ctx context.Context, uid uint32, method string, input []b
 	return nil, ledger.ErrInvalid
 }
 func safeError(e error) string {
-	for _, known := range []error{ledger.ErrInvalid, ledger.ErrDenied, ledger.ErrConflict, ledger.ErrNotFound, ledger.ErrUncertain} {
+	for _, known := range []error{ledger.ErrInvalid, ledger.ErrDenied, ledger.ErrConflict, ledger.ErrNotFound, ledger.ErrUncertain, ledger.ErrLimit, ledger.ErrArchive, ledger.ErrArchiveCleanup, documents.ErrUnavailable, documents.ErrIntegrity} {
 		if errors.Is(e, known) {
 			return known.Error()
 		}
@@ -391,24 +410,43 @@ func (s *Server) Serve(ctx context.Context, listener *net.UnixListener) error {
 				json.NewEncoder(c).Encode(local.Response{Error: ledger.ErrDenied.Error()})
 				return
 			}
-			c.SetDeadline(time.Now().Add(2 * time.Minute))
-			payload := make([]byte, h.Size)
-			if _, e = io.ReadFull(reader, payload); e != nil {
-				return
-			}
-			q := local.Request{Method: h.Method, Authorization: h.Authorization, Payload: payload}
-			callCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
-			defer cancel()
-			result, e := s.Handle(callCtx, uid, q)
-			response := local.Response{Result: result}
-			if e != nil {
-				response.Result = nil
-				response.Error = safeError(e)
-			}
-			json.NewEncoder(c).Encode(response)
+			s.servePayload(ctx, uid, h, reader, c)
 		}()
 	}
 }
+func (s *Server) servePayload(ctx context.Context, uid uint32, h local.Header, reader io.Reader, c net.Conn) {
+	var e error
+	duration := 90 * time.Second
+	if h.Method == "archive_backup" || h.Method == "archive_restore" {
+		duration = 15 * time.Minute
+	}
+	c.SetDeadline(time.Now().Add(duration + time.Second))
+	callCtx, cancel := context.WithTimeout(ctx, duration)
+	defer cancel()
+	stop := context.AfterFunc(callCtx, func() { c.SetDeadline(time.Now()) })
+	defer stop()
+	payload := make([]byte, h.Size)
+	if _, e = io.ReadFull(reader, payload); e != nil {
+		return
+	}
+	q := local.Request{Method: h.Method, Authorization: h.Authorization, Payload: payload}
+	if h.Method == "archive_backup" || h.Method == "archive_restore" {
+		s.archiveStream(callCtx, uid, q, h.StreamSize, reader, c)
+		return
+	}
+	if h.Method == "document_upload" || h.Method == "document_download" {
+		s.documentStream(callCtx, uid, q, h.StreamSize, reader, c)
+		return
+	}
+	result, e := s.Handle(callCtx, uid, q)
+	response := local.Response{Result: result}
+	if e != nil {
+		response.Result = nil
+		response.Error = safeError(e)
+	}
+	json.NewEncoder(c).Encode(response)
+}
+
 func Listen(path string) (*net.UnixListener, error) {
 	listener, e := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
 	if e != nil {

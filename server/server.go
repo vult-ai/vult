@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vult-ai/vult/access"
+	"github.com/vult-ai/vult/documents"
 	"github.com/vult-ai/vult/ledger"
 	"golang.org/x/time/rate"
 )
@@ -47,6 +48,7 @@ type Options struct {
 	Database  *pgxpool.Pool
 	Access    *Access
 	Admission Admission
+	Documents *documents.Vault
 }
 
 // New constructs the bounded HTTPS ingress. Zero options expose liveness only;
@@ -60,8 +62,9 @@ func New(c Config, options Options) (*http.Server, error) {
 	ready := options.Ready
 	var login *access.HTTP
 	var oauth, mcp, owner, identity http.Handler
+	var transfers *documentTransfers
 	if options.Access == nil {
-		if options.Database != nil || options.Admission != nil {
+		if options.Database != nil || options.Admission != nil || options.Documents != nil {
 			return nil, ErrConfiguration
 		}
 	} else {
@@ -76,7 +79,13 @@ func New(c Config, options Options) (*http.Server, error) {
 		ready = func(ctx context.Context) error { return ledger.Ready(ctx, db) }
 		login, identity = a.HTTP, a.identity
 		oauth = access.NewOAuthHTTP(a.Sessions)
-		mcp = remoteMCP(db, a.Sessions, options.Admission)
+		if options.Documents != nil {
+			if options.Documents.Storage == nil || options.Documents.Keys == nil {
+				return nil, ErrConfiguration
+			}
+			transfers = newDocumentTransfers(c.Origin, db, a.Sessions, options.Admission, options.Documents)
+		}
+		mcp = remoteMCP(db, a.Sessions, options.Admission, transfers)
 		owner = access.NewOwnerHTTP(a.Sessions, a.HTTP, ownerAdmission)
 	}
 	slots := make(chan struct{}, 32)
@@ -103,11 +112,16 @@ func New(c Config, options Options) (*http.Server, error) {
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, MCP-Protocol-Version, MCP-Session-Id, MCP-Method, MCP-Name")
 			w.Header().Set("Access-Control-Expose-Headers", "WWW-Authenticate, MCP-Protocol-Version")
 		}
-		if r.ContentLength > 1<<20 {
+		byteRoute := transfers != nil && strings.HasPrefix(r.URL.Path, transferPrefix)
+		limit := int64(1 << 20)
+		if byteRoute {
+			limit = documents.MaxSize
+		}
+		if r.ContentLength > limit {
 			failure(w, http.StatusRequestEntityTooLarge)
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		if !requests.Allow() {
 			w.Header().Set("Retry-After", "1")
 			failure(w, http.StatusTooManyRequests)
@@ -121,9 +135,17 @@ func New(c Config, options Options) (*http.Server, error) {
 			failure(w, http.StatusTooManyRequests)
 			return
 		}
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		timeout := 10 * time.Second
+		if byteRoute {
+			timeout = 90 * time.Second
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), timeout)
 		defer cancel()
 		r = r.WithContext(ctx)
+		if byteRoute {
+			transfers.ServeHTTP(w, r)
+			return
+		}
 		if credentialRoute(r) && r.Method == "OPTIONS" {
 			w.WriteHeader(204)
 			return

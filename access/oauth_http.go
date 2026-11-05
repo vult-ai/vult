@@ -155,7 +155,7 @@ func (h *OAuthHTTP) authorize(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cookie(w, pendingCookie, request, 300)
-		http.Redirect(w, r, "/oauth/authorize?request="+request, 303)
+		http.Redirect(w, r, "/oauth/authorize?request="+request, http.StatusSeeOther)
 		return
 	}
 	pending, e := r.Cookie(pendingCookie)
@@ -170,12 +170,12 @@ func (h *OAuthHTTP) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	session, e := r.Cookie(SessionCookie)
 	if e != nil {
-		http.Redirect(w, r, "/auth/login", 303)
+		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
 		return
 	}
 	_, e = h.s.Identity(r.Context(), session.Value)
 	if e != nil {
-		http.Redirect(w, r, "/auth/login", 303)
+		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
 		return
 	}
 	books := []bookChoice{}
@@ -262,5 +262,5 @@ func (h *OAuthHTTP) consent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cookie(w, pendingCookie, "", -1)
-	http.Redirect(w, r, destination, 303)
+	http.Redirect(w, r, destination, http.StatusSeeOther)
 }

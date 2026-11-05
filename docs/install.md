@@ -80,9 +80,10 @@ configuration, a missing initialized database, or a missing ledger schema stops
 startup and requires recovery. Installing over these conditions does not create
 an empty replacement or generate replacement keys.
 
-Version 0.2.0 upgrades a recognized v0.1.0 ledger through checksum-verified forward
-migrations. It preserves Books, journal rows, request outcomes, connections and
-local keys. Missing, altered, gapped or unknown migration receipts stop startup
+Version 0.3.0 upgrades recognized v0.1.0 and v0.2.0 ledgers through
+checksum-verified forward migrations. It preserves Books, journal rows, request
+outcomes, connections, originals and local keys. Missing, altered, gapped or
+unknown migration receipts stop startup
 and require recovery; they never trigger a new empty ledger. Released migrations
 are unchanged. PostgreSQL remains on major version 18; a major-version database
 upgrade is not performed by this installer.

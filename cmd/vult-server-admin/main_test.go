@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,9 +14,36 @@ import (
 
 	"github.com/pquerna/otp/totp"
 	"github.com/vult-ai/vult/access"
+	"github.com/vult-ai/vult/documents"
 	"github.com/vult-ai/vult/internal/testutil"
 	"github.com/vult-ai/vult/ledger"
 )
+
+func TestOfflineStatusBrokenPipeCannotTerminateCompletedCommand(t *testing.T) {
+	if os.Getenv("VULT_TEST_STATUS_PIPE") == "1" {
+		os.Args = []string{"vult-server-admin", "--help"}
+		main()
+		os.Exit(0)
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	read.Close()
+	defer write.Close()
+	child := exec.Command(executable, "-test.run=^TestOfflineStatusBrokenPipeCannotTerminateCompletedCommand$")
+	child.Env = append(os.Environ(), "VULT_TEST_STATUS_PIPE=1")
+	child.Stdout = write
+	var diagnostics bytes.Buffer
+	child.Stderr = &diagnostics
+	if err = child.Run(); err != nil {
+		t.Fatal("offline status pipe terminated the command", err, diagnostics.String())
+	}
+}
 
 func TestOfflineSetupKeepsSecretsPrivateAndDoesNotOverwrite(t *testing.T) {
 	db := testutil.New(t)
@@ -76,5 +104,48 @@ func TestOfflineCommandRejectsInvalidInputWithoutNetwork(t *testing.T) {
 		if run(context.Background(), args, &bytes.Buffer{}) == nil {
 			t.Fatal("invalid command accepted")
 		}
+	}
+}
+
+func TestOfflineDocumentKeyIsPrivateAndNeverOverwritten(t *testing.T) {
+	db := testutil.New(t)
+	tenant, err := db.Owner.EnsureTenant(db.Context)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	dsn, input, output := filepath.Join(directory, "operator.dsn"), filepath.Join(directory, "input.json"), filepath.Join(directory, "document-keys.json")
+	if err = os.WriteFile(dsn, []byte(testutil.DSN(db.Admin)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(request{TenantID: tenant})
+	if err = os.WriteFile(input, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"document-key", "--dsn-file", dsn, "--input", input, "--output", output}
+	var console bytes.Buffer
+	if err = run(db.Context, args, &console); err != nil {
+		t.Fatal(err)
+	}
+	keys, err := documents.OpenKeyring(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = keys.Identity(db.Context, tenant, "primary"); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(console.Bytes(), []byte("AGE-SECRET")) {
+		t.Fatal("document key reached console")
+	}
+	if err = run(db.Context, args, &console); err == nil {
+		t.Fatal("existing document keys overwritten")
+	}
+	after, err := os.ReadFile(output)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("retry changed retained keys", err)
 	}
 }

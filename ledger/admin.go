@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -121,7 +122,10 @@ func (a Admin) Revoke(ctx context.Context, id string) error {
 	}
 	if tag.RowsAffected() == 0 {
 		var exists bool
-		if a.DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM public.connections WHERE id=$1)", id).Scan(&exists) != nil || !exists {
+		if e = a.DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM public.connections WHERE id=$1)", id).Scan(&exists); e != nil {
+			return dbError(e)
+		}
+		if !exists {
 			return ErrNotFound
 		}
 	}
@@ -188,33 +192,31 @@ func exportBook(ctx context.Context, tx pgx.Tx, s Scope) (Export, error) {
 	if out.Accounts, e = readAccounts(ctx, tx, s); e != nil {
 		return Export{}, dbError(e)
 	}
-	rows, e := tx.Query(ctx, "SELECT id::text FROM public.entries WHERE tenant_id=$1 AND book_id=$2 ORDER BY sequence LIMIT 100001", s.TenantID, s.BookID)
-	if e != nil {
+	var count int
+	if e = tx.QueryRow(ctx, `SELECT count(*) FROM (SELECT 1 FROM public.entries
+ WHERE tenant_id=$1 AND book_id=$2 LIMIT 100001) bounded`, s.TenantID, s.BookID).Scan(&count); e != nil {
 		return Export{}, dbError(e)
 	}
-	ids := []string{}
-	for rows.Next() {
-		var id string
-		if e = rows.Scan(&id); e != nil {
-			rows.Close()
-			return Export{}, dbError(e)
-		}
-		ids = append(ids, id)
-	}
-	e = rows.Err()
-	rows.Close()
-	if e != nil {
-		return Export{}, dbError(e)
-	}
-	if len(ids) > 100000 {
+	if count > 100000 {
 		return Export{}, errors.New("export exceeds the supported entry limit")
 	}
-	for _, id := range ids {
-		v, e := readEntry(ctx, tx, s, id)
+	if count == 0 {
+		return out, nil
+	}
+	var after int64
+	for {
+		entries, more, e := readEntryPage(ctx, tx, s, after, 100)
 		if e != nil {
 			return Export{}, dbError(e)
 		}
-		out.Entries = append(out.Entries, v)
+		out.Entries = append(out.Entries, entries...)
+		if len(out.Entries) > 100000 || len(out.Entries) == 100000 && more {
+			return Export{}, errors.New("export exceeds the supported entry limit")
+		}
+		if !more {
+			break
+		}
+		after = entries[len(entries)-1].Sequence
 	}
 	return out, nil
 }
@@ -280,14 +282,61 @@ type Snapshot struct {
 
 var snapshotTables = []string{"tenants", "books", "accounts", "account_revisions", "requests", "entries", "lines", "closed_periods"}
 
-func snapshotRows(ctx context.Context, tx pgx.Tx, table string) ([]byte, error) {
-	var b []byte
+func snapshotRows(ctx context.Context, tx pgx.Tx, table, book string, budget int) ([]byte, error) {
+	if budget < 2 {
+		return nil, ErrLimit
+	}
 	projection := "to_jsonb(t)"
 	if table == "books" {
 		projection = "to_jsonb(t)-'write_epoch'"
 	}
-	e := tx.QueryRow(ctx, "SELECT convert_to(coalesce(jsonb_agg(rowdata ORDER BY rowdata::text),'[]'::jsonb)::text,'UTF8') FROM(SELECT "+projection+" AS rowdata FROM public."+pgx.Identifier{table}.Sanitize()+" t) rows").Scan(&b)
-	return b, e
+	query := "SELECT (" + projection + ")::text AS rowdata FROM public." + pgx.Identifier{table}.Sanitize() + " t"
+	var args []any
+	if book != "" {
+		where := "t.book_id=$1"
+		switch table {
+		case "tenants":
+			where = "t.id=(SELECT tenant_id FROM public.books WHERE id=$1)"
+		case "books":
+			where = "t.id=$1"
+		}
+		query += " WHERE " + where
+		args = []any{book}
+	}
+	rows, err := tx.Query(ctx, query+" ORDER BY rowdata", args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	data := []byte{'['}
+	var compact bytes.Buffer
+	for rows.Next() {
+		var row []byte
+		if err := rows.Scan(&row); err != nil {
+			return nil, err
+		}
+		compact.Reset()
+		if err := json.Compact(&compact, row); err != nil {
+			return nil, err
+		}
+		row = compact.Bytes()
+		separator := 0
+		if len(data) > 1 {
+			separator = 1
+		}
+		// Reserve the comma and closing bracket before growing the result buffer.
+		if len(row) > budget-len(data)-separator-1 {
+			return nil, ErrLimit
+		}
+		if separator != 0 {
+			data = append(data, ',')
+		}
+		data = append(data, row...)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return append(data, ']'), nil
 }
 func (a Admin) Snapshot(ctx context.Context) (Snapshot, error) {
 	tx, e := a.DB.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
@@ -295,18 +344,31 @@ func (a Admin) Snapshot(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, e
 	}
 	defer tx.Rollback(context.Background())
+	var documentTable bool
+	if e = tx.QueryRow(ctx, "SELECT to_regclass('public.documents') IS NOT NULL").Scan(&documentTable); e != nil {
+		return Snapshot{}, dbError(e)
+	}
+	if documentTable {
+		var originals bool
+		if e = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM public.documents)").Scan(&originals); e != nil {
+			return Snapshot{}, dbError(e)
+		}
+		if originals {
+			return Snapshot{}, errors.New("documents require a portable archive backup")
+		}
+	}
 	out := Snapshot{Format: "vult-ledger-backup-v1", SchemaSHA256: SchemaSHA256(), CreatedAt: time.Now().UTC(), Tables: map[string]json.RawMessage{}}
 	total := 0
 	for _, t := range snapshotTables {
-		b, e := snapshotRows(ctx, tx, t)
+		b, e := snapshotRows(ctx, tx, t, "", int(maxArchiveMetadata)-total)
 		if e != nil {
 			return Snapshot{}, e
 		}
 		total += len(b)
-		if total > 64<<20 {
-			return Snapshot{}, errors.New("backup exceeds the supported size")
-		}
 		out.Tables[t] = b
+	}
+	if len(raw(out)) > int(maxArchiveMetadata) {
+		return Snapshot{}, ErrLimit
 	}
 	if e = tx.Commit(ctx); e != nil {
 		return Snapshot{}, ErrUncertain
@@ -317,13 +379,27 @@ func (a Admin) Restore(ctx context.Context, s Snapshot) error {
 	if s.Format != "vult-ledger-backup-v1" || s.SchemaSHA256 != SchemaSHA256() || len(s.Tables) != len(snapshotTables) {
 		return ErrInvalid
 	}
-	tx, e := a.DB.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
-	if e != nil {
-		return e
+	tx, err := a.DB.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return dbError(err)
 	}
 	defer tx.Rollback(context.Background())
+	if err = restoreSnapshotRows(ctx, tx, s, snapshotTables); err != nil {
+		return err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return ErrUncertain
+	}
+	return nil
+}
+
+func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder []string) error {
+	var e error
 	if _, e = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(769305014)"); e != nil {
 		return e
+	}
+	if _, e = tx.Exec(ctx, "LOCK TABLE public.books IN SHARE ROW EXCLUSIVE MODE"); e != nil {
+		return dbError(e)
 	}
 	var occupied bool
 	if e = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM public.books) OR EXISTS(SELECT 1 FROM public.connections)").Scan(&occupied); e != nil {
@@ -344,9 +420,13 @@ func (a Admin) Restore(ctx context.Context, s Snapshot) error {
 		"entries":           {"tenant_id", "book_id", "id", "sequence", "receipt_id", "actor_id", "economic_date", "accounting_date", "description", "reversal_of", "recorded_at"},
 		"lines":             {"tenant_id", "book_id", "id", "entry_id", "position", "account_id", "side", "amount_minor", "memo", "reverses_line_id"},
 		"closed_periods":    {"tenant_id", "book_id", "id", "start_date", "end_date", "closed_at"},
+		"documents":         {"tenant_id", "book_id", "id", "sequence", "sha256", "size_bytes", "media_type", "original_name", "storage_id", "key_id", "state", "actor_id", "created_at", "ready_at", "expires_at", "used_at"},
+		"document_uploads":  {"tenant_id", "book_id", "id", "document_id", "storage_id", "actor_id", "connection_id", "receipt_id", "created_at", "expires_at"},
+		"source_citations":  {"tenant_id", "book_id", "id", "source_id", "revision", "sequence", "entry_id", "position", "document_id", "location", "actor_id", "receipt_id", "reason", "recorded_at"},
+		"evidence_links":    {"tenant_id", "book_id", "id", "link_id", "revision", "sequence", "entry_id", "document_id", "role", "action", "actor_id", "receipt_id", "reason", "recorded_at"},
 	}
 	tables := map[string][]map[string]json.RawMessage{}
-	for _, table := range snapshotTables {
+	for _, table := range tableOrder {
 		data, ok := s.Tables[table]
 		if !ok || len(data) > 64<<20 {
 			return ErrInvalid
@@ -363,7 +443,7 @@ func (a Admin) Restore(ctx context.Context, s Snapshot) error {
 				return x < y
 			})
 		}
-		if table == "entries" {
+		if table == "entries" || table == "source_citations" || table == "evidence_links" {
 			sort.SliceStable(rows, func(i, j int) bool {
 				var x, y int64
 				json.Unmarshal(rows[i]["sequence"], &x)
@@ -403,7 +483,7 @@ func (a Admin) Restore(ctx context.Context, s Snapshot) error {
 			}
 		}
 	}
-	for _, table := range snapshotTables[2:] {
+	for _, table := range tableOrder[2:] {
 		for _, row := range tables[table] {
 			var key bookKey
 			if json.Unmarshal(row["tenant_id"], &key.tenant) != nil || json.Unmarshal(row["book_id"], &key.book) != nil {
@@ -420,7 +500,12 @@ func (a Admin) Restore(ctx context.Context, s Snapshot) error {
 		if e = setScope(ctx, tx, Scope{TenantID: key.tenant, BookID: key.book}); e != nil {
 			return e
 		}
-		for _, table := range snapshotTables[2:] {
+		// Only a trusted operator session can select bulk range validation.
+		// Every other deferred journal constraint still runs for every entry.
+		if _, e = tx.Exec(ctx, "SELECT set_config('vult.restore_book',$1,true)", key.tenant+"/"+key.book); e != nil {
+			return dbError(e)
+		}
+		for _, table := range tableOrder[2:] {
 			for _, row := range groups[key][table] {
 				if e = insert(table, row); e != nil {
 					return e
@@ -432,6 +517,14 @@ func (a Admin) Restore(ctx context.Context, s Snapshot) error {
 		if _, e = tx.Exec(ctx, "SET CONSTRAINTS ALL IMMEDIATE"); e != nil {
 			return dbError(e)
 		}
+		// Always check the complete Book before leaving its scope. No financial
+		// rows change afterward; an invalid historical prefix rolls back all Books.
+		if _, e = tx.Exec(ctx, "SELECT public.ledger_validate_restored_book($1,$2)", key.tenant, key.book); e != nil {
+			return dbError(e)
+		}
+		if _, e = tx.Exec(ctx, "SELECT set_config('vult.restore_book','',true)"); e != nil {
+			return dbError(e)
+		}
 		if _, e = tx.Exec(ctx, "SET CONSTRAINTS ALL DEFERRED"); e != nil {
 			return e
 		}
@@ -439,22 +532,24 @@ func (a Admin) Restore(ctx context.Context, s Snapshot) error {
 	// Restored sequences are permanent, while the serialization counter is local.
 	// Advance it beyond all retained entries before accepting another posting.
 	if _, e = tx.Exec(ctx, `UPDATE public.books b SET write_epoch=greatest(b.write_epoch,
- coalesce((SELECT max(e.sequence) FROM public.entries e WHERE e.tenant_id=b.tenant_id AND e.book_id=b.id),0))`); e != nil {
+ coalesce((SELECT max(e.sequence) FROM public.entries e WHERE e.tenant_id=b.tenant_id AND e.book_id=b.id),0),
+ coalesce((SELECT max(d.sequence) FROM public.documents d WHERE d.tenant_id=b.tenant_id AND d.book_id=b.id),0),
+ coalesce((SELECT max(c.sequence) FROM public.source_citations c WHERE c.tenant_id=b.tenant_id AND c.book_id=b.id),0),
+ coalesce((SELECT max(l.sequence) FROM public.evidence_links l WHERE l.tenant_id=b.tenant_id AND l.book_id=b.id),0))`); e != nil {
 		return e
 	}
 	// Compare every retained row before commit; reject any coercion or omission.
-	for _, table := range snapshotTables {
-		actual, e := snapshotRows(ctx, tx, table)
+	remaining := int(maxArchiveMetadata)
+	for _, table := range tableOrder {
+		actual, e := snapshotRows(ctx, tx, table, "", remaining)
 		if e != nil {
 			return e
 		}
+		remaining -= len(actual)
 		var same bool
 		if e = tx.QueryRow(ctx, "SELECT $1::jsonb=$2::jsonb", string(actual), string(s.Tables[table])).Scan(&same); e != nil || !same {
 			return errors.New("restored rows differ from the backup")
 		}
-	}
-	if e = tx.Commit(ctx); e != nil {
-		return ErrUncertain
 	}
 	return nil
 }

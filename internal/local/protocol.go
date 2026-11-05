@@ -32,10 +32,12 @@ type Header struct {
 	Method        string `json:"method"`
 	Authorization string `json:"authorization,omitempty"`
 	Size          int    `json:"size"`
+	StreamSize    int64  `json:"stream_size,omitempty"`
 }
 type Response struct {
-	Result json.RawMessage `json:"result,omitempty"`
-	Error  string          `json:"error,omitempty"`
+	Result     json.RawMessage `json:"result,omitempty"`
+	Error      string          `json:"error,omitempty"`
+	StreamSize int64           `json:"stream_size,omitempty"`
 }
 type Client struct {
 	Socket      string
@@ -45,7 +47,7 @@ type Client struct {
 func NewClient() (Client, error) {
 	u, e := user.Lookup(ServiceUser)
 	if e != nil {
-		return Client{}, errors.New("Vult service is not installed")
+		return Client{}, errors.New("vult service is not installed")
 	}
 	uid, e := strconv.ParseUint(u.Uid, 10, 32)
 	if e != nil || uid == 0 || uint32(uid) == uint32(os.Getuid()) {
@@ -58,25 +60,11 @@ func (c Client) Call(ctx context.Context, method, authorization string, payload 
 	if e != nil {
 		return nil, e
 	}
-	dialer := net.Dialer{}
-	conn, e := dialer.DialContext(ctx, "unix", c.Socket)
+	conn, e := c.dial(ctx)
 	if e != nil {
-		return nil, errors.New("local service unavailable")
+		return nil, e
 	}
 	defer conn.Close()
-	unixConn, ok := conn.(*net.UnixConn)
-	if !ok {
-		return nil, errors.New("local socket required")
-	}
-	uid, e := PeerUID(unixConn)
-	if e != nil || uid != c.ExpectedUID {
-		return nil, errors.New("untrusted local service")
-	}
-	deadline := time.Now().Add(2 * time.Minute)
-	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
-		deadline = d
-	}
-	conn.SetDeadline(deadline)
 	header, e := json.Marshal(Header{Method: method, Authorization: authorization, Size: len(b)})
 	if e != nil || len(b) > MaxMessage {
 		return nil, errors.New("request exceeds supported size")
@@ -102,6 +90,32 @@ func (c Client) Call(ctx context.Context, method, authorization string, payload 
 		return nil, errors.New("missing service result")
 	}
 	return response.Result, nil
+}
+func (c Client) dial(ctx context.Context) (net.Conn, error) {
+	dialer := net.Dialer{}
+	conn, e := dialer.DialContext(ctx, "unix", c.Socket)
+	if e != nil {
+		return nil, errors.New("local service unavailable")
+	}
+	unixConn, ok := conn.(*net.UnixConn)
+	if !ok {
+		conn.Close()
+		return nil, errors.New("local socket required")
+	}
+	uid, e := PeerUID(unixConn)
+	if e != nil || uid != c.ExpectedUID {
+		conn.Close()
+		return nil, errors.New("untrusted local service")
+	}
+	deadline := time.Now().Add(2 * time.Minute)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	if e = conn.SetDeadline(deadline); e != nil {
+		conn.Close()
+		return nil, errors.New("local service unavailable")
+	}
+	return conn, nil
 }
 func ReadMessage(r io.Reader) ([]byte, error) {
 	reader := bufio.NewReaderSize(io.LimitReader(r, MaxMessage+2), 64<<10)

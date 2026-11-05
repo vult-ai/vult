@@ -1,0 +1,4 @@
+FROM scratch
+COPY --chmod=0555 build/vult-server-admin /vult-server-admin
+USER 65532:65532
+ENTRYPOINT ["/vult-server-admin"]

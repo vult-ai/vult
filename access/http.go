@@ -143,7 +143,7 @@ func (h *HTTP) CheckLoginCSRF(r *http.Request) bool {
 }
 
 func (h *HTTP) start(w http.ResponseWriter, r *http.Request) {
-	if len(r.Header.Values("Origin")) != 1 || r.Header.Get("Origin") != h.sessions.origin || len(r.Header.Values("Content-Type")) != 1 || strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") == false {
+	if len(r.Header.Values("Origin")) != 1 || r.Header.Get("Origin") != h.sessions.origin || len(r.Header.Values("Content-Type")) != 1 || !strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
 		fail(w, 403)
 		return
 	}
@@ -165,7 +165,7 @@ func (h *HTTP) start(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cookie(w, attemptCookie, attempt, 300)
-		http.Redirect(w, r, destination, 303)
+		http.Redirect(w, r, destination, http.StatusSeeOther)
 		return
 	}
 	var session string
@@ -215,5 +215,5 @@ func (h *HTTP) signedIn(w http.ResponseWriter, r *http.Request, session string) 
 	if pending, e := r.Cookie("__Host-vult-oauth-request"); e == nil && validToken(pending.Value) {
 		destination = "/oauth/authorize?request=" + pending.Value
 	}
-	http.Redirect(w, r, destination, 303)
+	http.Redirect(w, r, destination, http.StatusSeeOther)
 }

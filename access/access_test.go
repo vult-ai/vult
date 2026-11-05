@@ -3,6 +3,8 @@ package access_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -309,64 +311,89 @@ func TestStaleOwnerSnapshotCannotBypassRevocation(t *testing.T) {
 }
 
 func TestForwardUpgradePreservesExistingBooks(t *testing.T) {
-	db := testutil.New(t)
-	// Construct the actual released database from its unchanged SQL rather than
-	// retaining functions or policies installed by newer forward migrations.
-	sql, e := os.ReadFile("../ledger/migrations/0001_ledger.sql")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if _, e := db.Admin.Exec(db.Context, "DROP SCHEMA access CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public"); e != nil {
-		t.Fatal(e)
-	}
-	if _, e = db.Admin.Exec(db.Context, string(sql)); e != nil {
-		t.Fatal(e)
-	}
-	if _, e = db.Admin.Exec(db.Context, "CREATE TABLE public.schema_receipts(filename text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())"); e != nil {
-		t.Fatal(e)
-	}
-	if _, e = db.Admin.Exec(db.Context, "INSERT INTO public.schema_receipts(filename,sha256) VALUES('0001_ledger.sql',$1)", ledger.SchemaSHA256()); e != nil {
-		t.Fatal(e)
-	}
-	role := pgx.Identifier{db.Role}.Sanitize()
-	for _, grant := range []string{"REVOKE CREATE ON SCHEMA public FROM PUBLIC", "GRANT USAGE ON SCHEMA public TO " + role, "GRANT SELECT ON ALL TABLES IN SCHEMA public TO " + role, "GRANT INSERT ON public.accounts,public.account_revisions,public.entries,public.lines,public.requests TO " + role, "GRANT UPDATE(write_epoch) ON public.books TO " + role, "GRANT UPDATE(id) ON public.connections TO " + role, "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO " + role} {
-		if _, e = db.Admin.Exec(db.Context, grant); e != nil {
-			t.Fatal(e)
-		}
-	}
-	book, scope := db.Book(t, "Existing example")
-	debit, credit := db.Account(t, scope, "1000", "asset"), db.Account(t, scope, "3000", "equity")
-	db.Call(t, scope, "post_journal", ledger.PostJournal{RequestKey: "existing", EconomicDate: "2026-01-01", AccountingDate: "2026-01-01", Description: "Example funding", Lines: []ledger.PostLine{{AccountID: debit.ID, Side: "debit", AmountMinor: "1250"}, {AccountID: credit.ID, Side: "credit", AmountMinor: "1250"}}})
-	before, e := db.Owner.Snapshot(db.Context)
-	if e != nil {
-		t.Fatal(e)
-	}
-	if e = ledger.Apply(db.Context, db.Admin, db.Role); e != nil {
-		t.Fatal("forward upgrade failed", e)
-	}
-	after, e := db.Owner.Snapshot(db.Context)
-	if e != nil {
-		t.Fatal(e)
-	}
-	for name, rows := range before.Tables {
-		if !bytes.Equal(rows, after.Tables[name]) {
-			t.Fatal("forward upgrade rewrote retained data", name)
-		}
-	}
-	if before.SchemaSHA256 != after.SchemaSHA256 {
-		t.Fatal("v1 backup compatibility changed")
-	}
-	if e = ledger.Ready(db.Context, db.Runtime); e != nil {
-		t.Fatal(e)
-	}
-	if v, e := db.Owner.Verify(db.Context, book.ID); e != nil || v.Entries != 1 {
-		t.Fatal("upgraded journal invalid", e)
-	}
-	if _, e = db.Admin.Exec(db.Context, "UPDATE public.schema_receipts SET sha256=repeat('0',64) WHERE filename='0001_ledger.sql'"); e != nil {
-		t.Fatal(e)
-	}
-	if e = ledger.Apply(db.Context, db.Admin, db.Role); e == nil {
-		t.Fatal("changed released checksum accepted")
+	for _, baseline := range []struct {
+		name  string
+		files []string
+	}{
+		{"v0.1.0", []string{"0001_ledger.sql"}},
+		{"v0.2.0", []string{"0001_ledger.sql", "0002_server_access.sql"}},
+	} {
+		t.Run(baseline.name, func(t *testing.T) {
+			db := testutil.New(t)
+			// Construct the actual released database from its unchanged SQL rather than
+			// retaining functions or policies installed by newer forward migrations.
+			if _, e := db.Admin.Exec(db.Context, "DROP SCHEMA access CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public"); e != nil {
+				t.Fatal(e)
+			}
+			if _, e := db.Admin.Exec(db.Context, "CREATE TABLE public.schema_receipts(filename text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())"); e != nil {
+				t.Fatal(e)
+			}
+			for _, name := range baseline.files {
+				sql, e := os.ReadFile("../ledger/migrations/" + name)
+				if e != nil {
+					t.Fatal(e)
+				}
+				if _, e = db.Admin.Exec(db.Context, string(sql)); e != nil {
+					t.Fatal(e)
+				}
+				sum := sha256.Sum256(sql)
+				if _, e = db.Admin.Exec(db.Context, "INSERT INTO public.schema_receipts(filename,sha256) VALUES($1,$2)", name, hex.EncodeToString(sum[:])); e != nil {
+					t.Fatal(e)
+				}
+			}
+			role := pgx.Identifier{db.Role}.Sanitize()
+			grants := []string{"REVOKE CREATE ON SCHEMA public FROM PUBLIC", "GRANT USAGE ON SCHEMA public TO " + role, "GRANT SELECT ON public.books,public.accounts,public.account_revisions,public.entries,public.lines,public.requests,public.closed_periods,public.connections,public.schema_receipts TO " + role, "GRANT INSERT ON public.accounts,public.account_revisions,public.entries,public.lines,public.requests TO " + role, "GRANT UPDATE(write_epoch) ON public.books TO " + role, "GRANT UPDATE(id) ON public.connections TO " + role}
+			for _, name := range []string{"ledger_context(uuid,uuid)", "ledger_allowed(uuid,uuid,boolean)", "ledger_lock(uuid,uuid)", "ledger_import_owner()"} {
+				grants = append(grants, "GRANT EXECUTE ON FUNCTION public."+name+" TO "+role)
+			}
+			if len(baseline.files) == 2 {
+				grants = append(grants, "GRANT USAGE ON SCHEMA access TO "+role,
+					"GRANT EXECUTE ON FUNCTION access.owner_allowed(uuid),access.owner_write_allowed(uuid),access.delegation_allowed(uuid,boolean),access.require_agent(text,text,uuid,uuid,uuid,uuid,text) TO "+role)
+			}
+			for _, grant := range grants {
+				if _, e := db.Admin.Exec(db.Context, grant); e != nil {
+					t.Fatal(e)
+				}
+			}
+			book, scope := db.Book(t, "Existing example")
+			debit, credit := db.Account(t, scope, "1000", "asset"), db.Account(t, scope, "3000", "equity")
+			db.Call(t, scope, "post_journal", ledger.PostJournal{RequestKey: "existing", EconomicDate: "2026-01-01", AccountingDate: "2026-01-01", Description: "Example funding", Lines: []ledger.PostLine{{AccountID: debit.ID, Side: "debit", AmountMinor: "1250"}, {AccountID: credit.ID, Side: "credit", AmountMinor: "1250"}}})
+			before, e := db.Owner.Snapshot(db.Context)
+			if e != nil {
+				t.Fatal(e)
+			}
+			verification, e := db.Owner.Verify(db.Context, book.ID)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if e = ledger.Apply(db.Context, db.Admin, db.Role); e != nil {
+				t.Fatal("forward upgrade failed", e)
+			}
+			after, e := db.Owner.Snapshot(db.Context)
+			if e != nil {
+				t.Fatal(e)
+			}
+			for name, rows := range before.Tables {
+				if !bytes.Equal(rows, after.Tables[name]) {
+					t.Fatal("forward upgrade rewrote retained data", name)
+				}
+			}
+			if before.SchemaSHA256 != after.SchemaSHA256 {
+				t.Fatal("v1 backup compatibility changed")
+			}
+			if e = ledger.Ready(db.Context, db.Runtime); e != nil {
+				t.Fatal(e)
+			}
+			if v, e := db.Owner.Verify(db.Context, book.ID); e != nil || v != verification || v.Entries != 1 {
+				t.Fatal("upgraded journal invalid", e)
+			}
+			if _, e = db.Admin.Exec(db.Context, "UPDATE public.schema_receipts SET sha256=repeat('0',64) WHERE filename=$1", baseline.files[len(baseline.files)-1]); e != nil {
+				t.Fatal(e)
+			}
+			if e = ledger.Apply(db.Context, db.Admin, db.Role); e == nil {
+				t.Fatal("changed released checksum accepted")
+			}
+		})
 	}
 }
 

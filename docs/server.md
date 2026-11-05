@@ -5,7 +5,8 @@
 
 `GET`/`HEAD /healthz` checks liveness and `/readyz` checks the database schema
 receipt. Configured sign-in is served under `/auth/`, OAuth under `/oauth/`, and
-the eleven ledger tools through `/mcp`. Probe readiness alone does not verify
+the ledger tools through `/mcp`, with document tools when storage is configured.
+Probe readiness alone does not verify
 identity-provider or deployment policy configuration.
 
 ## Build
@@ -164,6 +165,16 @@ prior identity sessions and delegated remote credentials. Recovery is never an
 agent or HTTP operation. Preserve the old key until recovery succeeds and protect
 the new enrollment output.
 
+The offline `revoke-identity` command takes private `issuer` and `subject` input
+with the same `--dsn-file`, `--input` and new `--output` arguments. It invalidates
+that identity's existing browser sessions and delegated agent credentials across
+its tenants, without changing Books or ownership. An unknown identity fails;
+other identities remain connected. This is session/credential revocation, not
+an account-disable operation: block compromised sign-in at the identity provider
+or use built-in recovery before allowing fresh authentication. It is never an
+HTTP or agent operation. Preserve the private result and inspect the current
+state before retrying an uncertain operator command.
+
 Use database-native encrypted backups for server authentication/authorization
 state as well as financial records. The ledger backup/export intentionally
 excludes login credentials and delegated grants. Restore server backups offline,
@@ -205,9 +216,13 @@ MCP requests, finite body/read/write deadlines and fixed diagnostics bound the
 network surface. These limits do not change local socket behavior.
 
 A private admission implementation may deny an authorized request. Its optional
-`TransactionAdmission` method applies durable quota changes only to new financial
-requests, after retained-outcome lookup, in the same transaction. Identical retries
-do not charge again, and rolled-back writes retain no charge. Admission cannot
+`TransactionAdmission` method applies durable quota changes only to new writes,
+after retained-outcome lookup, in the same transaction. `add_document` admits a
+new byte reservation once; deduplicated intake does not reserve more bytes.
+`complete_document_upload` rechecks fresh admission without reserving the bytes
+again. The embedding policy distinguishes these operations and accounts for
+current storage use. Identical retries do not charge again, and rolled-back
+writes retain no charge. Admission cannot
 grant a tenant or Book permission.
 
 `OwnerAdmission` can restrict a new scoped owner effect in its transaction.
@@ -238,6 +253,129 @@ receipts. A retained result requires a live session; a new effect also requires
 MFA within five minutes. Concurrent retries apply once. Missing outcomes never
 mean rejection. Revocation and period closes obey the same live authorization
 and database rules as other ledger operations.
+
+## Document storage
+
+To enable originals, add a `documents` object to the private server configuration:
+
+```json
+{
+  "directory": "/var/lib/vult/originals",
+  "key_file": "/run/vult/document-keys.json"
+}
+```
+
+The directory must already exist, owned by the dedicated service user with mode
+0700. The key file is private mode 0400 or 0600. Provision it once with the
+offline `vult-server-admin document-key` command: its private input is
+`{"tenant_id":"TENANT_ID"}` and `--output` selects a new key file. Existing output
+is never replaced. Retain old key versions and an offline recovery copy.
+Opening the server never provisions or replaces a missing key.
+
+Alternatively, configure `key_directory` instead of `key_file`. The directory
+must already exist, owned by the service account with mode 0700. To provision a
+tenant explicitly, give `document-key` private input containing `tenant_id` and
+`key_directory`; its output reports readiness without containing the key.
+This form supports destination key provisioning during portable restore. The
+two key configuration fields are mutually exclusive. The online server only
+looks keys up; it never generates them.
+
+Schedule `vult-server-admin expire-documents` under the storage-owning account,
+with offline operator credentials. Its private input supplies `directory` and an
+optional `book_id`. Expiry needs no document keys. Each invocation reclaims at
+most 100 expired, never-used originals per Book, from at most 20 eligible Books
+when no Book is selected, oldest outstanding expiry first, with a 30-second
+database-operation budget. It requires
+an installation-superuser login with no role switching; a runtime login fails
+instead of silently reporting an empty sweep. The private result reports
+`books`, `expired` and whether `more` work remains. A failure can follow earlier
+committed Book batches; repeat maintenance after correcting the failure rather
+than treating it as a single all-or-nothing sweep.
+It cannot remove any original previously cited or attached as evidence. Keep
+operator credentials out of the online server's mounts and process environment.
+
+The storage interface publishes whole encrypted objects atomically and accepts
+only opaque identifiers. An embedding application can supply `Options.Documents`
+with alternative storage and key providers. Keys stay outside the ledger
+database. Both providers must preserve tenant boundaries, original hashes and
+old decryption keys. Neither provider grants access to a Book.
+
+Document transfer paths contain short-lived credentials. Proxy access logs must
+omit those paths, and application diagnostics must exclude original names and
+contents. Downloads are always attachments, never browser-rendered originals.
+
+### Automatic server expiry
+
+For the Linux container deployment, enable the supplied systemd timer as part
+of setup. It runs a separate one-shot maintenance container after boot and
+hourly, without adding operator authority to the web server. Build its image
+using the same architecture as the server:
+
+```sh
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false -o build/vult-server-admin ./cmd/vult-server-admin
+docker build --platform linux/amd64 -f packaging/linux/Dockerfile.maintenance -t vult-maintenance .
+```
+
+Provision `/etc/vult/operator/` as a root-owned mode-0700 directory. Inside it,
+place `operator.dsn` and `expiry.json`, each mode 0400 and owned by the image's
+UID/GID 65532. The root-only parent prevents host service users from reading
+these files; Docker exposes them only in the separate worker. Never mount this
+directory, its credentials or the Docker socket into the web container. Its
+runtime/authentication/owner roles stay restricted. The expiry input is:
+
+```json
+{"directory":"/var/lib/vult/originals"}
+```
+
+The originals directory must retain its service UID/GID and private permissions.
+The worker mounts no document keys. Adjust the unit's paths for your deployment,
+then install and enable both files:
+
+```sh
+sudo install -m 644 packaging/linux/vult-document-expiry.service /etc/systemd/system/
+sudo install -m 644 packaging/linux/vult-document-expiry.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now vult-document-expiry.timer
+systemctl list-timers vult-document-expiry.timer
+```
+
+Each container gets fresh private tmpfs output and is removed afterward. The
+unit removes its named worker on timeout/shutdown and before retrying; it never
+removes unrelated containers or volumes. Batch backlog is reported as a fixed
+operational message; detailed counts stay in the invocation's private output.
+For a non-container deployment, arrange equivalent credential/process isolation
+when scheduling the same offline command. The network server must not gain an
+operator pool or access to maintenance credentials.
+
+## Portable server recovery
+
+The offline `backup`, `restore` and `export` commands include originals, journal
+records, citation/evidence history and saved agent outcomes. They exclude login
+credentials and delegated grants; retain the separate server authentication
+backup described above. Run recovery with installation credentials under the
+storage-owning account, while application ingress is closed.
+
+All three commands use `--dsn-file FILE --input FILE --output FILE`. Their
+private JSON input contains `directory` and either `key_file` or `key_directory`.
+For `backup`, add `recovery_key_file`, containing a 32–128-character recovery key.
+An optional `book_id` limits backup to one Book. The output is an encrypted
+portable archive. Keep its recovery key separately from the archive.
+
+For `export`, require `book_id`; the output is a plaintext portable archive.
+Treat it as sensitive financial data. For `restore`, require `archive_file` and
+`recovery_key_file`, with an empty destination database and storage. The command
+accepts new portable archives and earlier encrypted finance-only backups. With
+`key_directory`, restore explicitly provisions destination tenant keys; with
+`key_file`, provision all required tenant keys beforehand. Old key files are
+never overwritten. Successful restore writes a private status result; reconnect
+agents explicitly afterward.
+
+Output destinations must be new. Files are published only after the stream
+completes. Wrong recovery keys, truncated input and hash mismatches fail without
+publishing a success result. If a commit or result publication is uncertain,
+inspect the destination before retrying. Preserve any staged objects identified
+by a cleanup error until recovery resolves them. Upgrades and uninstall retain
+the original storage and key directories.
 
 ## Embedding the server
 

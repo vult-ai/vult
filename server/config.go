@@ -18,11 +18,12 @@ var (
 )
 
 type Config struct {
-	Origin         string          `json:"origin"`
-	Listen         string          `json:"listen"`
-	TrustedProxies []string        `json:"trusted_proxies"`
-	PrivateIngress bool            `json:"private_ingress"`
-	Authentication *Authentication `json:"authentication,omitempty"`
+	Origin         string           `json:"origin"`
+	Listen         string           `json:"listen"`
+	TrustedProxies []string         `json:"trusted_proxies"`
+	PrivateIngress bool             `json:"private_ingress"`
+	Authentication *Authentication  `json:"authentication,omitempty"`
+	Documents      *DocumentStorage `json:"documents,omitempty"`
 }
 
 type ingress struct {

@@ -11,10 +11,10 @@ import (
 	"github.com/vult-ai/vult/ledger"
 )
 
-func connect(t *testing.T, ctx context.Context, call Call, access string) *mcp.ClientSession {
+func connect(t *testing.T, ctx context.Context, call Call, access string, options ...Options) *mcp.ClientSession {
 	t.Helper()
 	st, ct := mcp.NewInMemoryTransports()
-	ss, e := New(call, access).Connect(ctx, st, nil)
+	ss, e := New(call, access, options...).Connect(ctx, st, nil)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -26,6 +26,32 @@ func connect(t *testing.T, ctx context.Context, call Call, access string) *mcp.C
 	}
 	t.Cleanup(func() { cs.Close() })
 	return cs
+}
+
+func TestClientFileExportIsDeclaredWithoutGrantingLedgerWrites(t *testing.T) {
+	ctx := context.Background()
+	client := connect(t, ctx, func(context.Context, string, json.RawMessage) (json.RawMessage, error) {
+		return json.RawMessage(`{}`), nil
+	}, "read", Options{Documents: true, LocalFiles: true})
+	catalog, err := client.ListTools(ctx, nil)
+	if err != nil || len(catalog.Tools) != 12 {
+		t.Fatal("wrong document read catalog", err)
+	}
+	found := false
+	for _, tool := range catalog.Tools {
+		if ledger.Writing(tool.Name) {
+			t.Fatal("client file export enabled a ledger write")
+		}
+		if tool.Name == "get_document" {
+			found = true
+			if tool.Annotations == nil || tool.Annotations.ReadOnlyHint || tool.Annotations.IdempotentHint {
+				t.Fatal("client filesystem effect hidden")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("missing document export")
+	}
 }
 func invoke(t *testing.T, ctx context.Context, c *mcp.ClientSession, method string, input any) []byte {
 	t.Helper()

@@ -108,11 +108,12 @@ type ReviseAccount struct {
 	Name             string `json:"name"`
 }
 type PostJournal struct {
-	RequestKey     string     `json:"request_key"`
-	EconomicDate   string     `json:"economic_date"`
-	AccountingDate string     `json:"accounting_date"`
-	Description    string     `json:"description"`
-	Lines          []PostLine `json:"lines"`
+	RequestKey     string        `json:"request_key"`
+	EconomicDate   string        `json:"economic_date"`
+	AccountingDate string        `json:"accounting_date"`
+	Description    string        `json:"description"`
+	Lines          []PostLine    `json:"lines"`
+	Sources        []SourceInput `json:"sources,omitempty"`
 }
 type PostLine struct {
 	AccountID   string `json:"account_id"`

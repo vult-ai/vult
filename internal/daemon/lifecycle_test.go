@@ -81,7 +81,7 @@ func programFixture(t *testing.T) removalPaths {
 	if e = os.Symlink(filepath.Join(p.Code, "vult"), p.Shortcut); e != nil {
 		t.Fatal(e)
 	}
-	for _, name := range []string{"installation", "data/journal", "data/configuration.json", "data/database/PG_VERSION", "backups/books.age"} {
+	for _, name := range []string{"installation", "data/journal", "data/configuration.json", "data/database/PG_VERSION", "data/originals/example-object", "data/document-keys/example-key", "backups/books.age"} {
 		writeFixture(t, filepath.Join(p.Retained, name), []byte("retained: "+name), 0600)
 	}
 	return p

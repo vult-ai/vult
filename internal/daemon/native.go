@@ -483,6 +483,11 @@ func ServeNative(ctx context.Context) error {
 	if e = ledger.Ready(startup, runtimePool); e != nil {
 		return e
 	}
+	documents, e := prepareDocumentStorage(startup, ledger.Admin{DB: admin}, local.DataPath)
+	if e != nil {
+		return e
+	}
+	defer documents.Close()
 	// Persist readiness before opening any owner or agent endpoint.
 	if conf.State == "new" {
 		if e = markConfigurationReady(filepath.Join(local.DataPath, "configuration.json"), conf); e != nil {
@@ -517,7 +522,14 @@ func ServeNative(ctx context.Context) error {
 		return e
 	}
 	defer listener.Close()
-	server := &Server{Admin: ledger.Admin{DB: admin}, Ledger: ledger.Store{Runtime: runtimePool}, RecoveryKey: conf.RecoveryKey}
+	maintenance, cancelMaintenance := context.WithCancel(ctx)
+	maintained := make(chan struct{})
+	go func() {
+		defer close(maintained)
+		maintainDocuments(maintenance, ledger.Admin{DB: admin}, documents.disk)
+	}()
+	defer func() { cancelMaintenance(); <-maintained }()
+	server := &Server{Admin: ledger.Admin{DB: admin}, Ledger: ledger.Store{Runtime: runtimePool, Documents: documents.vault}, RecoveryKey: conf.RecoveryKey, ProvisionKeys: documents.keys.Provision}
 	e = server.Serve(ctx, listener)
 	if e != nil && !strings.Contains(e.Error(), "closed") {
 		return errors.New("local service stopped unexpectedly")

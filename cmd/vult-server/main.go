@@ -52,7 +52,14 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 		return e
 	}
 	defer auth.Close()
-	s, e := server.New(config, server.Options{Database: db, Access: auth})
+	documents, closer, e := server.OpenDocuments(config.Documents)
+	if e != nil {
+		return e
+	}
+	if closer != nil {
+		defer closer.Close()
+	}
+	s, e := server.New(config, server.Options{Database: db, Access: auth, Documents: documents})
 	if e != nil {
 		return e
 	}

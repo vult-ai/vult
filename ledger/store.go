@@ -11,11 +11,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/vult-ai/vult/documents"
 	"github.com/vult-ai/vult/internal/strictjson"
 )
 
 type Store struct {
-	Runtime *pgxpool.Pool
+	Runtime   *pgxpool.Pool
+	Documents *documents.Vault
 	// Authorize adds a trusted deployment restriction inside the same transaction.
 	// It cannot bypass the ledger's database scope, live leases or invariants.
 	Authorize func(context.Context, pgx.Tx, Scope, string, json.RawMessage) error
@@ -52,12 +54,15 @@ func dbError(e error) error {
 }
 func Writing(method string) bool {
 	switch method {
-	case "create_account", "revise_account", "post_journal", "reverse_journal":
+	case "create_account", "revise_account", "post_journal", "reverse_journal", "add_document", "complete_document_upload", "correct_source_citation", "attach_evidence", "detach_evidence":
 		return true
 	}
 	return false
 }
 func Supported(method string) bool {
+	if documentMethod(method) || citationMethod(method) || evidenceMethod(method) {
+		return true
+	}
 	switch method {
 	case "get_book", "list_accounts", "create_account", "revise_account", "post_journal", "get_journal", "list_journals", "reverse_journal", "get_balance", "get_trial_balance", "get_request_outcome":
 		return true
@@ -67,7 +72,25 @@ func Supported(method string) bool {
 
 // Call holds the live connection and Book through transaction completion.
 func (s Store) Call(ctx context.Context, scope Scope, method string, input json.RawMessage) (json.RawMessage, error) {
-	if s.Runtime == nil || !Supported(method) || !ValidID(scope.TenantID) || !ValidID(scope.BookID) || !ValidID(scope.ActorID) || !ValidID(scope.ConnectionID) {
+	if !Supported(method) {
+		return nil, ErrDenied
+	}
+	return s.transact(ctx, scope, method, input, func(tx pgx.Tx) (json.RawMessage, error) {
+		if documentMethod(method) {
+			return s.documentCall(ctx, tx, scope, method, input)
+		}
+		if citationMethod(method) {
+			return s.citationCall(ctx, tx, scope, method, input)
+		}
+		if evidenceMethod(method) {
+			return s.evidenceCall(ctx, tx, scope, method, input)
+		}
+		return dispatch(ctx, tx, scope, method, input, s.AdmitWrite)
+	})
+}
+
+func (s Store) transact(ctx context.Context, scope Scope, method string, input json.RawMessage, apply func(pgx.Tx) (json.RawMessage, error)) (json.RawMessage, error) {
+	if s.Runtime == nil || !ValidID(scope.TenantID) || !ValidID(scope.BookID) || !ValidID(scope.ActorID) || !ValidID(scope.ConnectionID) {
 		return nil, ErrDenied
 	}
 	if Writing(method) && scope.Access != "write" {
@@ -101,7 +124,7 @@ func (s Store) Call(ctx context.Context, scope Scope, method string, input json.
 			return nil, ErrDenied
 		}
 	}
-	result, e := dispatch(ctx, tx, scope, method, input, s.AdmitWrite)
+	result, e := apply(tx)
 	if e != nil {
 		return nil, e
 	}
@@ -152,37 +175,13 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 		if q.Limit == 0 {
 			q.Limit = 50
 		}
-		rows, e := tx.Query(ctx, "SELECT id::text FROM public.entries WHERE tenant_id=$1 AND book_id=$2 AND sequence>$3 ORDER BY sequence LIMIT $4", s.TenantID, s.BookID, q.After, q.Limit+1)
+		entries, more, e := readEntryPage(ctx, tx, s, q.After, q.Limit)
 		if e != nil {
 			return nil, dbError(e)
 		}
-		ids := []string{}
-		for rows.Next() {
-			var id string
-			if e = rows.Scan(&id); e != nil {
-				rows.Close()
-				return nil, dbError(e)
-			}
-			ids = append(ids, id)
-		}
-		e = rows.Err()
-		rows.Close()
-		if e != nil {
-			return nil, dbError(e)
-		}
-		more := len(ids) > q.Limit
-		if more {
-			ids = ids[:q.Limit]
-		}
-		entries := []Entry{}
 		next := q.After
-		for _, id := range ids {
-			v, e := readEntry(ctx, tx, s, id)
-			if e != nil {
-				return nil, dbError(e)
-			}
-			entries = append(entries, v)
-			next = v.Sequence
+		if len(entries) > 0 {
+			next = entries[len(entries)-1].Sequence
 		}
 		return raw(struct {
 			Entries   []Entry `json:"entries"`
@@ -194,16 +193,8 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 		if decode(&q) != nil || !ValidID(q.AccountID) || (q.Through != "" && !ValidDate(q.Through)) {
 			return nil, ErrInvalid
 		}
-		t, e := readTrial(ctx, tx, s, q.Through)
-		if e != nil {
-			return nil, dbError(e)
-		}
-		for _, b := range t.Balances {
-			if b.AccountID == q.AccountID {
-				return raw(b), nil
-			}
-		}
-		return nil, ErrNotFound
+		balance, e := readBalance(ctx, tx, s, q)
+		return raw(balance), dbError(e)
 	case "get_trial_balance":
 		var q TrialQuery
 		if decode(&q) != nil || (q.Through != "" && !ValidDate(q.Through)) {
@@ -273,6 +264,11 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 			if e := insertEntry(ctx, tx, s, &v); e != nil {
 				return nil, e
 			}
+			for i, source := range q.Sources {
+				if e := insertSource(ctx, tx, s, v.ID, receipt, i+1, source); e != nil {
+					return nil, e
+				}
+			}
 			return raw(v), nil
 		})
 	case "reverse_journal":
@@ -313,6 +309,9 @@ func validAccount(class, code, name string) bool {
 	return false
 }
 func validatePost(q PostJournal) error {
+	if validateSources(q.Sources) != nil {
+		return ErrInvalid
+	}
 	if !validKey(q.RequestKey) || !ValidDate(q.EconomicDate) || !ValidDate(q.AccountingDate) || len(q.Description) < 1 || len(q.Description) > 4000 || len(q.Lines) < 2 || len(q.Lines) > 256 {
 		return ErrInvalid
 	}
@@ -339,9 +338,7 @@ func write(ctx context.Context, tx pgx.Tx, s Scope, method, key string, request 
 	if !validKey(key) {
 		return nil, ErrInvalid
 	}
-	if _, e := tx.Exec(ctx, "SELECT public.ledger_lock($1,$2)", s.TenantID, s.BookID); e != nil {
-		return nil, dbError(e)
-	}
+	// transact already holds the Book write lock before receipt lookup/admission.
 	var oldMethod string
 	var oldRequest, oldResult []byte
 	e := tx.QueryRow(ctx, "SELECT operation,request_bytes,result_bytes FROM public.requests WHERE tenant_id=$1 AND book_id=$2 AND actor_id=$3 AND request_key=$4", s.TenantID, s.BookID, s.ActorID, key).Scan(&oldMethod, &oldRequest, &oldResult)
@@ -362,8 +359,10 @@ func write(ctx context.Context, tx pgx.Tx, s Scope, method, key string, request 
 	id := ID()
 	result, e := apply(id)
 	if e != nil {
-		if errors.Is(e, ErrConflict) {
-			return nil, e
+		for _, safe := range []error{ErrConflict, ErrInvalid, ErrDenied, ErrNotFound, documents.ErrIntegrity, documents.ErrUnavailable} {
+			if errors.Is(e, safe) {
+				return nil, safe
+			}
 		}
 		return nil, dbError(e)
 	}
@@ -394,27 +393,82 @@ func readAccounts(ctx context.Context, tx pgx.Tx, s Scope) ([]Account, error) {
 	}
 	return out, rows.Err()
 }
-func readEntry(ctx context.Context, tx pgx.Tx, s Scope, id string) (Entry, error) {
+
+const entryColumns = `id::text,sequence,receipt_id::text,actor_id::text,economic_date::text,accounting_date::text,
+ description,coalesce(reversal_of::text,''),recorded_at`
+
+func scanEntry(row pgx.Row) (Entry, error) {
 	var v Entry
 	v.Lines = []Line{}
-	e := tx.QueryRow(ctx, `SELECT id::text,sequence,receipt_id::text,actor_id::text,economic_date::text,accounting_date::text,
- description,coalesce(reversal_of::text,''),recorded_at FROM public.entries WHERE tenant_id=$1 AND book_id=$2 AND id=$3`, s.TenantID, s.BookID, id).Scan(&v.ID, &v.Sequence, &v.ReceiptID, &v.ActorID, &v.EconomicDate, &v.AccountingDate, &v.Description, &v.ReversalOf, &v.RecordedAt)
-	if e != nil {
-		return v, e
+	err := row.Scan(&v.ID, &v.Sequence, &v.ReceiptID, &v.ActorID, &v.EconomicDate, &v.AccountingDate, &v.Description, &v.ReversalOf, &v.RecordedAt)
+	return v, err
+}
+
+func readEntry(ctx context.Context, tx pgx.Tx, s Scope, id string) (Entry, error) {
+	v, err := scanEntry(tx.QueryRow(ctx, "SELECT "+entryColumns+" FROM public.entries WHERE tenant_id=$1 AND book_id=$2 AND id=$3", s.TenantID, s.BookID, id))
+	if err != nil {
+		return v, err
 	}
-	rows, e := tx.Query(ctx, "SELECT id::text,account_id::text,side,amount_minor::text,memo,coalesce(reverses_line_id::text,'') FROM public.lines WHERE tenant_id=$1 AND book_id=$2 AND entry_id=$3 ORDER BY position", s.TenantID, s.BookID, id)
-	if e != nil {
-		return v, e
+	entries := []Entry{v}
+	err = readEntryLines(ctx, tx, s, entries)
+	return entries[0], err
+}
+
+func readEntryPage(ctx context.Context, tx pgx.Tx, s Scope, after int64, limit int) ([]Entry, bool, error) {
+	rows, err := tx.Query(ctx, "SELECT "+entryColumns+" FROM public.entries WHERE tenant_id=$1 AND book_id=$2 AND sequence>$3 ORDER BY sequence LIMIT $4", s.TenantID, s.BookID, after, limit+1)
+	if err != nil {
+		return nil, false, err
+	}
+	entries := []Entry{}
+	for rows.Next() {
+		entry, err := scanEntry(rows)
+		if err != nil {
+			rows.Close()
+			return nil, false, err
+		}
+		entries = append(entries, entry)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, false, err
+	}
+	more := len(entries) > limit
+	if more {
+		entries = entries[:limit]
+	}
+	err = readEntryLines(ctx, tx, s, entries)
+	return entries, more, err
+}
+
+func readEntryLines(ctx context.Context, tx pgx.Tx, s Scope, entries []Entry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	ids := make([]string, len(entries))
+	positions := make(map[string]int, len(entries))
+	for i := range entries {
+		ids[i], positions[entries[i].ID] = entries[i].ID, i
+	}
+	rows, err := tx.Query(ctx, `SELECT entry_id::text,id::text,account_id::text,side,amount_minor::text,memo,coalesce(reverses_line_id::text,'')
+ FROM public.lines WHERE tenant_id=$1 AND book_id=$2 AND entry_id=ANY($3::uuid[]) ORDER BY entry_id,position`, s.TenantID, s.BookID, ids)
+	if err != nil {
+		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var l Line
-		if e = rows.Scan(&l.ID, &l.AccountID, &l.Side, &l.AmountMinor, &l.Memo, &l.ReversesLineID); e != nil {
-			return v, e
+		var entry string
+		var line Line
+		if err := rows.Scan(&entry, &line.ID, &line.AccountID, &line.Side, &line.AmountMinor, &line.Memo, &line.ReversesLineID); err != nil {
+			return err
 		}
-		v.Lines = append(v.Lines, l)
+		i, ok := positions[entry]
+		if !ok {
+			return ErrInvalid
+		}
+		entries[i].Lines = append(entries[i].Lines, line)
 	}
-	return v, rows.Err()
+	return rows.Err()
 }
 func insertEntry(ctx context.Context, tx pgx.Tx, s Scope, v *Entry) error {
 	e := tx.QueryRow(ctx, `INSERT INTO public.entries(tenant_id,book_id,id,sequence,receipt_id,actor_id,economic_date,accounting_date,description,reversal_of)
@@ -432,18 +486,28 @@ func insertEntry(ctx context.Context, tx pgx.Tx, s Scope, v *Entry) error {
 	}
 	return nil
 }
+
+const balanceQuery = `SELECT a.id::text,a.code,a.name,coalesce(sum(CASE WHEN e.id IS NULL THEN 0
+ WHEN l.side='debit' THEN l.amount_minor::numeric ELSE -l.amount_minor::numeric END),0)::text
+ FROM public.accounts a LEFT JOIN public.lines l ON l.tenant_id=a.tenant_id AND l.book_id=a.book_id AND l.account_id=a.id
+ LEFT JOIN public.entries e ON e.tenant_id=l.tenant_id AND e.book_id=l.book_id AND e.id=l.entry_id
+ AND($3='' OR e.accounting_date<=nullif($3,'')::date)
+ WHERE a.tenant_id=$1 AND a.book_id=$2`
+
+func readBalance(ctx context.Context, tx pgx.Tx, s Scope, q AccountQuery) (Balance, error) {
+	var balance Balance
+	err := tx.QueryRow(ctx, balanceQuery+" AND a.id=$4 GROUP BY a.id,a.code,a.name",
+		s.TenantID, s.BookID, q.Through, q.AccountID).Scan(&balance.AccountID, &balance.Code, &balance.Name, &balance.DebitPositiveMinor)
+	return balance, err
+}
+
 func readTrial(ctx context.Context, tx pgx.Tx, s Scope, through string) (Trial, error) {
 	b, e := readBook(ctx, tx, s)
 	if e != nil {
 		return Trial{}, e
 	}
 	out := Trial{Currency: b.Currency, Scale: b.Scale, Through: through, Balances: []Balance{}}
-	rows, e := tx.Query(ctx, `SELECT a.id::text,a.code,a.name,coalesce(sum(CASE WHEN e.id IS NULL THEN 0
- WHEN l.side='debit' THEN l.amount_minor::numeric ELSE -l.amount_minor::numeric END),0)::text
- FROM public.accounts a LEFT JOIN public.lines l ON l.tenant_id=a.tenant_id AND l.book_id=a.book_id AND l.account_id=a.id
- LEFT JOIN public.entries e ON e.tenant_id=l.tenant_id AND e.book_id=l.book_id AND e.id=l.entry_id
- AND($3='' OR e.accounting_date<=nullif($3,'')::date)
- WHERE a.tenant_id=$1 AND a.book_id=$2 GROUP BY a.id,a.code,a.name ORDER BY a.code,a.id`, s.TenantID, s.BookID, through)
+	rows, e := tx.Query(ctx, balanceQuery+" GROUP BY a.id,a.code,a.name ORDER BY a.code,a.id", s.TenantID, s.BookID, through)
 	if e != nil {
 		return out, e
 	}

@@ -81,7 +81,7 @@ func TestSignInHTTPCookiesCSRFAndLogout(t *testing.T) {
 	r.AddCookie(c)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
-	if w.Code != 303 || w.Header().Get("Location") != "/auth/complete" || calls != 1 {
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/auth/complete" || calls != 1 {
 		t.Fatal("valid login failed")
 	}
 	session := responseCookie(t, w, access.SessionCookie)

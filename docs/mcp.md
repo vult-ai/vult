@@ -52,13 +52,53 @@ A separately configured Linux server exposes Streamable HTTP MCP at
 configuration. The client must support OAuth discovery, public-client
 registration, S256 PKCE and the exact MCP resource. Sign in through the server's
 HTTPS login, select an owned Book and choose Read or Write before consenting.
-The same eleven tools are used; Write never includes owner administration.
+The original eleven tools remain available. Configuring document storage adds
+nine tools; Write never includes owner administration.
 
 Do not put access credentials in a URL or copy browser cookies into an agent.
 Access credentials expire after 15 minutes; refresh credentials rotate on use.
 Reconnect can retain an existing connection actor and its request outcomes.
 See [remote agent authorization](server.md#remote-agents) for scope, revocation
 and recovery rules. The local macOS bridge and its native approval are unchanged.
+
+## Original files
+
+For local file access, add explicit absolute import and export directories to the
+companion command:
+
+```sh
+vult mcp --connection CONNECTION_ID --import-dir /path/to/imports --export-dir /path/to/exports
+```
+
+Create the export directory with private permissions, for example
+`mkdir -m 700 /path/to/exports`; shared folders and extended macOS ACLs are
+refused. The native approval names those folders. The companion reads only inside the
+approved import directory and creates new files only in the export directory.
+It rejects traversal, symlinks at the selected input, hard links and special
+files. Originals are limited to 32 MiB; supported types are PDF, PNG, JPEG,
+WebP and CSV. Their contents and names are untrusted data, never instructions.
+Without configured folders, metadata queries work but file access is denied.
+
+`add_document` takes `request_key`, a relative `file` inside the import folder,
+and an optional `media_type`. The companion computes the exact size and SHA-256,
+prepares an intake and streams bytes outside MCP JSON. A successful result is a
+verified completed upload. Retrying a changed file with the same key is rejected.
+If a response is lost, inspect the original key and intake; never invent a new
+key while its outcome is uncertain.
+
+`get_document` takes `document_id` and may take an `output` filename. Exports
+become visible only after exact bytes/hash and final service confirmation. They
+never replace existing files. A read connection can export its own Book's
+originals, but cannot upload or alter citations/evidence.
+
+Remote-only MCP clients use metadata instead: prepare with `add_document`, then
+inspect `document.id` and `upload_id` through `get_document`. A pending upload
+returns a short-lived, single-use `upload_url`; PUT the exact declared bytes with
+`Content-Type: application/octet-stream`. Inspect the same intake again to
+recover its recorded completion. Ready originals provide a one-use
+`download_url`. These URLs are credentials: do not log, share, cache or attach an
+Authorization header to them. Each transfer rechecks the original agent's live
+authority. A URL alone does not mean a client has transferred a file.
 
 ## Tool catalog
 
@@ -75,10 +115,26 @@ and recovery rules. The local macOS bridge and its native approval are unchanged
 | `revise_account` | write | Change name/code using an expected revision |
 | `post_journal` | write | Post general debits and credits atomically |
 | `reverse_journal` | write | Post a complete linked reversal |
+| `add_document` | write | Prepare an original; local companion also streams its bytes |
+| `get_document` | read | Inspect an original and obtain its scoped byte transfer |
+| `list_documents` | read | Page through available verified originals |
+| `correct_source_citation` | write | Append a citation correction without changing accounting |
+| `attach_evidence` | write | Append an explicitly typed supporting relationship |
+| `detach_evidence` | write | Append a reasoned detachment while retaining history |
+| `get_entry_documents` | read | Read current sources/evidence or paged history |
+| `get_source_usage` | read | Inspect repeated use of one document location |
+| `list_entries_missing_evidence` | read | Report gaps by account, accounting date and role |
 
 Tools do not take tenant IDs, Book IDs or actor IDs. Those come from the
-connection. Read-only connections omit all four write tools; the service also
-enforces that boundary if a client invents a call.
+connection. Document-enabled write connections expose 20 tools and read
+connections expose 12. Without documents the counts remain eleven and seven.
+Read-only connections omit write tools; the service also enforces that boundary
+if a client invents a call. `post_journal` accepts optional `sources` only when
+documents are enabled; existing no-source inputs retain their behavior.
+
+The repository includes a [bookkeeping skill](../skills/vult-bookkeeping/SKILL.md)
+covering exact money, request recovery, source/evidence relationships and
+statement reuse checks. Loading a skill does not grant accounting permission.
 
 ## Exact money and retries
 

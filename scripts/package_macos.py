@@ -15,7 +15,7 @@ import tempfile
 import urllib.request
 from make_installer import render
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 GO_VERSION = "go1.27.3"
 PG_VERSION = "18.6"
 PG_SHA256 = "555610c24d53e4316da5b7d3fc25c279d96856d5e0e23ee308c328c5fa881d9f"
@@ -209,6 +209,7 @@ def main():
                     info.uid = info.gid = info.mtime = 0
                     tar.addfile(info, io.BytesIO(data))
         manifest = {"version": VERSION, "platform": "macos-arm64", "minimum_macos": "26.0", "go": GO_VERSION, "postgresql": PG_VERSION, "postgresql_source_sha256": PG_SHA256, "schema_sha256": digest(clean / "ledger/migrations/0001_ledger.sql"), "source_files": {name: digest(clean / name) for name in files}, "application_signing": "developer-id" if args.sign_application else "ad-hoc", "installer_signing": "developer-id" if args.sign_installer else "unsigned", "notarized": False}
+        manifest["migrations"] = {path.name: digest(path) for path in sorted((clean / "ledger/migrations").glob("*.sql"))}
         manifest["installer_sha256"] = hashlib.sha256(installer).hexdigest()
         (output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
         artifacts = sorted(output.iterdir())

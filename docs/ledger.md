@@ -55,6 +55,15 @@ updated or deleted, and later transactions cannot append lines to an old entry.
 Recorded results are checked against their journal values. Balances cannot exceed
 signed 64-bit range at any retained posting sequence.
 
+[0003_documents.sql](../ledger/migrations/0003_documents.sql) also checks
+each inserted line against its immutable receipt. Running deferred constraints
+early cannot make an entry accept additional lines later in the transaction.
+Historical range validation retains every posting prefix and checks live write
+access before its scoped scan. It runs with the migration owner's read access;
+other journal checks still use the caller's restricted role and row policies.
+The trusted restore path runs the full range check once per completed Book,
+after every entry's other constraints and before committing any restored rows.
+
 Economic date describes the event; accounting date selects its accounting period;
 recorded time is assigned by the service. A reversal preserves the original
 economic date and every line's account, amount, memo and ordering, switches sides,

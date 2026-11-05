@@ -1,0 +1,14 @@
+[Unit]
+Description=Expire unused Vult documents
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+UMask=0077
+TimeoutStartSec=120
+TimeoutStopSec=20
+ExecStartPre=/bin/sh -ec '/usr/bin/docker info >/dev/null; if /usr/bin/docker container inspect vult-document-expiry >/dev/null 2>&1; then /usr/bin/docker container rm --force vult-document-expiry >/dev/null; fi'
+ExecStart=/usr/bin/docker run --rm --pull=never --name vult-document-expiry --network host --read-only --cap-drop ALL --security-opt no-new-privileges:true --memory 192m --cpus 1 --pids-limit 64 --stop-timeout 10 --tmpfs /run/vult-maintenance:rw,noexec,nosuid,nodev,size=1m,uid=65532,gid=65532,mode=0700 --mount type=bind,src=/etc/vult/operator/operator.dsn,dst=/run/vult-operator/operator.dsn,readonly --mount type=bind,src=/etc/vult/operator/expiry.json,dst=/run/vult-operator/expiry.json,readonly --mount type=bind,src=/var/lib/vult/originals,dst=/var/lib/vult/originals --mount type=bind,src=/etc/ssl/certs/ca-certificates.crt,dst=/etc/ssl/certs/ca-certificates.crt,readonly vult-maintenance expire-documents --dsn-file /run/vult-operator/operator.dsn --input /run/vult-operator/expiry.json --output /run/vult-maintenance/result.json
+ExecStopPost=/bin/sh -ec '/usr/bin/docker info >/dev/null; if /usr/bin/docker container inspect vult-document-expiry >/dev/null 2>&1; then /usr/bin/docker container rm --force vult-document-expiry >/dev/null; fi'

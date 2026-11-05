@@ -62,13 +62,13 @@ func TestOAuthHTTPConsentBindsBrowserAndOwnedBook(t *testing.T) {
 	verifier := access.Random()
 	q := url.Values{"response_type": {"code"}, "client_id": {client.ID}, "redirect_uri": {client.Redirects[0]}, "resource": {f.service.Resource()}, "code_challenge": {access.Challenge(verifier)}, "code_challenge_method": {"S256"}, "scope": {"ledger:write"}, "state": {"bound-state"}}
 	w := networkRequest(ctx, h, "GET", "/oauth/authorize?"+q.Encode(), "")
-	if w.Code != 303 {
+	if w.Code != http.StatusSeeOther {
 		t.Fatal("authorization start failed", w.Body.String())
 	}
 	pending := responseCookie(t, w, "__Host-vult-oauth-request")
 	sessionCookie := &http.Cookie{Name: access.SessionCookie, Value: session}
 	w = networkRequest(ctx, h, "GET", w.Header().Get("Location"), "", pending)
-	if w.Code != 303 || w.Header().Get("Location") != "/auth/login" {
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/auth/login" {
 		t.Fatal("authorization skipped human sign-in")
 	}
 	w = networkRequest(ctx, h, "GET", "/oauth/authorize?request="+pending.Value, "", pending, sessionCookie)
@@ -96,7 +96,7 @@ func TestOAuthHTTPConsentBindsBrowserAndOwnedBook(t *testing.T) {
 		t.Fatal("consent accepted a foreign Book")
 	}
 	w = networkRequest(ctx, h, "POST", "/oauth/authorize", form.Encode(), pending, sessionCookie)
-	if w.Code != 303 {
+	if w.Code != http.StatusSeeOther {
 		t.Fatal("valid consent failed", w.Body.String())
 	}
 	destination, _ := url.Parse(w.Header().Get("Location"))

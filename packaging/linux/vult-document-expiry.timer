@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule unused Vult document expiry
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+Unit=vult-document-expiry.service
+
+[Install]
+WantedBy=timers.target

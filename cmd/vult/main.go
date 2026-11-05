@@ -17,6 +17,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vult-ai/vult/internal/daemon"
+	"github.com/vult-ai/vult/internal/filebridge"
 	"github.com/vult-ai/vult/internal/local"
 	"github.com/vult-ai/vult/internal/mcpserver"
 	"github.com/vult-ai/vult/internal/strictjson"
@@ -24,7 +25,7 @@ import (
 	"golang.org/x/term"
 )
 
-const help = `Vult 0.2.0 — local general ledger
+const help = `Vult ` + daemon.Version + ` — local general ledger
 
   vult init
   vult status
@@ -33,10 +34,11 @@ const help = `Vult 0.2.0 — local general ledger
   vult connection create --name NAME --book ID --access read|write
   vult connection list
   vult connection revoke ID
-  vult mcp --connection ID
+  vult mcp --connection ID [--import-dir DIRECTORY] [--export-dir DIRECTORY]
   vult period close --book ID --from YYYY-MM-DD --through YYYY-MM-DD
   vult verify --book ID
   vult export --book ID --output FILE.json
+  vult export --documents --book ID --output FILE.tar
   vult backup --output FILE.age
   vult restore --input FILE.age
   vult uninstall
@@ -49,6 +51,13 @@ when opening an agent session; connection IDs alone confer no access.
 `
 
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "backup", "restore", "export":
+			// A broken status pipe cannot undo a completed archive operation.
+			signal.Ignore(syscall.SIGPIPE)
+		}
+	}
 	if e := run(os.Args[1:], os.Stdout, os.Stderr); e != nil {
 		fmt.Fprintln(os.Stderr, "vult:", e)
 		os.Exit(1)
@@ -83,6 +92,9 @@ func run(args []string, out, errout io.Writer) error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	if archiveCommand(args) {
+		return runArchive(ctx, args, out)
+	}
 	if args[0] == "_install" {
 		if len(args) != 1 {
 			return ledger.ErrInvalid
@@ -138,36 +150,23 @@ func run(args []string, out, errout io.Writer) error {
 	method := ""
 	var payload any
 	outputPath := ""
-	inputPath := ""
 	switch args[0] {
-	case "init", "status", "backup", "restore", "verify", "export":
+	case "init", "status", "verify", "export":
 		method = args[0]
 		f := flags(method)
 		book := f.String("book", "", "Book ID")
 		output := f.String("output", "", "new output file")
-		input := f.String("input", "", "encrypted backup")
 		if parse(f, args[1:]) != nil {
 			return ledger.ErrInvalid
 		}
 		switch method {
 		case "init", "status":
-			if *book != "" || *output != "" || *input != "" {
+			if *book != "" || *output != "" {
 				return ledger.ErrInvalid
 			}
 			payload = struct{}{}
-		case "backup":
-			if *book != "" || *input != "" || *output == "" {
-				return ledger.ErrInvalid
-			}
-			payload = struct{}{}
-			outputPath = *output
-		case "restore":
-			if *book != "" || *output != "" || *input == "" {
-				return ledger.ErrInvalid
-			}
-			inputPath = *input
 		case "verify", "export":
-			if !ledger.ValidID(*book) || *input != "" || (method == "verify" && *output != "") || (method == "export" && *output == "") {
+			if !ledger.ValidID(*book) || (method == "verify" && *output != "") || (method == "export" && *output == "") {
 				return ledger.ErrInvalid
 			}
 			payload = struct {
@@ -258,16 +257,26 @@ func run(args []string, out, errout io.Writer) error {
 	case "mcp":
 		f := flags("mcp")
 		connection := f.String("connection", "", "connection ID")
-		if parse(f, args[1:]) != nil || !ledger.ValidID(*connection) {
+		imports := f.String("import-dir", "", "approved document import directory")
+		exports := f.String("export-dir", "", "approved document export directory")
+		if parse(f, args[1:]) != nil {
+			return ledger.ErrInvalid
+		}
+		request := local.SessionRequest{ConnectionID: *connection, ImportDirectory: *imports, ExportDirectory: *exports}
+		if !request.Valid() {
 			return ledger.ErrInvalid
 		}
 		c, e := local.NewClient()
 		if e != nil {
 			return e
 		}
-		result, e := c.OwnerCall(ctx, "open_session", struct {
-			ConnectionID string `json:"connection_id"`
-		}{*connection})
+		transport := &local.DocumentTransport{Client: c}
+		files, e := filebridge.Open(transport, *imports, *exports)
+		if e != nil {
+			return e
+		}
+		defer files.Close()
+		result, e := c.OwnerCall(ctx, "open_session", request)
 		if e != nil {
 			return e
 		}
@@ -280,9 +289,8 @@ func run(args []string, out, errout io.Writer) error {
 		if strictjson.Decode(result, &session) != nil || session.Token == "" {
 			return errors.New("invalid agent session")
 		}
-		server := mcpserver.New(func(ctx context.Context, name string, input json.RawMessage) (json.RawMessage, error) {
-			return c.Call(ctx, name, session.Token, input)
-		}, session.Access)
+		transport.Authorization = session.Token
+		server := mcpserver.New(files.Call, session.Access, mcpserver.Options{Documents: true, LocalFiles: true})
 		return server.Run(ctx, &mcp.StdioTransport{})
 	default:
 		return errors.New("unknown command; run vult help")
@@ -292,7 +300,7 @@ func run(args []string, out, errout io.Writer) error {
 		return e
 	}
 	var tty *os.File
-	if method == "init" || method == "restore" {
+	if method == "init" {
 		tty, e = os.OpenFile("/dev/tty", os.O_RDWR, 0)
 		if e != nil || !term.IsTerminal(int(tty.Fd())) {
 			if tty != nil {
@@ -302,32 +310,7 @@ func run(args []string, out, errout io.Writer) error {
 		}
 		defer tty.Close()
 	}
-	if method == "restore" {
-		file, e := os.OpenFile(inputPath, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
-		if e != nil {
-			return errors.New("encrypted backup unavailable")
-		}
-		info, e := file.Stat()
-		if e != nil || !info.Mode().IsRegular() || info.Size() > 66<<20 {
-			file.Close()
-			return errors.New("invalid encrypted backup")
-		}
-		data, e := io.ReadAll(io.LimitReader(file, (66<<20)+1))
-		file.Close()
-		if e != nil || len(data) > 66<<20 {
-			return errors.New("invalid encrypted backup")
-		}
-		fmt.Fprint(tty, "Backup recovery key: ")
-		key, e := term.ReadPassword(int(tty.Fd()))
-		fmt.Fprintln(tty)
-		if e != nil {
-			return errors.New("recovery key unavailable")
-		}
-		payload = struct {
-			Data        []byte `json:"data"`
-			RecoveryKey string `json:"recovery_key"`
-		}{data, string(key)}
-	}
+
 	var result json.RawMessage
 	if method == "status" {
 		statusCtx, done := context.WithTimeout(ctx, 2*time.Second)
@@ -372,38 +355,18 @@ func run(args []string, out, errout io.Writer) error {
 			Command string   `json:"command"`
 			Args    []string `json:"args"`
 		}{local.BinaryPath, []string{"mcp", "--connection", connection.ID}}})
-	case "backup":
-		var v struct {
-			Data []byte `json:"data"`
-		}
-		if strictjson.Decode(result, &v) != nil {
-			return ledger.ErrInvalid
-		}
-		if e = writeNew(outputPath, v.Data); e != nil {
-			return e
-		}
-		return jsonOut(out, struct {
-			Status string `json:"status"`
-		}{"encrypted_backup_written"})
 	case "export":
-		if e = writeNew(outputPath, append(result, '\n')); e != nil {
+		if e = local.WriteNewStream(outputPath, func(dst io.Writer) error {
+			_, err := dst.Write(append(result, '\n'))
+			return err
+		}); e != nil {
 			return e
 		}
-		return jsonOut(out, struct {
+		_ = jsonOut(out, struct {
 			Status string `json:"status"`
 		}{"plaintext_export_written"})
+		return nil
 	}
 	_, e = fmt.Fprintln(out, string(result))
 	return e
-}
-func writeNew(path string, data []byte) error {
-	f, e := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if e != nil {
-		return errors.New("a new output path is required")
-	}
-	defer f.Close()
-	if _, e = f.Write(data); e != nil {
-		return e
-	}
-	return f.Sync()
 }
