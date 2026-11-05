@@ -13,6 +13,13 @@ builds the native runtime and Vult, and creates a flat installer, source archive
 manifest and checksums. It does not install, start services, publish or run CI.
 It preserves the ordinary shared Go caches. The build uses two compiler jobs.
 
+After the package is complete, the builder generates `install.sh` with its exact
+package checksum and records the script's checksum in the manifest. The script
+is a release artifact, excluded from the source tree and source archive. The
+tagged template and generator reproduce it from the final package metadata.
+Do not rebuild the package after publishing its installer pin without
+regenerating the release metadata.
+
 The package contains the ledger executable, PostgreSQL runtime, license notices
 and a launch daemon definition. A checksum inventory lists only program files
 that may be removed by uninstall. It contains no database, credentials or recovery

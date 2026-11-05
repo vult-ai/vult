@@ -302,7 +302,7 @@ func requireExisting(state, kind string, exists bool) error {
 
 func verifyOrInitializeSchema(ctx context.Context, admin *pgxpool.Pool, role, state string) error {
 	if state == "ready" {
-		return ledger.Ready(ctx, admin)
+		return ledger.Upgrade(ctx, admin, role)
 	}
 	if state != "new" {
 		return errors.New("unknown installation state")

@@ -14,7 +14,15 @@ import (
 	"github.com/vult-ai/vult/internal/strictjson"
 )
 
-type Store struct{ Runtime *pgxpool.Pool }
+type Store struct {
+	Runtime *pgxpool.Pool
+	// Authorize adds a trusted deployment restriction inside the same transaction.
+	// It cannot bypass the ledger's database scope, live leases or invariants.
+	Authorize func(context.Context, pgx.Tx, Scope, string, json.RawMessage) error
+	// AdmitWrite runs only for a new request, after retained-outcome lookup, in
+	// the same transaction as its financial effects. Retries never consume twice.
+	AdmitWrite func(context.Context, pgx.Tx, Scope, string, json.RawMessage) error
+}
 
 func setScope(ctx context.Context, tx pgx.Tx, s Scope) error {
 	_, e := tx.Exec(ctx, `SELECT set_config('vult.tenant_id',$1,true),set_config('vult.book_id',$2,true),
@@ -73,6 +81,11 @@ func (s Store) Call(ctx context.Context, scope Scope, method string, input json.
 	if e = setScope(ctx, tx, scope); e != nil {
 		return nil, dbError(e)
 	}
+	if s.Authorize != nil {
+		if e = s.Authorize(ctx, tx, scope, method, input); e != nil {
+			return nil, e
+		}
+	}
 	var access string
 	e = tx.QueryRow(ctx, "SELECT access FROM public.connections WHERE tenant_id=$1 AND book_id=$2 AND id=$3 AND actor_id=$4 AND revoked_at IS NULL FOR SHARE", scope.TenantID, scope.BookID, scope.ConnectionID, scope.ActorID).Scan(&access)
 	if e != nil || access != scope.Access {
@@ -88,7 +101,7 @@ func (s Store) Call(ctx context.Context, scope Scope, method string, input json.
 			return nil, ErrDenied
 		}
 	}
-	result, e := dispatch(ctx, tx, scope, method, input)
+	result, e := dispatch(ctx, tx, scope, method, input, s.AdmitWrite)
 	if e != nil {
 		return nil, e
 	}
@@ -102,7 +115,7 @@ func (s Store) Call(ctx context.Context, scope Scope, method string, input json.
 	return result, nil
 }
 
-func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []byte) (json.RawMessage, error) {
+func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []byte, admit func(context.Context, pgx.Tx, Scope, string, json.RawMessage) error) (json.RawMessage, error) {
 	decode := func(v any) error {
 		if strictjson.Decode(input, v) != nil {
 			return ErrInvalid
@@ -218,7 +231,7 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 		if decode(&q) != nil || !validAccount(q.Class, q.Code, q.Name) {
 			return nil, ErrInvalid
 		}
-		return write(ctx, tx, s, method, q.RequestKey, raw(q), func(receipt string) (json.RawMessage, error) {
+		return write(ctx, tx, s, method, q.RequestKey, raw(q), admit, func(receipt string) (json.RawMessage, error) {
 			id := ID()
 			if _, e := tx.Exec(ctx, "INSERT INTO public.accounts(tenant_id,book_id,id,class) VALUES($1,$2,$3,$4)", s.TenantID, s.BookID, id, q.Class); e != nil {
 				return nil, e
@@ -233,7 +246,7 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 		if decode(&q) != nil || !ValidID(q.AccountID) || q.ExpectedRevision < 1 || !codePattern.MatchString(q.Code) || len(q.Name) < 1 || len(q.Name) > 120 {
 			return nil, ErrInvalid
 		}
-		return write(ctx, tx, s, method, q.RequestKey, raw(q), func(receipt string) (json.RawMessage, error) {
+		return write(ctx, tx, s, method, q.RequestKey, raw(q), admit, func(receipt string) (json.RawMessage, error) {
 			var class string
 			var revision int64
 			if e := tx.QueryRow(ctx, "SELECT class,revision FROM public.accounts WHERE tenant_id=$1 AND book_id=$2 AND id=$3", s.TenantID, s.BookID, q.AccountID).Scan(&class, &revision); e != nil {
@@ -252,7 +265,7 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 		if decode(&q) != nil || validatePost(q) != nil {
 			return nil, ErrInvalid
 		}
-		return write(ctx, tx, s, method, q.RequestKey, raw(q), func(receipt string) (json.RawMessage, error) {
+		return write(ctx, tx, s, method, q.RequestKey, raw(q), admit, func(receipt string) (json.RawMessage, error) {
 			v := Entry{ID: ID(), ReceiptID: receipt, ActorID: s.ActorID, EconomicDate: q.EconomicDate, AccountingDate: q.AccountingDate, Description: q.Description, Lines: []Line{}}
 			for _, l := range q.Lines {
 				v.Lines = append(v.Lines, Line{ID: ID(), AccountID: l.AccountID, Side: l.Side, AmountMinor: l.AmountMinor, Memo: l.Memo})
@@ -267,7 +280,7 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 		if decode(&q) != nil || !ValidID(q.EntryID) || !ValidDate(q.AccountingDate) || len(q.Reason) < 1 || len(q.Reason) > 4000 {
 			return nil, ErrInvalid
 		}
-		return write(ctx, tx, s, method, q.RequestKey, raw(q), func(receipt string) (json.RawMessage, error) {
+		return write(ctx, tx, s, method, q.RequestKey, raw(q), admit, func(receipt string) (json.RawMessage, error) {
 			old, e := readEntry(ctx, tx, s, q.EntryID)
 			if e != nil {
 				return nil, e
@@ -322,7 +335,7 @@ func validatePost(q PostJournal) error {
 	}
 	return nil
 }
-func write(ctx context.Context, tx pgx.Tx, s Scope, method, key string, request []byte, apply func(string) (json.RawMessage, error)) (json.RawMessage, error) {
+func write(ctx context.Context, tx pgx.Tx, s Scope, method, key string, request []byte, admit func(context.Context, pgx.Tx, Scope, string, json.RawMessage) error, apply func(string) (json.RawMessage, error)) (json.RawMessage, error) {
 	if !validKey(key) {
 		return nil, ErrInvalid
 	}
@@ -340,6 +353,11 @@ func write(ctx context.Context, tx pgx.Tx, s Scope, method, key string, request 
 	}
 	if !errors.Is(e, pgx.ErrNoRows) {
 		return nil, dbError(e)
+	}
+	if admit != nil {
+		if e = admit(ctx, tx, s, method, json.RawMessage(request)); e != nil {
+			return nil, e
+		}
 	}
 	id := ID()
 	result, e := apply(id)

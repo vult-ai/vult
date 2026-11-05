@@ -2,14 +2,18 @@ package daemon
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vult-ai/vult/internal/local"
 	"github.com/vult-ai/vult/internal/testutil"
 	"github.com/vult-ai/vult/ledger"
@@ -337,5 +341,166 @@ func TestInitializedSchemaIsNeverRecreatedOnStartup(t *testing.T) {
 	var exists bool
 	if e := db.Admin.QueryRow(db.Context, "SELECT to_regclass('public.schema_receipts') IS NOT NULL").Scan(&exists); e != nil || exists {
 		t.Fatal("startup recreated the missing schema", e)
+	}
+}
+
+func releasedSchema(ctx context.Context, db *pgxpool.Pool, role string) error {
+	b, e := os.ReadFile("../../ledger/migrations/0001_ledger.sql")
+	if e != nil {
+		return e
+	}
+	if checksum(b) != "1f2a80022713d3b913555391319685f3042916b437260912a7e1c8743f53e451" {
+		return errors.New("released migration changed")
+	}
+	if _, e = db.Exec(ctx, "CREATE TABLE public.schema_receipts(filename text PRIMARY KEY,sha256 text NOT NULL CHECK(sha256 ~ '^[a-f0-9]{64}$'),applied_at timestamptz NOT NULL DEFAULT clock_timestamp());REVOKE ALL ON public.schema_receipts FROM PUBLIC"); e != nil {
+		return e
+	}
+	if _, e = db.Exec(ctx, string(b)); e != nil {
+		return e
+	}
+	if _, e = db.Exec(ctx, "INSERT INTO public.schema_receipts(filename,sha256) VALUES('0001_ledger.sql',$1)", checksum(b)); e != nil {
+		return e
+	}
+	r := pgx.Identifier{role}.Sanitize()
+	for _, statement := range []string{
+		"REVOKE CREATE ON SCHEMA public FROM PUBLIC",
+		"GRANT USAGE ON SCHEMA public TO " + r,
+		"GRANT SELECT ON public.books,public.accounts,public.account_revisions,public.entries,public.lines,public.requests,public.closed_periods,public.connections,public.schema_receipts TO " + r,
+		"GRANT INSERT ON public.accounts,public.account_revisions,public.entries,public.lines,public.requests TO " + r,
+		"GRANT UPDATE(write_epoch) ON public.books TO " + r,
+		"GRANT UPDATE(id) ON public.connections TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.ledger_context(uuid,uuid),public.ledger_allowed(uuid,uuid,boolean),public.ledger_lock(uuid,uuid),public.ledger_import_owner() TO " + r,
+	} {
+		if _, e = db.Exec(ctx, statement); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+func TestNativeStartupUpgradesReleasedLedgerWithoutChangingRecords(t *testing.T) {
+	db := testutil.NewWithInitializer(t, releasedSchema)
+	book, scope := db.Book(t, "Example retained Book")
+	a, b := db.Account(t, scope, "1000", "asset"), db.Account(t, scope, "3000", "equity")
+	q := ledger.PostJournal{RequestKey: "retained", EconomicDate: "2026-01-01", AccountingDate: "2026-01-02", Description: "Example funding", Lines: []ledger.PostLine{{AccountID: a.ID, Side: "debit", AmountMinor: "1250"}, {AccountID: b.ID, Side: "credit", AmountMinor: "1250"}}}
+	result := db.Call(t, scope, "post_journal", q)
+	if e := db.Owner.ClosePeriod(db.Context, book.ID, "2026-01-01", "2026-01-31"); e != nil {
+		t.Fatal(e)
+	}
+	before, e := db.Owner.Snapshot(db.Context)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = ledger.Ready(db.Context, db.Admin); e == nil {
+		t.Fatal("test did not start with an older installation")
+	}
+	for i := 0; i < 2; i++ {
+		if e = verifyOrInitializeSchema(db.Context, db.Admin, db.Role, "ready"); e != nil {
+			t.Fatal("initialized ledger could not upgrade", e)
+		}
+		if e = ledger.Ready(db.Context, db.Admin); e != nil {
+			t.Fatal("upgraded schema is incomplete", e)
+		}
+		after, e := db.Owner.Snapshot(db.Context)
+		if e != nil || len(before.Tables) != len(after.Tables) {
+			t.Fatal("upgraded snapshot unavailable", e)
+		}
+		for name, want := range before.Tables {
+			if !bytes.Equal(want, after.Tables[name]) {
+				t.Fatal("upgrade changed recorded data", name)
+			}
+		}
+		if retry := db.Call(t, scope, "post_journal", q); !bytes.Equal(retry, result) {
+			t.Fatal("upgrade changed the existing actor or retry outcome")
+		}
+	}
+	fresh := testutil.New(t)
+	if schemaDefinition(t, db) != schemaDefinition(t, fresh) {
+		t.Fatal("upgraded schema differs from a fresh installation")
+	}
+	q.RequestKey, q.AccountingDate = "continue", "2026-02-01"
+	db.Call(t, scope, "post_journal", q)
+	if v, e := db.Owner.Verify(db.Context, book.ID); e != nil || v.Entries != 2 {
+		t.Fatal("upgraded ledger could not continue", e)
+	}
+}
+
+func schemaDefinition(t *testing.T, db *testutil.Database) string {
+	t.Helper()
+	const query = `WITH objects AS (
+ SELECT 'relation' AS kind, n.nspname||'.'||c.relname AS name,
+ jsonb_build_array(c.relkind,c.relrowsecurity,c.relforcerowsecurity,c.relacl)::text AS definition
+ FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+ WHERE n.nspname IN ('public','access') AND c.relkind IN ('r','S')
+ UNION ALL
+ SELECT 'column',n.nspname||'.'||c.relname||'.'||a.attname,
+ jsonb_build_array(a.attnum,format_type(a.atttypid,a.atttypmod),a.attnotnull,a.attidentity,
+ a.attgenerated,a.attacl,pg_get_expr(d.adbin,d.adrelid))::text
+ FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
+ JOIN pg_namespace n ON n.oid=c.relnamespace
+ LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+ WHERE n.nspname IN ('public','access') AND c.relkind='r' AND a.attnum>0 AND NOT a.attisdropped
+ UNION ALL
+ SELECT 'constraint',n.nspname||'.'||c.relname||'.'||k.conname,
+ jsonb_build_array(pg_get_constraintdef(k.oid),k.convalidated)::text
+ FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid
+ JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','access')
+ UNION ALL
+ SELECT 'index',n.nspname||'.'||c.relname,pg_get_indexdef(c.oid)
+ FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+ WHERE n.nspname IN ('public','access') AND c.relkind='i'
+ UNION ALL
+ SELECT 'function',n.nspname||'.'||p.proname||'('||pg_get_function_identity_arguments(p.oid)||')',
+ jsonb_build_array(pg_get_functiondef(p.oid),p.proacl)::text
+ FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+ WHERE n.nspname IN ('public','access')
+ UNION ALL
+ SELECT 'policy',n.nspname||'.'||c.relname||'.'||p.polname,
+ jsonb_build_array(p.polcmd,p.polpermissive,p.polroles,
+ pg_get_expr(p.polqual,p.polrelid),pg_get_expr(p.polwithcheck,p.polrelid))::text
+ FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid
+ JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','access')
+ UNION ALL
+ SELECT 'trigger',n.nspname||'.'||c.relname||'.'||g.tgname,
+ jsonb_build_array(pg_get_triggerdef(g.oid),g.tgenabled)::text
+ FROM pg_trigger g JOIN pg_class c ON c.oid=g.tgrelid
+ JOIN pg_namespace n ON n.oid=c.relnamespace
+ WHERE n.nspname IN ('public','access') AND NOT g.tgisinternal
+ UNION ALL
+ SELECT 'namespace',nspname,coalesce(nspacl::text,'')
+ FROM pg_namespace WHERE nspname IN ('public','access')
+ ) SELECT jsonb_agg(jsonb_build_array(kind,name,definition) ORDER BY kind,name)::text FROM objects`
+	var definition string
+	if e := db.Admin.QueryRow(db.Context, query).Scan(&definition); e != nil {
+		t.Fatal("schema definition unavailable", e)
+	}
+	return strings.ReplaceAll(definition, db.Role, "runtime_role")
+}
+
+func TestNativeUpgradeRejectsUnrecognizedReceipts(t *testing.T) {
+	for _, variation := range []string{"empty", "modified", "gap", "unknown"} {
+		t.Run(variation, func(t *testing.T) {
+			db := testutil.New(t)
+			statement := map[string]string{
+				"empty":    "DELETE FROM public.schema_receipts",
+				"modified": "UPDATE public.schema_receipts SET sha256=repeat('0',64) WHERE filename='0001_ledger.sql'",
+				"gap":      "DELETE FROM public.schema_receipts WHERE filename='0001_ledger.sql'",
+				"unknown":  "INSERT INTO public.schema_receipts(filename,sha256) VALUES('9999_unknown.sql',repeat('0',64))",
+			}[variation]
+			if _, e := db.Admin.Exec(db.Context, statement); e != nil {
+				t.Fatal(e)
+			}
+			var before, after string
+			snapshot := "SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY filename)::text,'[]') FROM public.schema_receipts r"
+			if db.Admin.QueryRow(db.Context, snapshot).Scan(&before) != nil {
+				t.Fatal("receipt snapshot unavailable")
+			}
+			if verifyOrInitializeSchema(db.Context, db.Admin, db.Role, "ready") == nil {
+				t.Fatal("unrecognized history was upgraded")
+			}
+			if db.Admin.QueryRow(db.Context, snapshot).Scan(&after) != nil || before != after {
+				t.Fatal("rejected upgrade changed the receipts")
+			}
+		})
 	}
 }

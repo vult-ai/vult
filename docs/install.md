@@ -80,10 +80,12 @@ configuration, a missing initialized database, or a missing ledger schema stops
 startup and requires recovery. Installing over these conditions does not create
 an empty replacement or generate replacement keys.
 
-Version 0.1.0 verifies its exact ledger schema and PostgreSQL major version.
-Unsupported versions stop with an error. Later upgrades must supply explicit
-forward migrations and preserve existing financial records; this version does
-not implement a general upgrade engine or a PostgreSQL major-version upgrade.
+Version 0.2.0 upgrades a recognized v0.1.0 ledger through checksum-verified forward
+migrations. It preserves Books, journal rows, request outcomes, connections and
+local keys. Missing, altered, gapped or unknown migration receipts stop startup
+and require recovery; they never trigger a new empty ledger. Released migrations
+are unchanged. PostgreSQL remains on major version 18; a major-version database
+upgrade is not performed by this installer.
 
 ## Distribution
 
@@ -103,9 +105,10 @@ Serve `install.sh` for HTTPS `GET /` at `vult.sh`, with
 `Cache-Control: no-cache`. Serve the file verbatim, with the same response for
 browsers and terminal clients. The website remains at `vult.ai`.
 
-Before tagging a release, retain the generated `install.sh` verbatim in the
-release source tree. Compare that tagged file, the GitHub release attachment and
-the actual HTTPS response byte for byte; a template alone is not that check.
+Attach the generated `install.sh` to the release instead of committing it to the
+source tree. Its SHA-256 is recorded in the release manifest. Reproduce the
+script with the tagged template and generator, then compare the generated file,
+the release attachment and the actual HTTPS response byte for byte.
 Create the repository and GitHub release with the package and checksums first,
 then enable the HTTPS root script, and announce only after a real installation
 check. The distribution domain needs two-factor authentication and registrar

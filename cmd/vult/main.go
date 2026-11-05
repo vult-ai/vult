@@ -24,7 +24,7 @@ import (
 	"golang.org/x/term"
 )
 
-const help = `Vult 0.1.0 — local general ledger
+const help = `Vult 0.2.0 — local general ledger
 
   vult init
   vult status

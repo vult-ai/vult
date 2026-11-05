@@ -30,11 +30,13 @@ Every change must preserve these:
 - One purpose per pull request. Keep it small.
 - Run `gofmt`, `go vet` and the tests that apply to your change, and say exactly which checks you ran.
 - Name code, tests and commits for what they do.
-- Don't add telemetry, network services, external money movement or a database fallback.
+- Don't add telemetry, external money movement or a database fallback. Server
+  changes must preserve the [network boundary](docs/server.md).
 
 ## Build and test
 
-Use Go 1.27.3 on Apple Silicon macOS. Build with:
+Use Go 1.27.3. The native local service requires Apple Silicon macOS; the separate
+server supports Linux. Build the local command with:
 
 ```sh
 go build -trimpath -buildvcs=false -o build/vult ./cmd/vult

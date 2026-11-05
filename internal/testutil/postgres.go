@@ -8,7 +8,10 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vult-ai/vult/ledger"
+	"net"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +27,21 @@ type Database struct {
 	Name    string
 }
 
+// DSN describes the effective pool configuration, including an isolated database
+// and restricted credentials changed after parsing the original server URL.
+func DSN(pool *pgxpool.Pool) string {
+	c := pool.Config().ConnConfig
+	u := url.URL{Scheme: "postgres", User: url.UserPassword(c.User, c.Password), Host: net.JoinHostPort(c.Host, strconv.Itoa(int(c.Port))), Path: "/" + c.Database, RawQuery: "sslmode=disable"}
+	return u.String()
+}
+
 func New(t *testing.T) *Database {
+	return NewWithInitializer(t, ledger.Apply)
+}
+
+// NewWithInitializer creates the same isolated database and restricted login,
+// with an explicit initializer for upgrade tests against an older schema.
+func NewWithInitializer(t *testing.T, initialize func(context.Context, *pgxpool.Pool, string) error) *Database {
 	t.Helper()
 	file := os.Getenv("VULT_TEST_DSN_FILE")
 	if file == "" || os.Getenv("VULT_TEST_ISOLATED") != "1" {
@@ -87,7 +104,7 @@ func New(t *testing.T) *Database {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = ledger.Apply(ctx, db.Admin, db.Role); e != nil {
+	if e = initialize(ctx, db.Admin, db.Role); e != nil {
 		if p, ok := e.(*pgconn.PgError); ok {
 			t.Logf("schema SQL context: %s; position %d; internal position %d", p.Where, p.Position, p.InternalPosition)
 		}

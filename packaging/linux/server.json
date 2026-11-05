@@ -1,0 +1,12 @@
+{
+  "origin": "https://ledger.example.com",
+  "listen": "127.0.0.1:9000",
+  "trusted_proxies": ["127.0.0.1/32"],
+  "authentication": {
+    "mode": "builtin",
+    "auth_dsn_file": "/run/vult/auth.dsn",
+    "owner_dsn_file": "/run/vult/owner.dsn",
+    "username": "example",
+    "credential_key_file": "/run/vult/credential.key"
+  }
+}

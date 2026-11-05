@@ -90,6 +90,8 @@ def prepare(artifacts, output):
     if digest != checksums.get(filename):
         raise ValueError("package checksum mismatch")
     script = render(version, platform, minimum, digest).encode()
+    if manifest.get("installer_sha256") not in (None, hashlib.sha256(script).hexdigest()):
+        raise ValueError("generated installer does not match release manifest")
     release = {"version": version, "platform": platform, "minimum_macos": minimum,
                "package": filename, "package_sha256": digest,
                "installer_sha256": hashlib.sha256(script).hexdigest()}

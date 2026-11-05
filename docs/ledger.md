@@ -1,7 +1,7 @@
 # Ledger model
 
-The authoritative definition is [0001_ledger.sql](../ledger/migrations/0001_ledger.sql).
-There are nine domain tables and one installation receipt table:
+The ledger definition is [0001_ledger.sql](../ledger/migrations/0001_ledger.sql).
+There are nine ledger tables and one installation receipt table:
 
 | Table | Authoritative fact |
 | --- | --- |
@@ -20,6 +20,29 @@ Tenant-owned relationships include the tenant and Book in their foreign keys.
 An account, line, receipt or reversal cannot point across a Book. The local
 service has separate administration and restricted runtime database credentials.
 Only the runtime credential is used for agent accounting calls.
+
+`ledger.Admin` is installation-wide authority for a trusted operator or native
+local owner. Applications serving tenant owners use `Admin.ForTenant` to obtain
+a `ledger.TenantAdmin`, whose operations always select one tenant. Its scope must
+come from application-verified ownership, never an unverified request parameter
+or identity-provider role claim. Binding a tenant is not authentication or a
+membership check. This API requires trusted administration database credentials;
+it does not replace runtime row-level security or authorize a remote session.
+It has no tenant provisioning, installation backup or restore methods.
+
+[0002_server_access.sql](../ledger/migrations/0002_server_access.sql) adds verified
+identity mappings, one owner per tenant and bounded, revocable sessions. Remote
+owner operations use `access.Service.WithOwner` with separate restricted
+credentials. Row policies require a live session, origin and stored ownership;
+selecting a tenant UUID cannot grant access. Session and ownership rows remain
+locked through completion, including concurrent revocation. Owner changes need
+authentication from the preceding five minutes. Installation provisioning and
+identity recovery remain offline operator actions.
+
+Migrations apply in filename order. Existing receipt checksums and sequence must
+match before any forward change. The original ledger checksum remains the v1
+data-backup identifier; authentication and connection grants are separate from
+the financial snapshot and must not be revived by data-only restore.
 
 The runtime must use READ COMMITTED for writes. Writes update and lock the Book
 until commit; deferred checks then see preceding committed changes. The database

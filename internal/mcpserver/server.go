@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vult-ai/vult/ledger"
+	"io"
+	"log/slog"
+	"strings"
 )
 
 type Call func(context.Context, string, json.RawMessage) (json.RawMessage, error)
@@ -41,12 +44,25 @@ var definitions = []definition{
 }
 
 func New(call Call, access string) *mcp.Server {
-	server := mcp.NewServer(&mcp.Implementation{Name: "vult", Version: "0.1.0"}, nil)
+	return makeServer(call, access, false)
+}
+
+func NewRemote(call Call, access string) *mcp.Server { return makeServer(call, access, true) }
+func makeServer(call Call, access string, remote bool) *mcp.Server {
+	version := "0.2.0"
+	options := &mcp.ServerOptions{Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	if remote {
+		options.Capabilities = &mcp.ServerCapabilities{}
+	}
+	server := mcp.NewServer(&mcp.Implementation{Name: "vult", Version: version}, options)
 	for _, item := range definitions {
 		if ledger.Writing(item.Name) && access != "write" {
 			continue
 		}
 		item := item
+		if remote && item.Name == "list_journals" {
+			item.Properties = strings.ReplaceAll(item.Properties, `"maximum":100`, `"maximum":20`)
+		}
 		var properties map[string]json.RawMessage
 		if json.Unmarshal([]byte(item.Properties), &properties) != nil {
 			panic("invalid built-in tool schema")

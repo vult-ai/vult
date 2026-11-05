@@ -1,10 +1,13 @@
 # Vult
 
-A local double-entry ledger for agents. Agents supply debits and credits;
+A double-entry ledger for agents. Agents supply debits and credits;
 Vult records a balanced, immutable journal.
 
-Vult 0.1.0 supports **macOS 26 on Apple Silicon**. Its native installer includes
-PostgreSQL. It has no web application, network listener or Docker dependency.
+Vult 0.2.0 supports local use on **macOS 26 on Apple Silicon** and a separate
+**Linux server** behind HTTPS. The macOS installer includes PostgreSQL and uses
+only a local socket, with no Docker dependency. Server mode adds human sign-in,
+scoped owner administration and OAuth for remote agents. There is no bookkeeping
+web application.
 
 ## Start a Book
 
@@ -18,7 +21,7 @@ The installer downloads a fixed release, checks its SHA-256, and asks for native
 administrator approval to install the protected service. It includes PostgreSQL;
 you do not need Docker, Go or a compiler. See [installation](docs/install.md).
 
-The v0.1.0 package is **unsigned and not notarized by Apple**. Its executable
+The macOS package is **unsigned and not notarized by Apple**. Its executable
 signatures are ad-hoc. The terminal installer checks the pinned package checksum
 and does not disable macOS security protections.
 
@@ -140,6 +143,11 @@ releases and migration files remain fixed.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for build and test requirements and
 [native packaging](docs/packaging.md) for installer creation.
+
+For self-hosting, see [running a Linux server](docs/server.md). Built-in sign-in
+uses a passphrase and authenticator; OIDC is optional. Server identity and billing
+integrations use extension interfaces. Open alone checks tenant and Book access.
+The macOS command continues to use native approval over its local socket.
 
 Apache-2.0. See [LICENSE](LICENSE), [NOTICE](NOTICE) and
 [third-party notices](THIRD_PARTY_NOTICES.md).

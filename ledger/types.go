@@ -17,6 +17,7 @@ var (
 	ErrConflict     = errors.New("request key already used with different input")
 	ErrNotFound     = errors.New("record not found")
 	ErrUncertain    = errors.New("outcome unresolved; look up the original request key")
+	ErrLimit        = errors.New("result exceeds the supported record limit")
 	idPattern       = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$`)
 	codePattern     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,31}$`)
 	amountPattern   = regexp.MustCompile(`^[1-9][0-9]{0,18}$`)

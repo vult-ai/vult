@@ -1,0 +1,18 @@
+{
+	admin off
+	persist_config off
+	log default {
+		exclude http.log.access http.log.error
+	}
+}
+
+ledger.example.com {
+	request_header -Forwarded
+	request_header -X-Forwarded-*
+	reverse_proxy 127.0.0.1:9000 {
+		header_up Host ledger.example.com
+		header_up X-Forwarded-Host ledger.example.com
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-For {remote_host}
+	}
+}

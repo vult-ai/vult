@@ -213,6 +213,25 @@ if os.environ.get('FIXTURE_INSTALL_FAIL'):sys.exit(1)
         with self.assertRaises(ValueError): installer.prepare(artifacts, output)
         self.assertFalse(output.exists())
 
+    def test_generated_installer_must_match_release_manifest(self):
+        artifacts = self.artifacts()
+        manifest = artifacts / "manifest.json"
+        metadata = json.loads(manifest.read_text())
+        metadata["installer_sha256"] = hashlib.sha256(self.script.encode()).hexdigest()
+
+        def update_manifest():
+            data = json.dumps(metadata).encode()
+            manifest.write_bytes(data)
+            (artifacts / "SHA256SUMS").write_text(f"{hashlib.sha256(data).hexdigest()}  manifest.json\n{self.digest}  vult-0.1.0-macos-arm64.pkg\n")
+
+        update_manifest()
+        installer.prepare(artifacts, self.work / "matching")
+        metadata["installer_sha256"] = "0" * 64
+        update_manifest()
+        output = self.work / "mismatched"
+        with self.assertRaises(ValueError): installer.prepare(artifacts, output)
+        self.assertFalse(output.exists())
+
     def test_package_links_are_not_accepted(self):
         artifacts = self.artifacts()
         package = artifacts / "vult-0.1.0-macos-arm64.pkg"

@@ -1,8 +1,8 @@
 # MCP connections
 
-Vult uses the MCP stdio transport. A client starts the protected `vult` executable
+The local macOS service uses MCP stdio. A client starts the protected `vult` executable
 and exchanges JSON-RPC messages on stdin/stdout. Diagnostics use stderr. There is
-no HTTP endpoint, remote login or client-specific Vult command.
+no network listener in local mode or client-specific Vult command.
 
 Create a connection from your own terminal:
 
@@ -45,6 +45,21 @@ permits that bridge to use the connection for up to eight hours. The credential
 stays in memory, is bound to the calling OS user, and is lost when the service
 restarts. Reconnect to obtain another approval when a session expires.
 
+## Remote server connections
+
+A separately configured Linux server exposes Streamable HTTP MCP at
+`https://ledger.example.com/mcp`. Use that URL in your client's remote MCP
+configuration. The client must support OAuth discovery, public-client
+registration, S256 PKCE and the exact MCP resource. Sign in through the server's
+HTTPS login, select an owned Book and choose Read or Write before consenting.
+The same eleven tools are used; Write never includes owner administration.
+
+Do not put access credentials in a URL or copy browser cookies into an agent.
+Access credentials expire after 15 minutes; refresh credentials rotate on use.
+Reconnect can retain an existing connection actor and its request outcomes.
+See [remote agent authorization](server.md#remote-agents) for scope, revocation
+and recovery rules. The local macOS bridge and its native approval are unchanged.
+
 ## Tool catalog
 
 | Tool | Access | Purpose |
@@ -52,7 +67,7 @@ restarts. Reconnect to obtain another approval when a session expires.
 | `get_book` | read | Currency, precision and selected Book identity |
 | `list_accounts` | read | Permanent IDs and current display revisions |
 | `get_journal` | read | One entry and every line |
-| `list_journals` | read | Sequence-ordered pages of up to 100 entries |
+| `list_journals` | read | Sequence-ordered pages: up to 100 locally, 20 remotely |
 | `get_balance` | read | Signed debit-positive minor-unit balance |
 | `get_trial_balance` | read | All balances, optionally through an accounting date |
 | `get_request_outcome` | read | This connection actor's retained request result |

@@ -1,5 +1,6 @@
 /dist/
 /build/
+/install.sh
 *.age
 *.sock
 .DS_Store

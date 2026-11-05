@@ -15,7 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Admin is used only after native owner authorization.
+// Admin is installation-wide administration for trusted operators and the
+// native local owner. Remote tenant owners must use TenantAdmin instead.
 type Admin struct{ DB *pgxpool.Pool }
 
 func (a Admin) EnsureTenant(ctx context.Context) (string, error) {
@@ -168,31 +169,42 @@ func (a Admin) Export(ctx context.Context, book string) (Export, error) {
 	if e = tx.QueryRow(ctx, "SELECT tenant_id::text FROM public.books WHERE id=$1", book).Scan(&tenant); e != nil {
 		return Export{}, dbError(e)
 	}
-	s := Scope{TenantID: tenant, BookID: book}
-	out := Export{Format: "vult-journal-v1", Entries: []Entry{}}
-	if out.Book, e = readBook(ctx, tx, s); e != nil {
-		return Export{}, e
-	}
-	if out.Accounts, e = readAccounts(ctx, tx, s); e != nil {
-		return Export{}, e
-	}
-	rows, e := tx.Query(ctx, "SELECT id::text FROM public.entries WHERE tenant_id=$1 AND book_id=$2 ORDER BY sequence LIMIT 100001", tenant, book)
+	out, e := exportBook(ctx, tx, Scope{TenantID: tenant, BookID: book})
 	if e != nil {
 		return Export{}, e
+	}
+	if e = tx.Commit(ctx); e != nil {
+		return Export{}, ErrUncertain
+	}
+	return out, nil
+}
+
+func exportBook(ctx context.Context, tx pgx.Tx, s Scope) (Export, error) {
+	out := Export{Format: "vult-journal-v1", Entries: []Entry{}}
+	var e error
+	if out.Book, e = readBook(ctx, tx, s); e != nil {
+		return Export{}, dbError(e)
+	}
+	if out.Accounts, e = readAccounts(ctx, tx, s); e != nil {
+		return Export{}, dbError(e)
+	}
+	rows, e := tx.Query(ctx, "SELECT id::text FROM public.entries WHERE tenant_id=$1 AND book_id=$2 ORDER BY sequence LIMIT 100001", s.TenantID, s.BookID)
+	if e != nil {
+		return Export{}, dbError(e)
 	}
 	ids := []string{}
 	for rows.Next() {
 		var id string
 		if e = rows.Scan(&id); e != nil {
 			rows.Close()
-			return Export{}, e
+			return Export{}, dbError(e)
 		}
 		ids = append(ids, id)
 	}
 	e = rows.Err()
 	rows.Close()
 	if e != nil {
-		return Export{}, e
+		return Export{}, dbError(e)
 	}
 	if len(ids) > 100000 {
 		return Export{}, errors.New("export exceeds the supported entry limit")
@@ -200,12 +212,9 @@ func (a Admin) Export(ctx context.Context, book string) (Export, error) {
 	for _, id := range ids {
 		v, e := readEntry(ctx, tx, s, id)
 		if e != nil {
-			return Export{}, e
+			return Export{}, dbError(e)
 		}
 		out.Entries = append(out.Entries, v)
-	}
-	if e = tx.Commit(ctx); e != nil {
-		return Export{}, ErrUncertain
 	}
 	return out, nil
 }
@@ -223,7 +232,11 @@ func (a Admin) Verify(ctx context.Context, book string) (Verification, error) {
 	if e != nil {
 		return Verification{}, e
 	}
-	out := Verification{BookID: book, Entries: len(v.Entries), Status: "verified"}
+	return verifyExport(v)
+}
+
+func verifyExport(v Export) (Verification, error) {
+	out := Verification{BookID: v.Book.ID, Entries: len(v.Entries), Status: "verified"}
 	seenEntries, seenLines := map[string]Entry{}, map[string]bool{}
 	for _, entry := range v.Entries {
 		q := PostJournal{RequestKey: "verification", EconomicDate: entry.EconomicDate, AccountingDate: entry.AccountingDate, Description: entry.Description}

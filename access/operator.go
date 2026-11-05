@@ -1,0 +1,118 @@
+package access
+
+import (
+	"context"
+	"strings"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/vult-ai/vult/ledger"
+)
+
+// Operator is offline installation authority, never an HTTP dependency.
+type Operator struct{ DB *pgxpool.Pool }
+
+// BindOwner creates a tenant when tenant is empty, or binds an existing tenant
+// explicitly. A tenant can have one owner; replacing it requires recovery.
+func (o Operator) BindOwner(ctx context.Context, tenant string, id Identity) (string, error) {
+	if o.DB == nil || !validIdentity(id) || tenant != "" && !ledger.ValidID(tenant) {
+		return "", ErrDenied
+	}
+	tx, e := o.DB.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if e != nil {
+		return "", ErrDenied
+	}
+	defer tx.Rollback(context.Background())
+	tenant, _, e = bindOwner(ctx, tx, tenant, id)
+	if e != nil {
+		return "", e
+	}
+	if tx.Commit(ctx) != nil {
+		return "", ErrDenied
+	}
+	return tenant, nil
+}
+
+func bindOwner(ctx context.Context, tx pgx.Tx, tenant string, id Identity) (string, string, error) {
+	if !validIdentity(id) || tenant != "" && !ledger.ValidID(tenant) {
+		return "", "", ErrDenied
+	}
+	if tenant == "" {
+		tenant = ledger.ID()
+		if _, e := tx.Exec(ctx, "INSERT INTO public.tenants(id) VALUES($1)", tenant); e != nil {
+			return "", "", ErrDenied
+		}
+	}
+	var user string
+	e := tx.QueryRow(ctx, `INSERT INTO access.identities(id,issuer,subject) VALUES($1,$2,$3)
+ ON CONFLICT(issuer,subject) DO UPDATE SET issuer=excluded.issuer RETURNING id::text`, ledger.ID(), id.Issuer, id.Subject).Scan(&user)
+	if e != nil {
+		return "", "", ErrDenied
+	}
+	if _, e = tx.Exec(ctx, "INSERT INTO access.owners(tenant_id,identity_id) VALUES($1,$2)", tenant, user); e != nil {
+		return "", "", ErrDenied
+	}
+	return tenant, user, nil
+}
+
+// RevokeIdentity invalidates sessions and delegated credentials through its epoch.
+func (o Operator) RevokeIdentity(ctx context.Context, id Identity) error {
+	if o.DB == nil || !validIdentity(id) {
+		return ErrDenied
+	}
+	tag, e := o.DB.Exec(ctx, "UPDATE access.identities SET epoch=epoch+1 WHERE issuer=$1 AND subject=$2", id.Issuer, id.Subject)
+	if e != nil || tag.RowsAffected() != 1 {
+		return ErrDenied
+	}
+	return nil
+}
+
+// ConfigureRoles grants only distinct restricted LOGIN roles. The ledger runtime
+// role is configured by ledger.Apply and must remain separate from both roles.
+func (o Operator) ConfigureRoles(ctx context.Context, runtimeRole, authRole, ownerRole string) error {
+	if o.DB == nil || runtimeRole == "" || authRole == "" || ownerRole == "" || authRole == ownerRole || runtimeRole == authRole || runtimeRole == ownerRole || strings.ContainsAny(runtimeRole+authRole+ownerRole, "\x00") {
+		return ErrDenied
+	}
+	for _, role := range []string{runtimeRole, authRole, ownerRole} {
+		var safe bool
+		e := o.DB.QueryRow(ctx, `SELECT rolcanlogin AND NOT(rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)
+ AND NOT EXISTS(SELECT 1 FROM pg_auth_members WHERE member=r.oid)
+ FROM pg_roles r WHERE rolname=$1`, role).Scan(&safe)
+		if e != nil || !safe {
+			return ErrDenied
+		}
+	}
+	tx, e := o.DB.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if e != nil {
+		return ErrDenied
+	}
+	defer tx.Rollback(context.Background())
+	a, r := pgx.Identifier{authRole}.Sanitize(), pgx.Identifier{ownerRole}.Sanitize()
+	statements := []string{
+		"GRANT USAGE ON SCHEMA access,public TO " + a + "," + r,
+		"GRANT SELECT ON public.schema_receipts TO " + a + "," + r,
+		"GRANT EXECUTE ON FUNCTION access.issue_session(text,text,text,text,timestamptz),access.session_identity(text,text),access.session_tenants(text,text),access.end_session(text,text) TO " + a,
+		"GRANT EXECUTE ON FUNCTION access.builtin_ready(text,text),access.reserve_builtin(text),access.finish_builtin(uuid,bigint,text,text,bigint,text),access.start_login(text,text,text,text,text,text),access.consume_login(text,text,text,text) TO " + a,
+		"GRANT EXECUTE ON FUNCTION access.register_client(text,text,text[]),access.start_oauth(text,text,text,text,text,text,text,text),access.pending_oauth(text,text),access.consent_oauth(text,text,text,uuid,uuid,text,uuid,text,boolean),access.exchange_oauth(text,text,text,text,text,text,text,text,text),access.resolve_agent(text,text) TO " + a,
+		"GRANT EXECUTE ON FUNCTION access.require_owner(uuid,boolean),access.owner_allowed(uuid) TO " + r,
+		"GRANT EXECUTE ON FUNCTION access.delegation_allowed(uuid,boolean) TO " + r,
+		"GRANT EXECUTE ON FUNCTION access.consent_books(text,text),access.consent_connections(text,text) TO " + a,
+		"GRANT SELECT,INSERT ON access.owner_requests TO " + r,
+		"GRANT EXECUTE ON FUNCTION access.owner_identity(uuid) TO " + r,
+		"GRANT EXECUTE ON FUNCTION access.owner_write_allowed(uuid) TO " + r,
+		"GRANT SELECT ON public.books,public.connections,public.accounts,public.account_revisions,public.entries,public.lines,public.requests,public.closed_periods TO " + r,
+		"GRANT INSERT ON public.books,public.connections,public.closed_periods TO " + r,
+		"GRANT UPDATE(write_epoch) ON public.books TO " + r,
+		"GRANT UPDATE(revoked_at) ON public.connections TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.ledger_lock(uuid,uuid),public.ledger_context(uuid,uuid),public.ledger_import_owner(),public.ledger_allowed(uuid,uuid,boolean) TO " + r,
+	}
+	for _, sql := range statements {
+		if _, e = tx.Exec(ctx, sql); e != nil {
+			return ErrDenied
+		}
+	}
+	if tx.Commit(ctx) != nil {
+		return ErrDenied
+	}
+	return nil
+}

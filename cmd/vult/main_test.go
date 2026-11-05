@@ -14,7 +14,7 @@ func TestPublicHelpAndVersionNeedNoInstallation(t *testing.T) {
 		if e := run(args, &out, &errout); e != nil {
 			t.Fatal(e)
 		}
-		if !strings.Contains(out.String(), "0.1.0") || errout.Len() != 0 {
+		if !strings.Contains(out.String(), "0.2.0") || errout.Len() != 0 {
 			t.Fatal("invalid help or version output")
 		}
 	}

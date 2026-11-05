@@ -13,8 +13,9 @@ import subprocess
 import tarfile
 import tempfile
 import urllib.request
+from make_installer import render
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 GO_VERSION = "go1.27.3"
 PG_VERSION = "18.6"
 PG_SHA256 = "555610c24d53e4316da5b7d3fc25c279d96856d5e0e23ee308c328c5fa881d9f"
@@ -190,6 +191,11 @@ def main():
         if args.sign_installer:
             cmd.extend(["--sign", args.sign_installer])
         run(cmd + [package])
+        # Generate the standalone installer only after the package is final.
+        # Generated release files are not part of the source archive.
+        installer = render(VERSION, "macos-arm64", "26.0", digest(package)).encode()
+        (output / "install.sh").write_bytes(installer)
+        (output / "install.sh").chmod(0o755)
         archive = output / f"vult-{VERSION}-source.tar.gz"
         # Normalize archive metadata and omit machine paths and VCS metadata.
         import gzip
@@ -203,6 +209,7 @@ def main():
                     info.uid = info.gid = info.mtime = 0
                     tar.addfile(info, io.BytesIO(data))
         manifest = {"version": VERSION, "platform": "macos-arm64", "minimum_macos": "26.0", "go": GO_VERSION, "postgresql": PG_VERSION, "postgresql_source_sha256": PG_SHA256, "schema_sha256": digest(clean / "ledger/migrations/0001_ledger.sql"), "source_files": {name: digest(clean / name) for name in files}, "application_signing": "developer-id" if args.sign_application else "ad-hoc", "installer_signing": "developer-id" if args.sign_installer else "unsigned", "notarized": False}
+        manifest["installer_sha256"] = hashlib.sha256(installer).hexdigest()
         (output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
         artifacts = sorted(output.iterdir())
         (output / "SHA256SUMS").write_text("".join(f"{digest(path)}  {path.name}\n" for path in artifacts))

@@ -6,13 +6,13 @@ import (
 	"embed"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"sort"
 	"strings"
 )
 
-//go:embed migrations/0001_ledger.sql
+//go:embed migrations/*.sql
 var migrations embed.FS
 
 func SchemaSHA256() string {
@@ -24,8 +24,39 @@ func SchemaSHA256() string {
 	return hex.EncodeToString(s[:])
 }
 
-// Apply initializes an empty database, or verifies its existing exact receipt.
+func migrationNames() []string {
+	entries, e := migrations.ReadDir("migrations")
+	if e != nil {
+		panic(e)
+	}
+	names := []string{}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
+			names = append(names, entry.Name())
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+func migrationSum(name string) string {
+	b, _ := migrations.ReadFile("migrations/" + name)
+	s := sha256.Sum256(b)
+	return hex.EncodeToString(s[:])
+}
+
+// Apply verifies installed receipts and applies only missing forward migrations.
 func Apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string) error {
+	return apply(ctx, admin, runtimeRole, false)
+}
+
+// Upgrade applies forward migrations only to a recognized, initialized ledger.
+// Missing or invalid schema receipts require recovery instead of initialization.
+func Upgrade(ctx context.Context, admin *pgxpool.Pool, runtimeRole string) error {
+	return apply(ctx, admin, runtimeRole, true)
+}
+
+func apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string, initialized bool) error {
 	if runtimeRole == "" || strings.ContainsAny(runtimeRole, "\x00") {
 		return ErrInvalid
 	}
@@ -42,27 +73,37 @@ func Apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string) error {
 		return e
 	}
 	if exists {
-		var sum string
-		var n int
-		if e = tx.QueryRow(ctx, "SELECT count(*),coalesce(min(sha256),'') FROM public.schema_receipts").Scan(&n, &sum); e != nil || n != 1 || sum != SchemaSHA256() {
-			return errors.New("installed schema does not match this release")
+		if e = verifyReceipts(ctx, tx, false); e != nil {
+			return e
 		}
 	} else {
+		if initialized {
+			return errors.New("stored schema is missing; recovery is required")
+		}
 		var occupied bool
 		if e = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_tables WHERE schemaname='public')").Scan(&occupied); e != nil || occupied {
 			return errors.New("a fresh database is required")
 		}
-		b, _ := migrations.ReadFile("migrations/0001_ledger.sql")
-		if _, e = tx.Exec(ctx, string(b)); e != nil {
-			return e
-		}
 		if _, e = tx.Exec(ctx, "CREATE TABLE public.schema_receipts(filename text PRIMARY KEY,sha256 text NOT NULL CHECK(sha256 ~ '^[a-f0-9]{64}$'),applied_at timestamptz NOT NULL DEFAULT clock_timestamp())"); e != nil {
 			return e
 		}
-		if _, e = tx.Exec(ctx, "INSERT INTO public.schema_receipts(filename,sha256) VALUES('0001_ledger.sql',$1)", SchemaSHA256()); e != nil {
+		if _, e = tx.Exec(ctx, "REVOKE ALL ON public.schema_receipts FROM PUBLIC"); e != nil {
 			return e
 		}
-		if _, e = tx.Exec(ctx, "REVOKE ALL ON public.schema_receipts FROM PUBLIC"); e != nil {
+	}
+	for _, name := range migrationNames() {
+		var applied bool
+		if e = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM public.schema_receipts WHERE filename=$1)", name).Scan(&applied); e != nil {
+			return e
+		}
+		if applied {
+			continue
+		}
+		b, _ := migrations.ReadFile("migrations/" + name)
+		if _, e = tx.Exec(ctx, string(b)); e != nil {
+			return e
+		}
+		if _, e = tx.Exec(ctx, "INSERT INTO public.schema_receipts(filename,sha256) VALUES($1,$2)", name, migrationSum(name)); e != nil {
 			return e
 		}
 	}
@@ -73,6 +114,10 @@ func Apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string) error {
 		"GRANT INSERT ON public.accounts,public.account_revisions,public.entries,public.lines,public.requests TO " + role,
 		"GRANT UPDATE(write_epoch) ON public.books TO " + role,
 		"GRANT UPDATE(id) ON public.connections TO " + role,
+		"GRANT USAGE ON SCHEMA access TO " + role,
+		"GRANT EXECUTE ON FUNCTION access.owner_allowed(uuid) TO " + role,
+		"GRANT EXECUTE ON FUNCTION access.owner_write_allowed(uuid) TO " + role,
+		"GRANT EXECUTE ON FUNCTION access.delegation_allowed(uuid,boolean),access.require_agent(text,text,uuid,uuid,uuid,uuid,text) TO " + role,
 	}
 	for _, name := range []string{"ledger_context(uuid,uuid)", "ledger_allowed(uuid,uuid,boolean)", "ledger_lock(uuid,uuid)", "ledger_import_owner()"} {
 		statements = append(statements, "GRANT EXECUTE ON FUNCTION public."+name+" TO "+role)
@@ -85,11 +130,30 @@ func Apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string) error {
 	return tx.Commit(ctx)
 }
 func Ready(ctx context.Context, pool *pgxpool.Pool) error {
-	var name, sum string
-	var n int
-	e := pool.QueryRow(ctx, "SELECT count(*),coalesce(min(filename),''),coalesce(min(sha256),'') FROM public.schema_receipts").Scan(&n, &name, &sum)
-	if e != nil || n != 1 || name != "0001_ledger.sql" || sum != SchemaSHA256() {
-		return fmt.Errorf("schema verification failed")
+	return verifyReceipts(ctx, pool, true)
+}
+
+type receiptReader interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}
+
+func verifyReceipts(ctx context.Context, db receiptReader, complete bool) error {
+	rows, e := db.Query(ctx, "SELECT filename,sha256 FROM public.schema_receipts ORDER BY filename")
+	if e != nil {
+		return errors.New("schema verification failed")
+	}
+	defer rows.Close()
+	expected := migrationNames()
+	n := 0
+	for rows.Next() {
+		var name, sum string
+		if rows.Scan(&name, &sum) != nil || n >= len(expected) || name != expected[n] || sum != migrationSum(name) {
+			return errors.New("installed schema does not match this release")
+		}
+		n++
+	}
+	if rows.Err() != nil || n == 0 || complete && n != len(expected) {
+		return errors.New("schema verification failed")
 	}
 	return nil
 }
