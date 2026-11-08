@@ -20,6 +20,7 @@ var (
 	ErrInvalid     = errors.New("invalid document request")
 	ErrUnavailable = errors.New("document storage unavailable")
 	ErrIntegrity   = errors.New("document integrity check failed")
+	ErrMediaType   = errors.New("unsupported document media type")
 	ErrExists      = errors.New("document object already exists")
 	objectPattern  = regexp.MustCompile(`^[a-f0-9]{64}$`)
 	idPattern      = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$`)

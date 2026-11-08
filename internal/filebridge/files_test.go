@@ -102,10 +102,15 @@ func TestFilesTransferOriginalWithoutJSONBytesOrOverwrite(t *testing.T) {
 	if err != nil || !transport.uploaded || !bytes.Equal(transport.data, data) || bytes.Contains(result, data[:100]) {
 		t.Fatal("file was not streamed correctly", err)
 	}
-	if _, err = files.Call(ctx, "get_document", body(map[string]any{"document_id": transport.document.ID, "output": "returned.pdf"})); err != nil {
+	exported, err := files.Call(ctx, "get_document", body(map[string]any{"document_id": transport.document.ID, "output": "returned.pdf"}))
+	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile(filepath.Join(exports, "returned.pdf"))
+	var where struct{ Path string }
+	if json.Unmarshal(exported, &where) != nil || where.Path != filepath.Join(exports, "returned.pdf") {
+		t.Fatal("the export did not say where the copy is", string(exported))
+	}
+	got, err := os.ReadFile(where.Path)
 	if err != nil || !bytes.Equal(got, data) {
 		t.Fatal("export changed bytes", err)
 	}

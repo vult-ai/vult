@@ -1,0 +1,12 @@
+/* Sources: read-only list of a Book's originals and the details of one. */
+.book-cell.document-preview-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.document-preview-name > svg { flex: none; color: var(--color-text-tertiary); }
+.document-preview-name > .entry-link { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The title, then the Book search the list is filtered by. */
+.sources-toolbar-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}

@@ -1,0 +1,4 @@
+.vult-column-resizer { position: absolute; inset-block: 0; inset-inline-end: 0; z-index: 5; width: 12px; cursor: col-resize; touch-action: none; user-select: none; }
+.vult-column-resizer::after { content: ""; position: absolute; inset-block: 5px; inset-inline-end: 0; width: 2px; background: transparent; }
+.vult-column-resizer:hover::after, .vult-column-resizer:focus-visible::after, .vult-column-resizer[data-resizing]::after { background: var(--color-fg-brand-primary); }
+.vult-column-resizer[aria-disabled] { pointer-events: none; cursor: default; }

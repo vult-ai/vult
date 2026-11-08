@@ -1,4 +1,5 @@
 FROM scratch
 COPY --chmod=0555 build/vult-server-admin /vult-server-admin
+COPY --chmod=0444 LICENSE NOTICE THIRD_PARTY_NOTICES.md /usr/share/licenses/vult/
 USER 65532:65532
 ENTRYPOINT ["/vult-server-admin"]

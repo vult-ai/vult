@@ -6,10 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
-	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -20,6 +17,19 @@ type Authorization struct {
 	Action string `json:"action"`
 	Digest string `json:"digest"`
 	UID    uint32 `json:"uid"`
+}
+
+// OwnerRequest identifies a live system-bus connection, never a claimed UID.
+type OwnerRequest struct {
+	Action  string          `json:"action"`
+	Payload json.RawMessage `json:"payload"`
+	BusName string          `json:"bus_name"`
+}
+
+// Peer is obtained from the accepted socket, not from a request.
+type Peer struct {
+	UID uint32
+	PID uint32
 }
 
 func Digest(payload any) string {
@@ -44,7 +54,7 @@ func (c Client) OwnerAuthorization(ctx context.Context, action string, payload a
 	if !OwnerAction(action) {
 		return "", errors.New("unknown owner action")
 	}
-	prompt, e := ownerPrompt(action, payload)
+	prompt, e := OwnerPrompt(action, payload)
 	if e != nil {
 		return "", e
 	}
@@ -54,18 +64,7 @@ func (c Client) OwnerAuthorization(ctx context.Context, action string, payload a
 	if os.Geteuid() == 0 {
 		result, e = c.Call(ctx, "authorize", "", input)
 	} else {
-		if runtime.GOOS != "darwin" {
-			return "", errors.New("owner authorization requires macOS")
-		}
-		command := BinaryPath + " _authorize " + action + " " + input.Digest + " " + strconv.FormatUint(uint64(uid), 10)
-		script := fmt.Sprintf("do shell script %q with administrator privileges with prompt %q", command, prompt)
-		cmd := exec.CommandContext(ctx, "/usr/bin/osascript", "-e", script)
-		cmd.Env = []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin", "LANG=C"}
-		output, err := cmd.Output()
-		if err != nil {
-			return "", errors.New("owner authorization cancelled or unavailable")
-		}
-		result = json.RawMessage(strings.TrimSpace(string(output)))
+		result, e = c.authorizeOwner(ctx, input, payload, prompt)
 	}
 	if e != nil {
 		return "", e
@@ -79,7 +78,21 @@ func (c Client) OwnerAuthorization(ctx context.Context, action string, payload a
 	return reply.Token, nil
 }
 
-func ownerPrompt(action string, payload any) (string, error) {
+// OwnerPrompt describes the exact authority requested in the native dialog.
+func OwnerPrompt(action string, payload any) (string, error) {
+	if !OwnerAction(action) {
+		return "", errors.New("unknown owner action")
+	}
+	if action == "browser_setup" || action == "browser_reset" {
+		data, err := json.Marshal(payload)
+		if err != nil || strictjson.Decode(data, &struct{}{}) != nil {
+			return "", errors.New("invalid browser setup request")
+		}
+		if action == "browser_reset" {
+			return "Reset Vult browser sign-in. Existing passkeys and browser sign-ins will stop working. Your Books are preserved.", nil
+		}
+		return "Finish setting up Vult on this Mac. Your browser opens next, where you create the passkey that protects your Vult.", nil
+	}
 	prompt := "Vult requires administrator approval for " + strings.ReplaceAll(action, "_", " ") + "."
 	if action == "archive_backup" {
 		data, err := json.Marshal(payload)
@@ -119,7 +132,7 @@ func ownerPrompt(action string, payload any) (string, error) {
 }
 func OwnerAction(s string) bool {
 	switch s {
-	case "init", "book_create", "book_list", "connection_create", "connection_list", "connection_revoke", "period_close", "verify", "export", "backup", "restore", "open_session", "archive_backup", "archive_restore":
+	case "init", "book_create", "book_list", "connection_create", "connection_list", "connection_revoke", "period_close", "verify", "export", "backup", "restore", "open_session", "archive_backup", "archive_restore", "browser_setup", "browser_reset":
 		return true
 	}
 	return false

@@ -1,0 +1,24 @@
+.book-url-id {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.book-url-id-value {
+  user-select: all;
+  font-variant-numeric: tabular-nums;
+}
+.book-url-form {
+  margin: 0;
+  border-top: 1px solid var(--color-border-secondary);
+}
+.book-url-form .vult-settings-row-content {
+  align-items: stretch;
+  gap: 12px;
+}
+/* The address form is the section's first row; the Book ID row follows it. */
+.vult-settings-rows > .book-url-form:first-child {
+  border-top: 0;
+}
+.book-url-form + .vult-settings-row {
+  border-top: 1px solid var(--color-border-secondary);
+}

@@ -7,15 +7,18 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import signal
+import stat
 import subprocess
 import tarfile
 import tempfile
 import urllib.request
+from go_notices import check as check_go_notices
 from make_installer import render
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 GO_VERSION = "go1.27.3"
 PG_VERSION = "18.6"
 PG_SHA256 = "555610c24d53e4316da5b7d3fc25c279d96856d5e0e23ee308c328c5fa881d9f"
@@ -26,6 +29,57 @@ ENV = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "C", "LC_ALL": "C", "SOU
 def digest(path):
     with path.open("rb") as f:
         return hashlib.file_digest(f, "sha256").hexdigest()
+
+
+# Institution and brand artwork is served from the shared asset origin only. Its
+# catalogs and content-addressed originals never enter a source tree or package;
+# synthetic test artwork under web/unit/fixtures/ is the one exception.
+ARTWORK_CATALOGS = {"catalog.v1.json", "brand-logos.v1.json", "brands.v1.json"}
+ARTWORK_ORIGINAL = re.compile(r"^[0-9a-f]{64}\.(?:svg|png|webp)$")
+
+
+def shared_artwork(name):
+    parts = Path(name).parts
+    if parts[:3] == ("web", "unit", "fixtures"):
+        return False
+    return "shared-assets" in parts or parts[-1] in ARTWORK_CATALOGS or bool(ARTWORK_ORIGINAL.match(parts[-1]))
+
+
+def interface_files(root):
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("interface must be a regular build directory")
+    files, total = {}, 0
+    for path in sorted(root.rglob("*")):
+        mode = path.lstat().st_mode
+        if stat.S_ISDIR(mode):
+            continue
+        if not stat.S_ISREG(mode) or any(part.startswith(".") for part in path.relative_to(root).parts):
+            raise ValueError("unexpected interface build member")
+        if shared_artwork(path.relative_to(root).as_posix()):
+            raise ValueError("shared artwork is served from its origin, not packaged")
+        total += path.stat().st_size
+        if total > 64 << 20 or len(files) >= 4096:
+            raise ValueError("interface build exceeds supported size")
+        files[path.relative_to(root).as_posix()] = digest(path)
+    if "index.html" not in files or not 0 < (root / "index.html").stat().st_size <= 1 << 20:
+        raise ValueError("interface index is missing or oversized")
+    manifest = json.dumps(files, sort_keys=True, separators=(",", ":")).encode()
+    return files, hashlib.sha256(manifest).hexdigest()
+
+
+def stage_interface(root, destination, expected):
+    files, actual = interface_files(root)
+    if actual != expected:
+        raise ValueError("interface build checksum mismatch")
+    destination.mkdir(parents=True, exist_ok=False)
+    for name, checksum in files.items():
+        target = destination / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(root / name, target, follow_symlinks=False)
+        if target.is_symlink() or digest(target) != checksum:
+            raise ValueError("interface build changed while staging")
+        target.chmod(0o644)
+    return actual
 
 
 def run(args, cwd=None, env=None, timeout=600):
@@ -59,6 +113,8 @@ def selected_files(source):
             raise ValueError("invalid or duplicate source path")
         if any(part in (".DS_Store", ".git", "__pycache__") or part.startswith("._") for part in rel.parts):
             raise ValueError("machine metadata cannot be selected as source")
+        if shared_artwork(name):
+            raise ValueError("shared artwork is served from its origin, not published as source")
         path = source / rel
         if path.is_symlink() or not path.is_file() or any((source / Path(*rel.parts[:i])).is_symlink() for i in range(1, len(rel.parts))):
             raise ValueError("source paths must be regular files")
@@ -131,14 +187,39 @@ def runtime_payload(pg, dest):
             output.chmod(0o644)
 
 
+def build_browser_setup(source, product, signing_identity):
+    app = product / "Vult Browser Setup.app"
+    contents = app / "Contents"
+    (contents / "MacOS").mkdir(parents=True)
+    shutil.copyfile(source / "packaging/macos/browser-setup.plist", contents / "Info.plist")
+    executable = contents / "MacOS/browser-setup"
+    run(["/usr/bin/clang", "-fobjc-arc", "-Os", "-arch", "arm64", "-mmacosx-version-min=26.0",
+         "-Wall", "-Wextra", "-Werror", "-framework", "Cocoa", "-framework", "Security",
+         "packaging/macos/browser_setup.m", "-o", executable], cwd=source)
+    executable.chmod(0o755)
+    run(["/usr/bin/strip", "-S", executable])
+    run(["/usr/bin/codesign", "--force", "--sign", signing_identity or "-", "--options", "runtime", app])
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--output", type=Path, required=True, help="new artifact directory")
+    p.add_argument("--output", type=Path, help="new artifact directory")
+    p.add_argument("--web-dist", type=Path, help="built interface from the same source")
+    p.add_argument("--web-sha256", help="expected interface file-manifest checksum")
+    p.add_argument("--print-web-sha256", type=Path, help="print an interface file-manifest checksum and exit")
     p.add_argument("--go", default="go", help="Go 1.27.3 executable")
     p.add_argument("--postgres-archive", type=Path, help="use an existing checksum-verified source archive; native code is always rebuilt cleanly")
     p.add_argument("--sign-application", help="Developer ID Application signing identity")
     p.add_argument("--sign-installer", help="Developer ID Installer signing identity")
     args = p.parse_args()
+    if args.print_web_sha256:
+        print(interface_files(args.print_web_sha256)[1])
+        return
+    if not args.output or not args.web_dist or not args.web_sha256:
+        p.error("--output, --web-dist and --web-sha256 are required")
+    _, web_checksum = interface_files(args.web_dist)
+    if web_checksum != args.web_sha256:
+        p.error("interface build checksum mismatch")
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         p.error("build on Apple Silicon macOS")
     go = shutil.which(args.go)
@@ -157,12 +238,15 @@ def main():
         work = Path(temporary)
         clean = work / "source"
         materialize(source, clean, files)
+        stage_interface(args.web_dist, clean / "web/dist", args.web_sha256)
+        # Every Go module compiled in must ship with its license notice.
+        check_go_notices(go, clean, env)
         pg = build_postgres(work, args.postgres_archive)
         payload = work / "payload"
         product = payload / str(PREFIX).lstrip("/")
         product.mkdir(parents=True)
         runtime_payload(pg, product / "postgres")
-        run([go, "build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w", "-o", product / "vult", "./cmd/vult"], clean, env)
+        run([go, "build", "-tags=webui", "-trimpath", "-buildvcs=false", "-ldflags=-s -w", "-o", product / "vult", "./cmd/vult"], clean, env)
         (product / "vult").chmod(0o755)
         for path in sorted(product.rglob("*")):
             if path.is_file() and (path.suffix == ".dylib" or path.parent.name == "bin" or path.name == "vult"):
@@ -173,14 +257,17 @@ def main():
                 run(command + [path])
         for name in ("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"):
             shutil.copyfile(clean / name, product / name)
+        build_browser_setup(clean, product, args.sign_application)
         launch = payload / "Library/LaunchDaemons"
         launch.mkdir(parents=True)
         shutil.copyfile(clean / "packaging/macos/ai.vult.ledger.plist", launch / "ai.vult.ledger.plist")
+        shutil.copyfile(clean / "packaging/macos/ai.vult.browser.plist", launch / "ai.vult.browser.plist")
         # Only unchanged, explicitly inventoried program files may be removed.
         inventory = {"format": "vult-program-files-v1", "version": VERSION,
                      "files": {path.relative_to(product).as_posix(): digest(path)
                                for path in sorted(product.rglob("*")) if path.is_file()},
-                     "launch_daemon_sha256": digest(launch / "ai.vult.ledger.plist")}
+                     "launch_daemon_sha256": digest(launch / "ai.vult.ledger.plist"),
+                     "browser_daemon_sha256": digest(launch / "ai.vult.browser.plist")}
         (product / "program-files.json").write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n")
         for directory in payload.rglob("*"):
             if directory.is_dir():
@@ -211,6 +298,7 @@ def main():
         manifest = {"version": VERSION, "platform": "macos-arm64", "minimum_macos": "26.0", "go": GO_VERSION, "postgresql": PG_VERSION, "postgresql_source_sha256": PG_SHA256, "schema_sha256": digest(clean / "ledger/migrations/0001_ledger.sql"), "source_files": {name: digest(clean / name) for name in files}, "application_signing": "developer-id" if args.sign_application else "ad-hoc", "installer_signing": "developer-id" if args.sign_installer else "unsigned", "notarized": False}
         manifest["migrations"] = {path.name: digest(path) for path in sorted((clean / "ledger/migrations").glob("*.sql"))}
         manifest["installer_sha256"] = hashlib.sha256(installer).hexdigest()
+        manifest["interface_sha256"] = web_checksum
         (output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
         artifacts = sorted(output.iterdir())
         (output / "SHA256SUMS").write_text("".join(f"{digest(path)}  {path.name}\n" for path in artifacts))

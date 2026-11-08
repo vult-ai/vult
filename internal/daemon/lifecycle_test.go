@@ -27,7 +27,7 @@ func TestNativeSocketConnectionPreservesSpacesAndCredentials(t *testing.T) {
 			t.Fatal(e)
 		}
 		c := config.ConnConfig
-		if c.Host != filepath.Join(local.DataPath, "postgres") || c.Port != 5432 || c.Database != database || c.User != "vult_owner" || c.Password != password {
+		if c.Host != local.PostgresSocketPath || c.Port != 5432 || c.Database != database || c.User != "vult_owner" || c.Password != password {
 			t.Fatal("native connection target or credential encoding changed")
 		}
 		if c.TLSConfig != nil || len(c.Fallbacks) != 0 {
@@ -60,15 +60,17 @@ func checksum(b []byte) string {
 func programFixture(t *testing.T) removalPaths {
 	t.Helper()
 	dir := t.TempDir()
-	p := removalPaths{Code: filepath.Join(dir, "program"), Plist: filepath.Join(dir, "startup", "ledger.plist"), Shortcut: filepath.Join(dir, "bin", "vult"), Retained: filepath.Join(dir, "storage")}
+	p := removalPaths{Code: filepath.Join(dir, "program"), Startup: filepath.Join(dir, "startup", "ledger.plist"), Shortcut: filepath.Join(dir, "bin", "vult"), Retained: filepath.Join(dir, "storage")}
 	m := removalManifest{Format: "vult-program-files-v1", Version: Version, Files: map[string]string{}}
-	for _, name := range []string{"vult", "LICENSE", "postgres/bin/pg_ctl", "postgres/share/config.sample"} {
+	for _, name := range []string{"vult", "LICENSE", "postgres/bin/pg_ctl", "postgres/share/config.sample",
+		"Vult Browser Setup.app/Contents/Info.plist", "Vult Browser Setup.app/Contents/MacOS/browser-setup",
+		"Vult Browser Setup.app/Contents/_CodeSignature/CodeResources"} {
 		data := []byte("synthetic program: " + name)
 		writeFixture(t, filepath.Join(p.Code, name), data, 0755)
 		m.Files[name] = checksum(data)
 	}
 	plist := []byte("synthetic startup definition")
-	writeFixture(t, p.Plist, plist, 0644)
+	writeFixture(t, p.Startup, plist, 0644)
 	m.LaunchDaemonSHA256 = checksum(plist)
 	b, e := json.Marshal(m)
 	if e != nil {
@@ -81,7 +83,7 @@ func programFixture(t *testing.T) removalPaths {
 	if e = os.Symlink(filepath.Join(p.Code, "vult"), p.Shortcut); e != nil {
 		t.Fatal(e)
 	}
-	for _, name := range []string{"installation", "data/journal", "data/configuration.json", "data/database/PG_VERSION", "data/originals/example-object", "data/document-keys/example-key", "backups/books.age"} {
+	for _, name := range []string{"installation", "browser-identity.json", "data/journal", "data/configuration.json", "data/database/PG_VERSION", "data/originals/example-object", "data/document-keys/example-key", "backups/books.age"} {
 		writeFixture(t, filepath.Join(p.Retained, name), []byte("retained: "+name), 0600)
 	}
 	return p
@@ -121,15 +123,83 @@ func TestSoftwareRemovalKeepsStorageKeysBackupsAndIdentity(t *testing.T) {
 	before := retainedBytes(t, p)
 	stopped := false
 	r, e := removeProgram(p, uint32(os.Geteuid()), func() error { stopped = true; return nil })
-	if e != nil || !stopped || r.Removed != 5 || len(r.Kept) != 0 {
+	if e != nil || !stopped || r.Removed != 8 || len(r.Kept) != 0 {
 		t.Fatal("software removal failed", r, e)
 	}
-	for _, path := range []string{p.Code, p.Plist, p.Shortcut} {
+	for _, path := range []string{p.Code, p.Startup, p.Shortcut} {
 		if _, e := os.Lstat(path); !os.IsNotExist(e) {
 			t.Fatal("program path remains", path, e)
 		}
 	}
 	assertRetained(t, p, before)
+}
+
+func TestSoftwareRemovalKeepsBrowserIdentityAndRemovesOnlyKnownStartup(t *testing.T) {
+	p := programFixture(t)
+	var m removalManifest
+	if err := json.Unmarshal(fixtureBytes(t, filepath.Join(p.Code, programManifest)), &m); err != nil {
+		t.Fatal(err)
+	}
+	plist := filepath.Join(filepath.Dir(p.Startup), "ai.vult.browser.plist")
+	startup := []byte("synthetic browser startup")
+	writeFixture(t, plist, startup, 0644)
+	m.BrowserDaemonSHA256 = checksum(startup)
+	data, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(p.Code, programManifest), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"browser-installation", "data/browser.json", "data/browser-state.json", "browser/key.pem", "browser/auth.dsn"} {
+		writeFixture(t, filepath.Join(p.Retained, name), []byte("retained synthetic browser identity"), 0400)
+	}
+	before := retainedBytes(t, p)
+	if _, err := removeProgram(p, uint32(os.Geteuid()), func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(plist); !os.IsNotExist(err) {
+		t.Fatal("inventoried browser startup remains", err)
+	}
+	assertRetained(t, p, before)
+}
+
+func TestSoftwareRemovalRejectsChangedBrowserStartupBeforeStopping(t *testing.T) {
+	for _, variant := range []string{"unchanged", "modified", "hardlink", "symlink", "unrecognized"} {
+		t.Run(variant, func(t *testing.T) {
+			p := programFixture(t)
+			path := filepath.Join(filepath.Dir(p.Startup), "ai.vult.browser.plist")
+			data := []byte("synthetic browser startup")
+			writeFixture(t, path, data, 0644)
+			m := removalManifest{BrowserDaemonSHA256: checksum(data)}
+			switch variant {
+			case "modified":
+				if err := os.WriteFile(path, []byte("another startup definition"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			case "hardlink":
+				if err := os.Link(path, path+".copy"); err != nil {
+					t.Fatal(err)
+				}
+			case "symlink":
+				if err := os.Rename(path, path+".copy"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(path+".copy", path); err != nil {
+					t.Fatal(err)
+				}
+			case "unrecognized":
+				m.BrowserDaemonSHA256 = ""
+			}
+			stopped := false
+			if err := verifyBrowserStartup(p, m, uint32(os.Geteuid())); err == nil {
+				stopped = true
+			}
+			if stopped != (variant == "unchanged") {
+				t.Fatal("changed or unrecognized browser startup passed the stop preflight")
+			}
+		})
+	}
 }
 
 func TestSoftwareRemovalPreservesModifiedAndUnrecognizedFiles(t *testing.T) {
@@ -166,12 +236,31 @@ func TestStopFailureDoesNotRemoveProgramFiles(t *testing.T) {
 	if !bytes.Equal(fixtureBytes(t, filepath.Join(p.Code, "vult")), before) {
 		t.Fatal("program changed before stop completed")
 	}
-	fixtureBytes(t, p.Plist)
+	fixtureBytes(t, p.Startup)
 	fixtureBytes(t, filepath.Join(p.Code, programManifest))
 }
 
+func TestSoftwareRemovalPreservesModifiedSetupApplication(t *testing.T) {
+	p := programFixture(t)
+	before := retainedBytes(t, p)
+	executable := filepath.Join(p.Code, "Vult Browser Setup.app/Contents/MacOS/browser-setup")
+	modified := []byte("modified synthetic setup executable")
+	if err := os.WriteFile(executable, modified, 0755); err != nil {
+		t.Fatal(err)
+	}
+	unknown := filepath.Join(p.Code, "Vult Browser Setup.app/Contents/custom.json")
+	writeFixture(t, unknown, []byte("unrecognized synthetic settings"), 0600)
+	if _, err := removeProgram(p, uint32(os.Geteuid()), func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(fixtureBytes(t, executable), modified) || string(fixtureBytes(t, unknown)) != "unrecognized synthetic settings" {
+		t.Fatal("modified or unrecognized application file changed")
+	}
+	assertRetained(t, p, before)
+}
+
 func TestUnsafeInventoryCannotStartRemoval(t *testing.T) {
-	for _, kind := range []string{"traversal", "unrecognized", "bad-checksum", "linked-parent", "retained-storage"} {
+	for _, kind := range []string{"traversal", "unrecognized", "unrecognized-app", "bad-checksum", "linked-parent", "linked-app-parent", "retained-storage"} {
 		t.Run(kind, func(t *testing.T) {
 			p := programFixture(t)
 			var m removalManifest
@@ -183,6 +272,8 @@ func TestUnsafeInventoryCannotStartRemoval(t *testing.T) {
 				m.Files["postgres/../../storage/data/journal"] = checksum([]byte("ignored"))
 			case "unrecognized":
 				m.Files["data/journal"] = checksum([]byte("ignored"))
+			case "unrecognized-app":
+				m.Files["Vult Browser Setup.app/Contents/Helpers/unknown"] = checksum([]byte("ignored"))
 			case "bad-checksum":
 				m.Files["vult"] = "invalid"
 			case "linked-parent":
@@ -191,6 +282,15 @@ func TestUnsafeInventoryCannotStartRemoval(t *testing.T) {
 				}
 				if e := os.Symlink(filepath.Join(p.Retained, "share"), filepath.Join(p.Code, "postgres/share")); e != nil {
 					t.Fatal(e)
+				}
+			case "linked-app-parent":
+				source := filepath.Join(p.Code, "Vult Browser Setup.app/Contents/MacOS")
+				destination := filepath.Join(p.Retained, "browser-executable")
+				if err := os.Rename(source, destination); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(destination, source); err != nil {
+					t.Fatal(err)
 				}
 			}
 			b, _ := json.Marshal(m)
@@ -344,25 +444,32 @@ func TestInitializedSchemaIsNeverRecreatedOnStartup(t *testing.T) {
 	}
 }
 
-func releasedSchema(ctx context.Context, db *pgxpool.Pool, role string) error {
-	b, e := os.ReadFile("../../ledger/migrations/0001_ledger.sql")
-	if e != nil {
+func releasedSchema(ctx context.Context, db *pgxpool.Pool, role string, names []string) error {
+	releasedHashes := map[string]string{
+		"0001_ledger.sql":        "1f2a80022713d3b913555391319685f3042916b437260912a7e1c8743f53e451",
+		"0002_server_access.sql": "733594d4b3559f30f8f97ed2ca3595b8f8cf6d2adf4b2cbd0213a32da5f4814f",
+		"0003_documents.sql":     "1427a42e8c4d90d0fa5f3de6d8ce56c9467e243a336f86758e5d98dd8704fbe6",
+	}
+	if _, e := db.Exec(ctx, "CREATE TABLE public.schema_receipts(filename text PRIMARY KEY,sha256 text NOT NULL CHECK(sha256 ~ '^[a-f0-9]{64}$'),applied_at timestamptz NOT NULL DEFAULT clock_timestamp());REVOKE ALL ON public.schema_receipts FROM PUBLIC"); e != nil {
 		return e
 	}
-	if checksum(b) != "1f2a80022713d3b913555391319685f3042916b437260912a7e1c8743f53e451" {
-		return errors.New("released migration changed")
-	}
-	if _, e = db.Exec(ctx, "CREATE TABLE public.schema_receipts(filename text PRIMARY KEY,sha256 text NOT NULL CHECK(sha256 ~ '^[a-f0-9]{64}$'),applied_at timestamptz NOT NULL DEFAULT clock_timestamp());REVOKE ALL ON public.schema_receipts FROM PUBLIC"); e != nil {
-		return e
-	}
-	if _, e = db.Exec(ctx, string(b)); e != nil {
-		return e
-	}
-	if _, e = db.Exec(ctx, "INSERT INTO public.schema_receipts(filename,sha256) VALUES('0001_ledger.sql',$1)", checksum(b)); e != nil {
-		return e
+	for _, name := range names {
+		b, e := os.ReadFile("../../ledger/migrations/" + name)
+		if e != nil {
+			return e
+		}
+		if checksum(b) != releasedHashes[name] {
+			return errors.New("released migration changed")
+		}
+		if _, e = db.Exec(ctx, string(b)); e != nil {
+			return e
+		}
+		if _, e = db.Exec(ctx, "INSERT INTO public.schema_receipts(filename,sha256) VALUES($1,$2)", name, checksum(b)); e != nil {
+			return e
+		}
 	}
 	r := pgx.Identifier{role}.Sanitize()
-	for _, statement := range []string{
+	statements := []string{
 		"REVOKE CREATE ON SCHEMA public FROM PUBLIC",
 		"GRANT USAGE ON SCHEMA public TO " + r,
 		"GRANT SELECT ON public.books,public.accounts,public.account_revisions,public.entries,public.lines,public.requests,public.closed_periods,public.connections,public.schema_receipts TO " + r,
@@ -370,8 +477,23 @@ func releasedSchema(ctx context.Context, db *pgxpool.Pool, role string) error {
 		"GRANT UPDATE(write_epoch) ON public.books TO " + r,
 		"GRANT UPDATE(id) ON public.connections TO " + r,
 		"GRANT EXECUTE ON FUNCTION public.ledger_context(uuid,uuid),public.ledger_allowed(uuid,uuid,boolean),public.ledger_lock(uuid,uuid),public.ledger_import_owner() TO " + r,
-	} {
-		if _, e = db.Exec(ctx, statement); e != nil {
+	}
+	if len(names) >= 2 {
+		statements = append(statements, "GRANT USAGE ON SCHEMA access TO "+r,
+			"GRANT EXECUTE ON FUNCTION access.owner_allowed(uuid),access.owner_write_allowed(uuid),access.delegation_allowed(uuid,boolean),access.require_agent(text,text,uuid,uuid,uuid,uuid,text) TO "+r)
+	}
+	if len(names) >= 3 {
+		statements = append(statements,
+			"GRANT SELECT,INSERT ON public.documents,public.document_uploads TO "+r,
+			"GRANT UPDATE(state,storage_id,key_id,ready_at,expires_at) ON public.documents TO "+r,
+			"GRANT UPDATE(used_at) ON public.documents TO "+r,
+			"GRANT SELECT,INSERT ON public.source_citations TO "+r,
+			"GRANT SELECT,INSERT ON public.evidence_links TO "+r,
+			"GRANT EXECUTE ON FUNCTION public.document_use(uuid,uuid,uuid) TO "+r,
+			"GRANT EXECUTE ON FUNCTION public.ledger_validate_balances(uuid,uuid,uuid) TO "+r)
+	}
+	for _, statement := range statements {
+		if _, e := db.Exec(ctx, statement); e != nil {
 			return e
 		}
 	}
@@ -379,49 +501,61 @@ func releasedSchema(ctx context.Context, db *pgxpool.Pool, role string) error {
 }
 
 func TestNativeStartupUpgradesReleasedLedgerWithoutChangingRecords(t *testing.T) {
-	db := testutil.NewWithInitializer(t, releasedSchema)
-	book, scope := db.Book(t, "Example retained Book")
-	a, b := db.Account(t, scope, "1000", "asset"), db.Account(t, scope, "3000", "equity")
-	q := ledger.PostJournal{RequestKey: "retained", EconomicDate: "2026-01-01", AccountingDate: "2026-01-02", Description: "Example funding", Lines: []ledger.PostLine{{AccountID: a.ID, Side: "debit", AmountMinor: "1250"}, {AccountID: b.ID, Side: "credit", AmountMinor: "1250"}}}
-	result := db.Call(t, scope, "post_journal", q)
-	if e := db.Owner.ClosePeriod(db.Context, book.ID, "2026-01-01", "2026-01-31"); e != nil {
-		t.Fatal(e)
-	}
-	before, e := db.Owner.Snapshot(db.Context)
-	if e != nil {
-		t.Fatal(e)
-	}
-	if e = ledger.Ready(db.Context, db.Admin); e == nil {
-		t.Fatal("test did not start with an older installation")
-	}
-	for i := 0; i < 2; i++ {
-		if e = verifyOrInitializeSchema(db.Context, db.Admin, db.Role, "ready"); e != nil {
-			t.Fatal("initialized ledger could not upgrade", e)
-		}
-		if e = ledger.Ready(db.Context, db.Admin); e != nil {
-			t.Fatal("upgraded schema is incomplete", e)
-		}
-		after, e := db.Owner.Snapshot(db.Context)
-		if e != nil || len(before.Tables) != len(after.Tables) {
-			t.Fatal("upgraded snapshot unavailable", e)
-		}
-		for name, want := range before.Tables {
-			if !bytes.Equal(want, after.Tables[name]) {
-				t.Fatal("upgrade changed recorded data", name)
+	for _, baseline := range []struct {
+		name  string
+		files []string
+	}{
+		{"v0.1.0", []string{"0001_ledger.sql"}},
+		{"v0.2.0", []string{"0001_ledger.sql", "0002_server_access.sql"}},
+		{"v0.3.0", []string{"0001_ledger.sql", "0002_server_access.sql", "0003_documents.sql"}},
+	} {
+		t.Run(baseline.name, func(t *testing.T) {
+			db := testutil.NewWithInitializer(t, func(ctx context.Context, pool *pgxpool.Pool, role string) error {
+				return releasedSchema(ctx, pool, role, baseline.files)
+			})
+			book, scope := db.Book(t, "Example retained Book")
+			a, b := db.ReleasedAccount(t, scope, "1000", "asset"), db.ReleasedAccount(t, scope, "3000", "equity")
+			q := ledger.PostJournal{RequestKey: "retained", EconomicDate: "2026-01-01", AccountingDate: "2026-01-02", Description: "Example funding", Lines: []ledger.PostLine{{AccountID: a.ID, Side: "debit", AmountMinor: "1250"}, {AccountID: b.ID, Side: "credit", AmountMinor: "1250"}}}
+			result := db.ReleasedPost(t, scope, q)
+			if e := db.Owner.ClosePeriod(db.Context, book.ID, "2026-01-01", "2026-01-31"); e != nil {
+				t.Fatal(e)
 			}
-		}
-		if retry := db.Call(t, scope, "post_journal", q); !bytes.Equal(retry, result) {
-			t.Fatal("upgrade changed the existing actor or retry outcome")
-		}
-	}
-	fresh := testutil.New(t)
-	if schemaDefinition(t, db) != schemaDefinition(t, fresh) {
-		t.Fatal("upgraded schema differs from a fresh installation")
-	}
-	q.RequestKey, q.AccountingDate = "continue", "2026-02-01"
-	db.Call(t, scope, "post_journal", q)
-	if v, e := db.Owner.Verify(db.Context, book.ID); e != nil || v.Entries != 2 {
-		t.Fatal("upgraded ledger could not continue", e)
+			before := db.ReleasedSnapshot(t)
+			var e error
+			if e = ledger.Ready(db.Context, db.Admin); e == nil {
+				t.Fatal("test did not start with an older installation")
+			}
+			var code string
+			for i := 0; i < 2; i++ {
+				if e = verifyOrInitializeSchema(db.Context, db.Admin, db.Role, "ready"); e != nil {
+					t.Fatal("initialized ledger could not upgrade", e)
+				}
+				if e = ledger.Ready(db.Context, db.Admin); e != nil {
+					t.Fatal("upgraded schema is incomplete", e)
+				}
+				after, e := db.Owner.Snapshot(db.Context)
+				if e != nil {
+					t.Fatal("upgraded snapshot unavailable", e)
+				}
+				fixed := testutil.AssertReleasedSnapshotUpgrade(t, before, after, book)
+				if i > 0 && fixed != code {
+					t.Fatal("a second startup changed the Book's fixed address")
+				}
+				code = fixed
+				if retry := db.Call(t, scope, "post_journal", q); !bytes.Equal(retry, result) {
+					t.Fatal("upgrade changed the existing actor or retry outcome")
+				}
+			}
+			fresh := testutil.New(t)
+			if schemaDefinition(t, db) != schemaDefinition(t, fresh) {
+				t.Fatal("upgraded schema differs from a fresh installation")
+			}
+			q.RequestKey, q.AccountingDate = "continue", "2026-02-01"
+			db.Call(t, scope, "post_journal", q)
+			if v, e := db.Owner.Verify(db.Context, book.ID); e != nil || v.Entries != 2 {
+				t.Fatal("upgraded ledger could not continue", e)
+			}
+		})
 	}
 }
 

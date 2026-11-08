@@ -1,0 +1,45 @@
+/*
+ * Confirmation dialogs size to their content: the consequence, any evidence
+ * the decision needs, then one button row.
+ */
+.vult-confirm .dialog-heading {
+  border-bottom: 0;
+}
+.vult-confirm-body {
+  display: grid;
+  gap: 16px;
+  padding: 0 24px 24px;
+  overflow-wrap: anywhere;
+}
+.vult-confirm-detail {
+  margin: 0;
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+.vult-confirm-detail strong {
+  color: var(--color-text-primary);
+}
+.vult-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+/* Phones stack the actions, the confirm verb on top, like every dialog footer. */
+@media (width < 768px) {
+  .vult-confirm-body {
+    padding: 0 16px 16px;
+  }
+  .vult-confirm-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+}
+
+/* An inline confirmation inside a panel, such as reversing an entry. */
+.entry-reversal {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}

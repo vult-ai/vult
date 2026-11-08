@@ -15,7 +15,7 @@ func TestArchiveCommandsKeepBrokenPipesSeparateFromMCPLifecycle(t *testing.T) {
 	if command := os.Getenv("VULT_TEST_PIPE_COMMAND"); command != "" {
 		// Malformed inputs fail before service access. Their closed diagnostic
 		// pipe exercises main's real signal policy without owner authorization.
-		os.Args = []string{"vult", command}
+		os.Args = append([]string{"vult"}, strings.Fields(command)...)
 		main()
 		os.Exit(0)
 	}
@@ -23,7 +23,8 @@ func TestArchiveCommandsKeepBrokenPipesSeparateFromMCPLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, command := range []string{"backup", "restore", "export", "mcp"} {
+	// Bare mcp starts an agent bridge, so an unknown flag stands in for a malformed call.
+	for _, command := range []string{"backup", "restore", "export", "mcp --unknown"} {
 		t.Run(command, func(t *testing.T) {
 			read, write, err := os.Pipe()
 			if err != nil {
@@ -40,7 +41,7 @@ func TestArchiveCommandsKeepBrokenPipesSeparateFromMCPLifecycle(t *testing.T) {
 				t.Fatal("malformed command did not fail", err)
 			}
 			status := exit.Sys().(syscall.WaitStatus)
-			if command == "mcp" {
+			if strings.HasPrefix(command, "mcp") {
 				if !status.Signaled() || status.Signal() != syscall.SIGPIPE {
 					t.Fatal("MCP inherited the owner command's signal policy", status)
 				}
@@ -57,7 +58,7 @@ func TestPublicHelpAndVersionNeedNoInstallation(t *testing.T) {
 		if e := run(args, &out, &errout); e != nil {
 			t.Fatal(e)
 		}
-		if !strings.Contains(out.String(), "0.3.0") || errout.Len() != 0 {
+		if !strings.Contains(out.String(), "0.4.0") || errout.Len() != 0 {
 			t.Fatal("invalid help or version output")
 		}
 	}

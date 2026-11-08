@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -27,13 +28,19 @@ import (
 
 const help = `Vult ` + daemon.Version + ` — local general ledger
 
+  vult setup [--book-name NAME --currency CODE [--profile personal|business] [--timezone ZONE]]
   vult init
   vult status
+  vult doctor [--json]
+  vult open
+  vult browser reset
   vult book create --name NAME --currency CODE --scale N
   vult book list
   vult connection create --name NAME --book ID --access read|write
   vult connection list
   vult connection revoke ID
+  vult mcp install
+  vult mcp [--name AGENT] [--import-dir DIRECTORY] [--export-dir DIRECTORY]
   vult mcp --connection ID [--import-dir DIRECTORY] [--export-dir DIRECTORY]
   vult period close --book ID --from YYYY-MM-DD --through YYYY-MM-DD
   vult verify --book ID
@@ -45,9 +52,10 @@ const help = `Vult ` + daemon.Version + ` — local general ledger
   vult --version
   vult help
 
-Owner operations require macOS administrator authorization.
-Agent connections are scoped to one Book. Native owner approval is required
-when opening an agent session; connection IDs alone confer no access.
+Owner operations require system administrator authorization.
+Agent connections are scoped to one Book. An agent started with vult mcp asks
+the owner to approve it in the browser with their passkey; connection IDs
+alone confer no access.
 `
 
 func main() {
@@ -92,8 +100,32 @@ func run(args []string, out, errout io.Writer) error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	if args[0] == "doctor" {
+		return runDoctor(ctx, args[1:], out)
+	}
 	if archiveCommand(args) {
 		return runArchive(ctx, args, out)
+	}
+	if args[0] == "open" || args[0] == "browser" || args[0] == "setup" {
+		return runBrowser(ctx, args, out)
+	}
+	if args[0] == "_serve_browser" {
+		if len(args) != 1 {
+			return ledger.ErrInvalid
+		}
+		return daemon.ServeNativeBrowser(ctx)
+	}
+	if args[0] == "_browser_install" {
+		if len(args) != 1 {
+			return ledger.ErrInvalid
+		}
+		return daemon.InstallNativeBrowser(ctx)
+	}
+	if args[0] == "_browser_check" {
+		if len(args) != 1 || runtime.GOOS != "linux" || os.Geteuid() != 0 {
+			return ledger.ErrDenied
+		}
+		return checkLocalBrowser(ctx)
 	}
 	if args[0] == "_install" {
 		if len(args) != 1 {
@@ -129,7 +161,7 @@ func run(args []string, out, errout io.Writer) error {
 		return daemon.Uninstall(ctx, out, errout)
 	}
 	if args[0] == "_authorize" {
-		if len(args) != 4 || os.Geteuid() != 0 {
+		if runtime.GOOS != "darwin" || len(args) != 4 || os.Geteuid() != 0 {
 			return ledger.ErrDenied
 		}
 		uid, e := strconv.ParseUint(args[3], 10, 32)
@@ -146,6 +178,12 @@ func run(args []string, out, errout io.Writer) error {
 		}
 		_, e = fmt.Fprintln(out, string(result))
 		return e
+	}
+	if args[0] == "_owner_authorization" {
+		if runtime.GOOS != "linux" || len(args) != 1 {
+			return ledger.ErrDenied
+		}
+		return local.OwnerAuthorizationHelper(ctx, os.Stdin, out)
 	}
 	method := ""
 	var payload any
@@ -255,11 +293,22 @@ func run(args []string, out, errout io.Writer) error {
 			Through string `json:"through"`
 		}{*book, *from, *through}
 	case "mcp":
+		if len(args) == 2 && args[1] == "install" {
+			return runAgentInstall(ctx, out)
+		}
 		f := flags("mcp")
 		connection := f.String("connection", "", "connection ID")
+		name := f.String("name", "", "how this agent describes itself to the owner")
 		imports := f.String("import-dir", "", "approved document import directory")
 		exports := f.String("export-dir", "", "approved document export directory")
 		if parse(f, args[1:]) != nil {
+			return ledger.ErrInvalid
+		}
+		if *connection == "" {
+			// No connection ID: the owner approves this agent in the browser.
+			return runAgentBridge(ctx, *name, *imports, *exports)
+		}
+		if *name != "" {
 			return ledger.ErrInvalid
 		}
 		request := local.SessionRequest{ConnectionID: *connection, ImportDirectory: *imports, ExportDirectory: *exports}
@@ -290,7 +339,7 @@ func run(args []string, out, errout io.Writer) error {
 			return errors.New("invalid agent session")
 		}
 		transport.Authorization = session.Token
-		server := mcpserver.New(files.Call, session.Access, mcpserver.Options{Documents: true, LocalFiles: true})
+		server := mcpserver.New(files.Call, session.Access, mcpserver.Options{Documents: true, LocalFiles: true, OwnerUploads: true})
 		return server.Run(ctx, &mcp.StdioTransport{})
 	default:
 		return errors.New("unknown command; run vult help")
@@ -333,11 +382,15 @@ func run(args []string, out, errout io.Writer) error {
 		}
 		fmt.Fprintln(tty, "Store this backup recovery key offline. Never give it to an agent:")
 		fmt.Fprintln(tty, v.RecoveryKey)
-		check := exec.CommandContext(ctx, "/usr/bin/fdesetup", "status")
-		check.Env = []string{"PATH=/usr/bin:/bin", "LANG=C"}
-		b, e := check.Output()
-		if e != nil || !strings.Contains(string(b), "FileVault is On") {
-			fmt.Fprintln(errout, "Warning: FileVault is off or its status is unknown. Protect the local database with disk encryption.")
+		if runtime.GOOS == "linux" {
+			fmt.Fprintln(errout, "Protect the local database with disk encryption such as LUKS. Disk-encryption status was not checked.")
+		} else {
+			check := exec.CommandContext(ctx, "/usr/bin/fdesetup", "status")
+			check.Env = []string{"PATH=/usr/bin:/bin", "LANG=C"}
+			b, e := check.Output()
+			if e != nil || !strings.Contains(string(b), "FileVault is On") {
+				fmt.Fprintln(errout, "Warning: FileVault is off or its status is unknown. Protect the local database with disk encryption.")
+			}
 		}
 		return jsonOut(out, struct {
 			Status   string `json:"status"`

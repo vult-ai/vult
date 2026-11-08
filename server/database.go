@@ -58,6 +58,10 @@ func databaseConfig(raw string) (*pgxpool.Config, error) {
 // OpenDatabase uses only restricted runtime credentials. It neither provisions
 // tenants nor initializes/migrates a database and never returns driver details.
 func OpenDatabase(ctx context.Context, path string) (*pgxpool.Pool, error) {
+	return openDatabase(ctx, path, 8)
+}
+
+func openDatabase(ctx context.Context, path string, maxConns int32) (*pgxpool.Pool, error) {
 	b, e := ReadPrivateFile(path, 16<<10)
 	if e != nil {
 		return nil, ErrDatabase
@@ -66,6 +70,7 @@ func OpenDatabase(ctx context.Context, path string) (*pgxpool.Pool, error) {
 	if e != nil {
 		return nil, e
 	}
+	c.MaxConns = maxConns
 	pool, e := pgxpool.NewWithConfig(ctx, c)
 	if e != nil {
 		return nil, ErrDatabase

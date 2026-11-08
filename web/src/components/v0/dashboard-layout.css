@@ -1,0 +1,5 @@
+/* Dashboard grid contract: sibling gutters and section spacing. */
+:root {
+  --vult-dashboard-gutter: 8px;
+  --vult-dashboard-row-gap: 16px;
+}

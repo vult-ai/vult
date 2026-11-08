@@ -66,7 +66,8 @@ func TestAuthenticationWiringRequiresSeparateRestrictedRoles(t *testing.T) {
 	if e := os.WriteFile(keyFile, key, 0600); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := op.InitializeBuiltin(db.Context, "", "example", "Example horse battery staple 7428", key); e != nil {
+	enrollment, e := op.InitializeBuiltin(db.Context, "", "example", "Example horse battery staple 7428", key)
+	if e != nil {
 		t.Fatal(e)
 	}
 	c := Config{Origin: "https://ledger.example.com", Listen: "127.0.0.1:8080", TrustedProxies: []string{"127.0.0.1/32"}, Authentication: &Authentication{Mode: "builtin", AuthDSNFile: files[0], OwnerDSNFile: files[1], Username: "example", CredentialKeyFile: keyFile}}
@@ -92,6 +93,37 @@ func TestAuthenticationWiringRequiresSeparateRestrictedRoles(t *testing.T) {
 		t.Fatal("authentication from another origin was accepted")
 	}
 	a.Close()
+	t.Run("built-in-passkeys", func(t *testing.T) {
+		if _, err := op.InitializePasskeys(db.Context, enrollment.TenantID, "example", c.Origin); err != nil {
+			t.Fatal(err)
+		}
+		for _, mode := range []string{"builtin", "passkey"} {
+			config := c
+			auth := *c.Authentication
+			config.Authentication = &auth
+			auth.Mode, auth.Passkeys = mode, true
+			if mode == "passkey" {
+				auth.CredentialKeyFile = ""
+			}
+			opened, err := OpenAccess(db.Context, config, db.Runtime, nil)
+			if err != nil {
+				t.Fatal("passkey configuration unavailable", mode, err)
+			}
+			service, err := New(config, Options{Database: db.Runtime, Access: opened})
+			if err != nil {
+				opened.Close()
+				t.Fatal(err)
+			}
+			r := request()
+			r.URL.Path = "/auth/login"
+			w := httptest.NewRecorder()
+			service.Handler.ServeHTTP(w, r)
+			opened.Close()
+			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Sign in with a passkey") || strings.Contains(w.Body.String(), "Passphrase") != (mode == "builtin") {
+				t.Fatal("configured login methods changed", mode, w.Code)
+			}
+		}
+	})
 	t.Run("provider-pages", func(t *testing.T) {
 		ext := c
 		options := *c.Authentication

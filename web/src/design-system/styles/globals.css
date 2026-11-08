@@ -1,0 +1,231 @@
+/* Keep generated build artifacts outside Tailwind's class scan. */
+@import "tailwindcss" source("../../");
+@import "./theme.css";
+
+@plugin "tailwindcss-react-aria-components";
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:where(.dark-mode, .dark-mode *));
+@custom-variant label (& [data-label]);
+@custom-variant focus-input-within (&:has(input:focus));
+
+/* Scrollbars, one look everywhere (docs/design/shell.md): thin, a quiet thumb on a
+   transparent track. Containers that scroll vertically reserve its space. */
+:root {
+  --vult-scrollbar-thumb: var(--color-border-primary);
+  scrollbar-color: var(--vult-scrollbar-thumb) transparent;
+}
+* {
+  scrollbar-width: thin;
+}
+
+/* Keep the workspace legible behind floating surfaces, including body portals. */
+.vult-overlay-backdrop {
+  background-color: rgb(0 0 0 / 0.12);
+}
+
+.dark-mode .vult-overlay-backdrop {
+  background-color: rgb(0 0 0 / 0.4);
+}
+
+.vult-overlay-surface {
+  box-shadow:
+    var(--tw-ring-offset-shadow, 0 0 #0000),
+    var(--tw-ring-shadow, 0 0 #0000),
+    0 16px 48px -12px rgb(0 0 0 / 0.16),
+    0 2px 8px rgb(0 0 0 / 0.04);
+}
+
+.dark-mode .vult-overlay-surface {
+  box-shadow:
+    var(--tw-ring-offset-shadow, 0 0 #0000),
+    var(--tw-ring-shadow, 0 0 #0000),
+    0 16px 48px -12px rgb(0 0 0 / 0.4),
+    0 2px 8px rgb(0 0 0 / 0.16);
+}
+
+@utility scrollbar-hide {
+  /* For Webkit-based browsers (Chrome, Safari and Opera) */
+  &::-webkit-scrollbar {
+    display: none;
+    -webkit-appearance: none;
+  }
+
+  /* For IE, Edge and Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+@utility transition-inherit-all {
+  transition-property: inherit;
+  transition-duration: inherit;
+  transition-timing-function: inherit;
+}
+
+html,
+body {
+  font-family: var(--font-body);
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-variant-ligatures: contextual;
+  font-variant-ligatures: contextual;
+  -webkit-font-kerning: normal;
+  font-kerning: normal;
+}
+
+/* App scroll regions use native overlay scrollbars and system visibility preferences. */
+
+/* Vult product typography roles. Keep hierarchy semantic instead of page-specific. */
+.vult-type-metadata {
+  font-family: var(--font-body);
+  font-size: var(--text-vult-metadata);
+  font-weight: var(--text-vult-metadata--font-weight);
+  line-height: var(--text-vult-metadata--line-height);
+}
+
+/* The log data hierarchy shares one font; action and guidance roles stay distinct. */
+.vult-type-log,
+.vult-type-log-value,
+.vult-type-log-metric {
+  font-family: var(--font-log);
+  letter-spacing: var(--text-vult-log--letter-spacing);
+  font-variant-numeric: tabular-nums;
+  font-variant-ligatures: none;
+}
+
+.vult-type-log {
+  font-size: var(--text-vult-log);
+  font-weight: var(--text-vult-log--font-weight);
+  line-height: var(--text-vult-log--line-height);
+}
+
+/* Detail values keep the readable UI size, with the log font's alignment. */
+.vult-type-log-value {
+  font-size: var(--text-vult-log-value);
+  font-weight: var(--text-vult-log-value--font-weight);
+  line-height: var(--text-vult-log-value--line-height);
+}
+
+/* Event amounts retain their emphasis without synthesized bold glyphs. */
+.vult-type-log-metric {
+  font-size: var(--text-vult-log-metric);
+  font-weight: var(--text-vult-log-metric--font-weight);
+  line-height: var(--text-vult-log-metric--line-height);
+}
+
+.vult-type-label {
+  font-family: var(--font-body);
+  font-size: var(--text-vult-label);
+  font-weight: var(--text-vult-label--font-weight);
+  line-height: var(--text-vult-label--line-height);
+}
+
+.vult-type-ui {
+  font-family: var(--font-body);
+  font-size: var(--text-vult-ui);
+  font-weight: var(--text-vult-ui--font-weight);
+  line-height: var(--text-vult-ui--line-height);
+}
+
+.vult-type-body {
+  font-family: var(--font-body);
+  font-size: var(--text-vult-body);
+  font-weight: var(--text-vult-body--font-weight);
+  line-height: var(--text-vult-body--line-height);
+}
+
+.vult-type-intro {
+  font-family: var(--font-body);
+  font-size: var(--text-vult-intro);
+  font-weight: var(--text-vult-intro--font-weight);
+  line-height: var(--text-vult-intro--line-height);
+}
+
+.vult-type-compact-title {
+  font-family: var(--font-body);
+  font-size: var(--text-vult-compact-title);
+  font-weight: var(--text-vult-compact-title--font-weight);
+  line-height: var(--text-vult-compact-title--line-height);
+  letter-spacing: normal;
+}
+
+.vult-type-section-title {
+  font-family: var(--font-body);
+  font-size: var(--text-vult-section-title);
+  font-weight: var(--text-vult-section-title--font-weight);
+  line-height: var(--text-vult-section-title--line-height);
+  letter-spacing: var(--text-vult-section-title--letter-spacing);
+}
+
+.vult-type-document-body {
+  font-family: var(--font-body);
+  font-size: var(--text-vult-document-body);
+  font-weight: var(--text-vult-document-body--font-weight);
+  line-height: var(--text-vult-document-body--line-height);
+}
+
+/* Compose shows document structure without borrowing a template's visual design. */
+.vult-compose-document
+  > :where(p, div, blockquote, pre, ul, ol, h1, h2, h3, h4, h5, h6)
+  + :where(p, div, blockquote, pre, ul, ol, h1, h2, h3, h4, h5, h6) {
+  margin-block-start: 0.75em;
+}
+
+.vult-compose-document
+  > p:has(> br:only-child)
+  + :where(p, div, blockquote, pre, ul, ol, h1, h2, h3, h4, h5, h6) {
+  margin-block-start: 0;
+}
+
+.vult-type-metric-value {
+  font-family: var(--font-body);
+  font-size: var(--text-vult-metric-value);
+  font-weight: var(--text-vult-metric-value--font-weight);
+  line-height: var(--text-vult-metric-value--line-height);
+}
+
+.vult-type-page-title {
+  font-family: var(--font-body);
+  font-size: var(--text-vult-page-title);
+  font-weight: var(--text-vult-page-title--font-weight);
+  line-height: var(--text-vult-page-title--line-height);
+  letter-spacing: var(--text-vult-page-title--letter-spacing);
+}
+
+.vult-type-number {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hide the default expand arrow on Safari.  */
+details summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Hide default arrows from number inputs. */
+/* Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+/* Firefox */
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Hide the default clear button (X) from search inputs. */
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+/* Hide the default outline on chart elements. */
+.recharts-surface,
+.recharts-surface g,
+.recharts-surface path {
+  outline: none;
+}
+
+.vult-shell-actions .vult-pressable {
+  min-height: 2rem;
+}

@@ -15,6 +15,8 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
+const recordedBookMigration = "0004_recorded_book.sql"
+
 func SchemaSHA256() string {
 	b, e := migrations.ReadFile("migrations/0001_ledger.sql")
 	if e != nil {
@@ -72,8 +74,10 @@ func apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string, initial
 	if e = tx.QueryRow(ctx, "SELECT to_regclass('public.schema_receipts') IS NOT NULL").Scan(&exists); e != nil {
 		return e
 	}
+	names := migrationNames()
+	applied := 0
 	if exists {
-		if e = verifyReceipts(ctx, tx, false); e != nil {
+		if applied, e = verifyReceipts(ctx, tx, names, false); e != nil {
 			return e
 		}
 	} else {
@@ -91,14 +95,7 @@ func apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string, initial
 			return e
 		}
 	}
-	for _, name := range migrationNames() {
-		var applied bool
-		if e = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM public.schema_receipts WHERE filename=$1)", name).Scan(&applied); e != nil {
-			return e
-		}
-		if applied {
-			continue
-		}
+	for _, name := range names[applied:] {
 		b, _ := migrations.ReadFile("migrations/" + name)
 		if _, e = tx.Exec(ctx, string(b)); e != nil {
 			return e
@@ -110,57 +107,64 @@ func apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string, initial
 	role := pgx.Identifier{runtimeRole}.Sanitize()
 	statements := []string{
 		"REVOKE CREATE ON SCHEMA public FROM PUBLIC", "GRANT USAGE ON SCHEMA public TO " + role,
-		"GRANT SELECT ON public.books,public.accounts,public.account_revisions,public.entries,public.lines,public.requests,public.closed_periods,public.connections,public.schema_receipts TO " + role,
+		"GRANT SELECT ON public.books,public.accounts,public.account_revisions,public.entries,public.lines,public.requests,public.closed_periods,public.connections,public.schema_receipts,public.book_revisions TO " + role,
 		"GRANT INSERT ON public.accounts,public.account_revisions,public.entries,public.lines,public.requests TO " + role,
 		"GRANT UPDATE(write_epoch) ON public.books TO " + role,
+		"GRANT EXECUTE ON FUNCTION public.ledger_set_book_logo(uuid,uuid,text,text,text,bytea) TO " + role,
 		"GRANT UPDATE(id) ON public.connections TO " + role,
 		"GRANT SELECT,INSERT ON public.documents,public.document_uploads TO " + role,
 		"GRANT UPDATE(state,storage_id,key_id,ready_at,expires_at) ON public.documents TO " + role,
 		"GRANT UPDATE(used_at) ON public.documents TO " + role,
 		"GRANT SELECT,INSERT ON public.source_citations TO " + role,
 		"GRANT SELECT,INSERT ON public.evidence_links TO " + role,
+		"GRANT SELECT ON public.search_words,public.search_totals TO " + role,
+		"GRANT EXECUTE ON FUNCTION public.search_text(text),public.search_tokens(text) TO " + role,
+		"GRANT SELECT,INSERT ON public.operation_proposals,public.operation_consumptions TO " + role,
+		"GRANT SELECT ON public.operation_decisions TO " + role,
+		"GRANT EXECUTE ON FUNCTION access.operation_owner_allowed(uuid,uuid,uuid,bigint),access.operation_executor_active(uuid,uuid,uuid,uuid),access.hold_operation_owner(uuid,uuid,uuid,bigint) TO " + role,
+		"GRANT EXECUTE ON FUNCTION public.operation_dependencies(uuid,uuid,text,jsonb,uuid),public.operation_dependencies_settled(jsonb) TO " + role,
+		"GRANT EXECUTE ON FUNCTION access.owner_posting_consumer(uuid,uuid,uuid) TO " + role,
 		"GRANT EXECUTE ON FUNCTION public.document_use(uuid,uuid,uuid) TO " + role,
 		"GRANT EXECUTE ON FUNCTION public.ledger_validate_balances(uuid,uuid,uuid) TO " + role,
+		"GRANT EXECUTE ON FUNCTION public.ledger_native_position(uuid,uuid,uuid,text,bigint,bigint) TO " + role,
 		"GRANT USAGE ON SCHEMA access TO " + role,
 		"GRANT EXECUTE ON FUNCTION access.owner_allowed(uuid) TO " + role,
-		"GRANT EXECUTE ON FUNCTION access.owner_write_allowed(uuid) TO " + role,
+		"GRANT EXECUTE ON FUNCTION access.owner_write_allowed(uuid),access.owner_document_allowed(uuid,uuid) TO " + role,
 		"GRANT EXECUTE ON FUNCTION access.delegation_allowed(uuid,boolean),access.require_agent(text,text,uuid,uuid,uuid,uuid,text) TO " + role,
 	}
 	for _, name := range []string{"ledger_context(uuid,uuid)", "ledger_allowed(uuid,uuid,boolean)", "ledger_lock(uuid,uuid)", "ledger_import_owner()"} {
 		statements = append(statements, "GRANT EXECUTE ON FUNCTION public."+name+" TO "+role)
 	}
-	for _, s := range statements {
-		if _, e = tx.Exec(ctx, s); e != nil {
-			return e
-		}
+	if _, e = tx.Exec(ctx, strings.Join(statements, ";\n")); e != nil {
+		return e
 	}
 	return tx.Commit(ctx)
 }
 func Ready(ctx context.Context, pool *pgxpool.Pool) error {
-	return verifyReceipts(ctx, pool, true)
+	_, err := verifyReceipts(ctx, pool, migrationNames(), true)
+	return err
 }
 
 type receiptReader interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 }
 
-func verifyReceipts(ctx context.Context, db receiptReader, complete bool) error {
+func verifyReceipts(ctx context.Context, db receiptReader, expected []string, complete bool) (int, error) {
 	rows, e := db.Query(ctx, "SELECT filename,sha256 FROM public.schema_receipts ORDER BY filename")
 	if e != nil {
-		return errors.New("schema verification failed")
+		return 0, errors.New("schema verification failed")
 	}
 	defer rows.Close()
-	expected := migrationNames()
 	n := 0
 	for rows.Next() {
 		var name, sum string
 		if rows.Scan(&name, &sum) != nil || n >= len(expected) || name != expected[n] || sum != migrationSum(name) {
-			return errors.New("installed schema does not match this release")
+			return 0, errors.New("installed schema does not match this release")
 		}
 		n++
 	}
 	if rows.Err() != nil || n == 0 || complete && n != len(expected) {
-		return errors.New("schema verification failed")
+		return 0, errors.New("schema verification failed")
 	}
-	return nil
+	return n, nil
 }

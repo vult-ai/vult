@@ -167,6 +167,30 @@ func TestDatabaseEnforcesOwnerSessionAndTenant(t *testing.T) {
 	}
 }
 
+func TestSessionTenantListCanRequireAnExplicitLimit(t *testing.T) {
+	f := fresh(t)
+	_, session, id := f.owner(t, "alpha")
+	for range 2 {
+		if _, err := f.operator.BindOwner(f.db.Context, "", id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out, err := f.service.TenantsBounded(f.db.Context, session, 2); !errors.Is(err, ledger.ErrLimit) || out != nil {
+		t.Fatal("tenant limit returned a partial list", err)
+	}
+	if out, err := f.service.TenantsBounded(f.db.Context, session, 3); err != nil || len(out) != 3 {
+		t.Fatal("exact tenant limit failed", err)
+	}
+	if out, err := f.service.Tenants(f.db.Context, session); err != nil || len(out) != 3 {
+		t.Fatal("existing tenant listing changed", err)
+	}
+	for _, limit := range []int{0, -1, 1001} {
+		if _, err := f.service.TenantsBounded(f.db.Context, session, limit); !errors.Is(err, ledger.ErrInvalid) {
+			t.Fatal("invalid tenant limit accepted", err)
+		}
+	}
+}
+
 func TestOwnerOperationsKeepLedgerRulesAndRollback(t *testing.T) {
 	f := fresh(t)
 	db := f.db
@@ -311,12 +335,18 @@ func TestStaleOwnerSnapshotCannotBypassRevocation(t *testing.T) {
 }
 
 func TestForwardUpgradePreservesExistingBooks(t *testing.T) {
+	releasedHashes := map[string]string{
+		"0001_ledger.sql":        "1f2a80022713d3b913555391319685f3042916b437260912a7e1c8743f53e451",
+		"0002_server_access.sql": "733594d4b3559f30f8f97ed2ca3595b8f8cf6d2adf4b2cbd0213a32da5f4814f",
+		"0003_documents.sql":     "1427a42e8c4d90d0fa5f3de6d8ce56c9467e243a336f86758e5d98dd8704fbe6",
+	}
 	for _, baseline := range []struct {
 		name  string
 		files []string
 	}{
 		{"v0.1.0", []string{"0001_ledger.sql"}},
 		{"v0.2.0", []string{"0001_ledger.sql", "0002_server_access.sql"}},
+		{"v0.3.0", []string{"0001_ledger.sql", "0002_server_access.sql", "0003_documents.sql"}},
 	} {
 		t.Run(baseline.name, func(t *testing.T) {
 			db := testutil.New(t)
@@ -333,11 +363,15 @@ func TestForwardUpgradePreservesExistingBooks(t *testing.T) {
 				if e != nil {
 					t.Fatal(e)
 				}
+				sum := sha256.Sum256(sql)
+				hash := hex.EncodeToString(sum[:])
+				if hash != releasedHashes[name] {
+					t.Fatal("released migration changed", name)
+				}
 				if _, e = db.Admin.Exec(db.Context, string(sql)); e != nil {
 					t.Fatal(e)
 				}
-				sum := sha256.Sum256(sql)
-				if _, e = db.Admin.Exec(db.Context, "INSERT INTO public.schema_receipts(filename,sha256) VALUES($1,$2)", name, hex.EncodeToString(sum[:])); e != nil {
+				if _, e = db.Admin.Exec(db.Context, "INSERT INTO public.schema_receipts(filename,sha256) VALUES($1,$2)", name, hash); e != nil {
 					t.Fatal(e)
 				}
 			}
@@ -346,9 +380,19 @@ func TestForwardUpgradePreservesExistingBooks(t *testing.T) {
 			for _, name := range []string{"ledger_context(uuid,uuid)", "ledger_allowed(uuid,uuid,boolean)", "ledger_lock(uuid,uuid)", "ledger_import_owner()"} {
 				grants = append(grants, "GRANT EXECUTE ON FUNCTION public."+name+" TO "+role)
 			}
-			if len(baseline.files) == 2 {
+			if len(baseline.files) >= 2 {
 				grants = append(grants, "GRANT USAGE ON SCHEMA access TO "+role,
 					"GRANT EXECUTE ON FUNCTION access.owner_allowed(uuid),access.owner_write_allowed(uuid),access.delegation_allowed(uuid,boolean),access.require_agent(text,text,uuid,uuid,uuid,uuid,text) TO "+role)
+			}
+			if len(baseline.files) >= 3 {
+				grants = append(grants,
+					"GRANT SELECT,INSERT ON public.documents,public.document_uploads TO "+role,
+					"GRANT UPDATE(state,storage_id,key_id,ready_at,expires_at) ON public.documents TO "+role,
+					"GRANT UPDATE(used_at) ON public.documents TO "+role,
+					"GRANT SELECT,INSERT ON public.source_citations TO "+role,
+					"GRANT SELECT,INSERT ON public.evidence_links TO "+role,
+					"GRANT EXECUTE ON FUNCTION public.document_use(uuid,uuid,uuid) TO "+role,
+					"GRANT EXECUTE ON FUNCTION public.ledger_validate_balances(uuid,uuid,uuid) TO "+role)
 			}
 			for _, grant := range grants {
 				if _, e := db.Admin.Exec(db.Context, grant); e != nil {
@@ -356,16 +400,16 @@ func TestForwardUpgradePreservesExistingBooks(t *testing.T) {
 				}
 			}
 			book, scope := db.Book(t, "Existing example")
-			debit, credit := db.Account(t, scope, "1000", "asset"), db.Account(t, scope, "3000", "equity")
-			db.Call(t, scope, "post_journal", ledger.PostJournal{RequestKey: "existing", EconomicDate: "2026-01-01", AccountingDate: "2026-01-01", Description: "Example funding", Lines: []ledger.PostLine{{AccountID: debit.ID, Side: "debit", AmountMinor: "1250"}, {AccountID: credit.ID, Side: "credit", AmountMinor: "1250"}}})
-			before, e := db.Owner.Snapshot(db.Context)
+			debit, credit := db.ReleasedAccount(t, scope, "1000", "asset"), db.ReleasedAccount(t, scope, "3000", "equity")
+			db.ReleasedPost(t, scope, ledger.PostJournal{RequestKey: "existing", EconomicDate: "2026-01-01", AccountingDate: "2026-01-01", Description: "Example funding", Lines: []ledger.PostLine{{AccountID: debit.ID, Side: "debit", AmountMinor: "1250"}, {AccountID: credit.ID, Side: "credit", AmountMinor: "1250"}}})
+			before := db.ReleasedSnapshot(t)
+			baselineExport := db.ReleasedExport(t, book.ID)
+			baselineBytes, e := json.Marshal(baselineExport)
 			if e != nil {
 				t.Fatal(e)
 			}
-			verification, e := db.Owner.Verify(db.Context, book.ID)
-			if e != nil {
-				t.Fatal(e)
-			}
+			baselineHash := sha256.Sum256(baselineBytes)
+			verification := ledger.Verification{BookID: book.ID, Entries: 1, Lines: 2, JournalSHA256: hex.EncodeToString(baselineHash[:]), Status: "verified"}
 			if e = ledger.Apply(db.Context, db.Admin, db.Role); e != nil {
 				t.Fatal("forward upgrade failed", e)
 			}
@@ -373,11 +417,7 @@ func TestForwardUpgradePreservesExistingBooks(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			for name, rows := range before.Tables {
-				if !bytes.Equal(rows, after.Tables[name]) {
-					t.Fatal("forward upgrade rewrote retained data", name)
-				}
-			}
+			testutil.AssertReleasedSnapshotUpgrade(t, before, after, book)
 			if before.SchemaSHA256 != after.SchemaSHA256 {
 				t.Fatal("v1 backup compatibility changed")
 			}

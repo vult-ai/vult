@@ -1,0 +1,112 @@
+.account-ledger {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  container-type: inline-size;
+  container-name: account-ledger;
+}
+.account-ledger-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 16px;
+  padding-block: 12px;
+  border-block: 1px solid var(--color-border-secondary);
+}
+.account-ledger-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.account-ledger-heading > .account-detail-identity {
+  margin: 0 0 12px;
+}
+.account-ledger-summary dt,
+.account-ledger-date small {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-metadata);
+}
+.account-ledger-summary dd {
+  margin: 4px 0 0;
+  color: var(--color-text-primary);
+  font-size: var(--text-vult-ui);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.account-ledger-date small {
+  display: block;
+}
+.account-ledger-reference {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  text-align: start;
+}
+.account-ledger-reference > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.account-ledger-money {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+@container account-ledger (width < 600px) {
+  .account-ledger-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.account-ledger-summary.account-ledger-summary-inline {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(112px, max-content));
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  align-items: start;
+  gap: 12px 32px;
+  padding: 0 12px;
+  margin-bottom: 20px;
+  border: 0;
+}
+.account-ledger-summary-inline > div {
+  min-width: 0;
+}
+.account-ledger-summary-inline dt {
+  margin-bottom: 4px;
+  line-height: var(--text-vult-metadata--line-height);
+  white-space: nowrap;
+}
+.account-ledger-summary-inline > div:last-child dt {
+  color: var(--color-text-secondary);
+}
+.account-ledger-summary-inline > div:last-child dd {
+  font-weight: 600;
+}
+.account-ledger-summary-inline dd,
+.account-ledger-summary-inline dd.account-group-activity-total {
+  margin: 0;
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+}
+
+.account-ledger-summary-inline dd {
+  white-space: nowrap;
+}
+.account-ledger-table [data-testid="account-ledger-frame"] {
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--vult-shell-panel-radius);
+  box-shadow: none;
+}
+@container account-ledger (width < 560px) {
+  .account-ledger-summary.account-ledger-summary-inline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

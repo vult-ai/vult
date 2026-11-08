@@ -14,19 +14,32 @@ var ErrInvalid = errors.New("invalid JSON")
 
 // Decode reads one object, rejecting ambiguous keys and invalid Unicode.
 func Decode(raw []byte, value any) error {
+	return decode(raw, value, false, "")
+}
+
+// DecodeNonNull also rejects null values, except at the named field path.
+// An empty path disallows every null.
+func DecodeNonNull(raw []byte, value any, nullable string) error {
+	return decode(raw, value, true, nullable)
+}
+
+func decode(raw []byte, value any, rejectNull bool, nullable string) error {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) < 2 || raw[0] != '{' || !utf8.Valid(raw) || !validEscapes(raw) {
 		return ErrInvalid
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.UseNumber()
-	var scan func(int, reflect.Type) error
-	scan = func(depth int, shape reflect.Type) error {
+	var scan func(int, reflect.Type, string) error
+	scan = func(depth int, shape reflect.Type, path string) error {
 		if depth > 32 {
 			return ErrInvalid
 		}
 		tok, err := d.Token()
 		if err != nil {
+			return ErrInvalid
+		}
+		if rejectNull && tok == nil && (path == "" || path != nullable) {
 			return ErrInvalid
 		}
 		delim, ok := tok.(json.Delim)
@@ -44,7 +57,7 @@ func Decode(raw []byte, value any) error {
 				}
 				seen[s] = true
 				child, ok := objectField(shape, s)
-				if !ok || scan(depth+1, child) != nil {
+				if !ok || scan(depth+1, child, joinPath(path, s)) != nil {
 					return ErrInvalid
 				}
 			}
@@ -55,7 +68,7 @@ func Decode(raw []byte, value any) error {
 				child = shape.Elem()
 			}
 			for d.More() {
-				if scan(depth+1, child) != nil {
+				if scan(depth+1, child, path+"[]") != nil {
 					return ErrInvalid
 				}
 			}
@@ -68,7 +81,7 @@ func Decode(raw []byte, value any) error {
 		}
 		return nil
 	}
-	if scan(0, reflect.TypeOf(value)) != nil {
+	if scan(0, reflect.TypeOf(value), "") != nil {
 		return ErrInvalid
 	}
 	if _, err := d.Token(); err != io.EOF {
@@ -80,6 +93,13 @@ func Decode(raw []byte, value any) error {
 		return ErrInvalid
 	}
 	return nil
+}
+
+func joinPath(parent, field string) string {
+	if parent == "" {
+		return field
+	}
+	return parent + "." + field
 }
 
 func dereference(t reflect.Type) reflect.Type {

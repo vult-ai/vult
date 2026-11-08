@@ -1,0 +1,384 @@
+/* Dashboard panel standard: an outer shell with icon, title and subtitle,
+   and one inner card that carries the figure, its keys and its detail. The
+   Accounts overview uses the same panels. */
+.dash-grid-layout,
+.accounts-overview {
+  --dash-shell: color-mix(in srgb, var(--color-text-primary) 7%, var(--color-bg-primary));
+  --dash-card: var(--color-bg-primary);
+  --dash-fill: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
+  --dash-line: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+  /* One bar thickness: chart columns and the spending strip. */
+  --dash-bar: 12px;
+}
+.dash-grid-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+.dash-grid-layout > .dash-summary,
+.dash-grid-layout > .dash-balance { grid-column: 1 / -1; }
+@media (width < 1100px) {
+  .dash-grid-layout { grid-template-columns: minmax(0, 1fr); }
+}
+
+.dash-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 6px 6px;
+  border-radius: var(--radius-2xl);
+  background: var(--dash-shell);
+}
+.dash-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px 10px 6px;
+}
+.dash-panel-icon {
+  display: grid;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: var(--radius-lg);
+  background: var(--dash-fill);
+  color: var(--color-text-secondary);
+}
+.dash-panel-icon svg { width: 18px; height: 18px; }
+.dash-panel-titles { min-width: 0; flex: 1; }
+.dash-panel-titles h2 { margin: 0; color: var(--color-text-primary); font-weight: 600; }
+.dash-panel-titles p { margin: 1px 0 0; overflow: hidden; color: var(--color-text-tertiary); text-overflow: ellipsis; white-space: nowrap; }
+.dash-panel-action { display: flex; flex: none; align-items: center; gap: 8px; }
+/* A card's two views: a small segmented switch beside its link. */
+.dash-mode { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--dash-fill); }
+.dash-mode-option {
+  min-width: 36px; padding: 2px 8px; border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: var(--color-text-tertiary); cursor: pointer; transition: background-color 120ms ease, color 120ms ease;
+}
+.dash-mode-option:hover { color: var(--color-text-primary); }
+.dash-mode-option[aria-pressed="true"] { background: var(--dash-card); color: var(--color-text-primary); box-shadow: 0 0 0 1px var(--dash-line); }
+.dash-panel-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: calc(var(--radius-2xl) - 6px);
+  background: var(--dash-card);
+  box-shadow: var(--shadow-xs);
+}
+.dash-link {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.dash-link:hover { background: var(--dash-fill); color: var(--color-text-primary); }
+
+.dash-key, .dash-swatch { display: inline-block; flex: none; width: 9px; height: 9px; margin-right: 7px; border-radius: var(--radius-sm); }
+.dash-change { font-variant-numeric: tabular-nums; }
+/* A change is coloured by its direction alone: up green, down red. */
+.dash-change[data-tone="up"] { color: var(--color-direction-up-text); }
+.dash-change[data-tone="down"] { color: var(--color-direction-down-text); }
+.dash-change[data-tone="flat"] { color: var(--color-text-tertiary); }
+
+/* Summary and balance sheet figures */
+.dash-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.dash-stats-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dash-stat {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 20px;
+  border: 0;
+  border-left: 1px solid var(--dash-line);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.dash-stat:first-child { padding-left: 4px; border-left: 0; }
+/* A card's label that opens its detail; the rest of the card stays selectable. */
+.dash-stat-open {
+  justify-self: start;
+  gap: 2px;
+  margin: -2px -4px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+}
+.dash-stat-open:hover { color: var(--color-text-primary); background: var(--dash-fill); }
+.dash-stat-open-icon { width: 14px; height: 14px; color: var(--color-fg-quaternary); }
+.dash-stat-open:hover .dash-stat-open-icon { color: var(--color-fg-secondary); }
+.dash-stat-label { display: inline-flex; align-items: center; color: var(--color-text-secondary); }
+.dash-stat strong {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: var(--text-vult-dashboard-value);
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.dash-stat-foot { overflow: hidden; color: var(--color-text-tertiary); text-overflow: ellipsis; white-space: nowrap; }
+@media (width < 900px) {
+  .dash-stats, .dash-stats-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 0; }
+  .dash-stat:nth-child(odd) { padding-left: 4px; border-left: 0; }
+}
+@media (width < 520px) {
+  .dash-stats, .dash-stats-3 { grid-template-columns: minmax(0, 1fr); }
+  .dash-stat { padding-left: 4px; border-left: 0; }
+}
+
+/* Chips */
+
+/* Lean paired columns */
+/* Columns and rules share one pixel grid: the zero boundary is rounded to a whole
+   pixel once, and both the columns and the lines are placed from it. */
+/* The chart and its table take the same height, so switching never moves the page. */
+.dash-chart { --plot-h: 248px; --plot-total: calc(var(--plot-h) + 24px); }
+.dash-plot {
+  --axis: 52px;
+  --zero-px: round(calc(var(--plot-h) * var(--zero, 0)), 1px);
+  position: relative; display: grid; grid-template-rows: var(--plot-h) 16px; gap: 8px; height: var(--plot-total); margin-top: 4px; padding-right: var(--axis);
+}
+/* Any amount below zero keeps at least a sliver under the line for its mark. */
+.dash-plot[data-below] {
+  --zero-px: max(12px, round(calc(var(--plot-h) * var(--zero, 0)), 1px));
+}
+.dash-grid { position: absolute; top: 0; right: 0; left: 0; height: var(--plot-h); pointer-events: none; }
+/* Gridlines stop at the plot; their labels sit in the gutter beside them. */
+.dash-grid > span { position: absolute; right: var(--axis); left: 0; height: 1px; bottom: round(calc(var(--zero-px) + (var(--plot-h) - var(--zero-px)) * var(--t, 0)), 1px); background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--color-text-primary) 10%, transparent) 0 2px, transparent 2px 6px); }
+/* The deepest negative value is labelled, not ruled. */
+.dash-grid > span[data-floor] { bottom: 0; background: none; }
+/* Zero is the one solid line; columns keep the same 3px gap from it on both sides. */
+/* The line takes the top pixel of the space below zero, so 3px stay clear above and below it. */
+.dash-grid > span[data-zero] { bottom: calc(var(--zero-px) - 1px); background: color-mix(in srgb, var(--color-text-primary) 22%, transparent); }
+.dash-grid b { position: absolute; top: 50%; right: calc(-1 * var(--axis)); transform: translateY(-50%); color: var(--color-text-tertiary); font-weight: 400; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dash-bars { position: relative; display: grid; grid-template-columns: repeat(var(--groups), minmax(0, 1fr)); height: var(--plot-h); }
+.dash-group {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  height: 100%;
+  /* Room between periods when many share the width (a month of days). */
+  padding: 0 min(2px, 10%);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+}
+.dash-group[data-dimmed] .dash-column { opacity: 0.4; }
+/* Bars keep their thickness when there is room and narrow, never overflow,
+   when many periods share the width. */
+.dash-column {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 2px;
+  flex-direction: column-reverse;
+  gap: 2px;
+  width: var(--dash-bar);
+  height: 100%;
+  transition: opacity 140ms ease;
+}
+.dash-segment { flex: none; min-height: 3px; border-radius: var(--radius-sm); }
+.dash-axis { display: grid; grid-template-columns: repeat(var(--groups), minmax(0, 1fr)); color: var(--color-text-tertiary); text-align: center; white-space: nowrap; }
+.dash-empty { display: grid; min-height: 120px; place-items: center; color: var(--color-text-tertiary); }
+
+/* Rows */
+.dash-rows { display: grid; margin: -4px -8px; padding: 0; list-style: none; }
+.dash-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name value" "meter meta";
+  align-items: center;
+  gap: 6px 16px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.dash-row-plain { grid-template-areas: "name value"; }
+/* A row's name that opens it, leaving the row's figures to select and copy. */
+.dash-row-open {
+  justify-self: start;
+  max-width: 100%;
+  margin: -2px -4px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+.dash-row-open:hover { text-decoration: underline; text-decoration-color: var(--dash-line); text-underline-offset: 3px; }
+button.dash-row { cursor: pointer; }
+button.dash-row:hover { background: var(--dash-fill); }
+.dash-row-name { display: flex; align-items: center; min-width: 0; overflow: hidden; color: var(--color-text-primary); text-overflow: ellipsis; white-space: nowrap; grid-area: name; }
+.dash-row-name > .vult-type-metadata { margin-left: 4px; overflow: hidden; color: var(--color-text-tertiary); text-overflow: ellipsis; }
+.dash-row-value { grid-area: value; text-align: right; font-variant-numeric: tabular-nums; }
+.dash-row-meta { grid-area: meta; color: var(--color-text-tertiary); text-align: right; font-variant-numeric: tabular-nums; }
+.dash-meter { grid-area: meter; height: 4px; border-radius: var(--radius-sm); background: var(--dash-fill); }
+.dash-meter > span { display: block; height: 100%; border-radius: var(--radius-sm); }
+
+@media (width < 640px) {
+  .dash-panel-body { padding: 14px 12px; }
+  .dash-grid-layout { --dash-bar: 9px; }
+  .dash-plot { --axis: 46px; }
+  .dash-chart { --plot-h: 200px; }
+}
+.dash-stat strong { font-family: var(--font-body); }
+
+/* Trend lines: one neutral line for the selected dates and a dashed one for the
+   comparison period. Colour on this page identifies accounts, so trends stay grey. */
+.dash-stat .balance-trend { width: 100%; height: 36px; margin-top: 4px; }
+.dash-panel .balance-trend-current { stroke: var(--color-text-secondary); stroke-width: 1.5; }
+.dash-panel .balance-trend-current-point { fill: var(--color-text-secondary); }
+.dash-panel .balance-trend stop { stop-color: var(--color-text-secondary); }
+.dash-panel .balance-trend-previous { stroke: var(--color-text-quaternary); }
+
+/* Light mode: a lighter shell; the chart keeps Vult's neon pastels in both modes. */
+:root:not(.dark-mode) .dash-grid-layout,
+:root:not(.dark-mode) .accounts-overview {
+  --dash-shell: color-mix(in srgb, var(--color-text-primary) 3.5%, var(--color-bg-primary));
+  --dash-fill: color-mix(in srgb, var(--color-text-primary) 5%, transparent);
+}
+
+/* The hover fill reaches 6px past the plot, so a column at the ceiling or the
+   floor sits inside it, rounded corners included. */
+.dash-group { position: relative; isolation: isolate; }
+.dash-group::before { content: ""; position: absolute; inset: -6px 0 0; z-index: -1; border-radius: inherit; background: transparent; }
+.dash-group[data-active]::before { background: var(--dash-fill); }
+/* With columns below zero, it reaches 6px under the plot too. */
+.dash-plot[data-below] .dash-group::before { bottom: -6px; }
+.dash-axis > span[data-active] { color: var(--color-text-primary); }
+/* A label wider than its period stays centred on it, over unlabelled neighbours. */
+.dash-axis > span { display: flex; justify-content: center; }
+.dash-segment { transform-origin: bottom; animation: dash-grow 450ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes dash-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .dash-segment { animation: none; } }
+.dash-tip {
+  position: absolute;
+  z-index: 5;
+  top: -6px;
+  min-width: 200px;
+  max-width: 260px;
+  padding: 10px 12px;
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-primary);
+  box-shadow: 0 0 0 1px var(--dash-line), var(--shadow-lg);
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.dash-tip[data-side="right"] { left: calc(var(--at) + 6px); }
+.dash-tip[data-side="left"] { right: calc(100% - var(--at) + 6px); }
+.dash-tip p { display: flex; align-items: center; gap: 8px; margin: 0; }
+.dash-tip-title { justify-content: space-between; margin-bottom: 6px !important; color: var(--color-text-primary); font-weight: 500; }
+.dash-tip-group + .dash-tip-group { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--dash-line); }
+.dash-tip-head { justify-content: space-between; color: var(--color-text-secondary); }
+.dash-tip-row { color: var(--color-text-tertiary); }
+.dash-tip-row > i { flex: none; width: 8px; height: 8px; border-radius: var(--radius-xs); }
+.dash-tip-row > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-tip-row > span:last-child { color: var(--color-text-primary); }
+
+/* Parts of a whole: one segmented bar, in the main chart's segment style. */
+.dash-share { display: flex; gap: 2px; height: var(--dash-bar); margin: 2px 0 4px; }
+.dash-share > span { flex: 1 1 0; min-width: 3px; border-radius: var(--radius-sm); transform-origin: left; animation: dash-grow-x 500ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes dash-grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .dash-share > span { animation: none; } }
+.dash-row-share { grid-template-columns: minmax(0, 1fr) auto 112px; grid-template-areas: "name meta value"; }
+.dash-row-share .dash-row-meta { text-align: right; }
+
+/* A list that ends a card takes the rest of it, so paired cards end on the
+   same line, but its rows keep their own height and stack from the top: one
+   or two accounts never spread down the card. */
+.dash-panel-body > .dash-rows:last-child,
+.dash-panel-body > .dash-share + .dash-rows {
+  flex: 1;
+  grid-auto-rows: min-content;
+  align-content: start;
+}
+.dash-panel-body > .dash-rows:last-child > li,
+.dash-panel-body > .dash-share + .dash-rows > li { display: grid; }
+
+.dash-share > span { transition: opacity 140ms ease; }
+.dash-share[data-focus] > span:not([data-active]) { opacity: 0.35; }
+li[data-active] > .dash-row { background: var(--dash-fill); }
+
+/* Focused account: its segments stay lit, the rest step back. */
+.dash-segment { transition: opacity 160ms ease; }
+.dash-segment[data-muted] { opacity: 0.18; }
+
+/* The first card meets the header the way collection pages do. */
+
+/* Signed columns: positive amounts stack up from zero, negative ones hang below it,
+   hatched in the account's colour so a reduction never reads as more activity. */
+.dash-column { flex-direction: column; gap: 0; }
+.dash-column-up { box-sizing: border-box; display: flex; flex: none; flex-direction: column-reverse; gap: 2px; height: calc(100% - var(--zero-px)); padding-bottom: 3px; }
+/* The gaps between segments take their share from the segments, so a full
+   column never rises past the ceiling. */
+.dash-column-up > .dash-segment, .dash-column-down > .dash-segment { flex: 0 1 auto; }
+.dash-column-down { box-sizing: border-box; display: flex; flex: none; flex-direction: column; gap: 2px; height: var(--zero-px); padding-top: 4px; }
+.dash-segment-negative {
+  background: repeating-linear-gradient(135deg, var(--seg) 0 2px, transparent 2px 5px);
+  box-shadow: inset 0 0 0 1px var(--seg);
+  transform-origin: top;
+}
+/* The chart's below-zero key, beside "in" and "out"; it explains itself on hover or focus. */
+.dash-legend-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: help;
+  text-decoration: underline dotted var(--color-text-quaternary);
+  text-underline-offset: 3px;
+}
+.dash-panel-note { color: var(--color-text-tertiary); white-space: nowrap; }
+.dash-key-negative {
+  flex: none; width: 9px; height: 9px; border-radius: var(--radius-sm);
+  background: repeating-linear-gradient(135deg, var(--color-text-tertiary) 0 2px, transparent 2px 4px);
+  box-shadow: inset 0 0 0 1px var(--color-text-tertiary);
+}
+.dash-table-wrap { box-sizing: border-box; height: var(--plot-total); overflow: auto; margin: 4px -4px 0; }
+.dash-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.dash-table th, .dash-table td { padding: 7px 4px; text-align: right; white-space: nowrap; }
+.dash-table th[scope="row"], .dash-table thead th:first-child { text-align: left; font-weight: 400; }
+.dash-table thead th { position: sticky; top: 0; background: var(--dash-card); color: var(--color-text-tertiary); font-weight: 400; }
+.dash-table tbody tr + tr, .dash-table tfoot tr { border-top: 1px solid var(--dash-line); }
+.dash-table tfoot { font-weight: 600; }
+.dash-table-period { padding: 0; border: 0; background: transparent; color: var(--color-text-primary); cursor: pointer; text-align: left; }
+.dash-table-period:hover { text-decoration: underline; text-underline-offset: 3px; }
+.dash-table-head { display: inline-flex; align-items: center; gap: 4px; }
+.dash-table-toggle { display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-tertiary); cursor: pointer; }
+.dash-table-toggle:disabled { visibility: hidden; }
+.dash-table .dash-table-account { border-top: 0; color: var(--color-text-secondary); }
+.dash-table .dash-table-account th[scope="row"] { padding-left: 32px; white-space: normal; }
+.dash-table-account i { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: var(--radius-full); }
+.dash-change-label { color: var(--color-text-tertiary); }
+
+.dash-chart-actions { display: inline-flex; align-items: center; gap: 12px; min-width: 0; }
+.dash-account-select { width: 200px; max-width: 40vw; min-width: 0; }
+.dash-chart-actions .dash-link { white-space: nowrap; }
+.dash-option-key { margin-right: 0; }
+/* Links that replace a headline's aside keep its line height, so choosing a
+   period or an account never moves the panel. */
+.vult-headline-aside .dash-link { margin-block: -4px; line-height: var(--text-vult-ui--line-height); }
+/* A headline keeps one height whatever its figure, caption or aside holds. */
+.dash-panel .vult-headline:not([data-stacked]) { min-height: 28px; align-items: center; }

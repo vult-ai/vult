@@ -1,5 +1,9 @@
 # Install Vult
 
+For Ubuntu 24.04 LTS on x86-64 with GNOME and Chrome, follow
+[native Ubuntu installation](../packaging/ubuntu/README.md). It uses a separate
+installer and local release archive; the terminal download below is for macOS.
+
 Run this from your own terminal on a supported Mac:
 
 ```sh
@@ -25,6 +29,24 @@ vult book create --name "Personal" --currency USD --scale 2
 
 Keep the recovery key shown by `init` offline. The installer does not initialize
 your Books, request financial records or send any of them over the network.
+
+## Open in your browser
+
+From your own terminal, run `vult open`. The first opening shows Vult Browser
+Setup, where macOS asks permission to trust this installation's unique local
+HTTPS hostname. Approval applies only to SSL for that hostname; its certificate
+has no certificate-signing authority. Setup runs visibly in your logged-in
+session because macOS requires interactive authorization for this change.
+
+After HTTPS verification succeeds, Vult requests native administrator approval
+for the one-use passkey setup link. Save your passkey in the browser and keep the
+displayed recovery codes offline. The browser service listens only on loopback;
+agents continue to use the separate Unix socket and native consent flow.
+
+Cancelling certificate approval leaves browser enrollment incomplete and your
+Books intact. Run `vult open` again to continue. To replace a lost local passkey,
+run `vult browser reset`; administrator approval is required, old browser sign-ins
+are revoked, and your Books are preserved.
 
 If an existing command or unsafe shell directory prevents creation of the short
 `vult` command, use `/Library/PrivilegedHelperTools/ai.vult.ledger/vult`.
@@ -80,7 +102,7 @@ configuration, a missing initialized database, or a missing ledger schema stops
 startup and requires recovery. Installing over these conditions does not create
 an empty replacement or generate replacement keys.
 
-Version 0.3.0 upgrades recognized v0.1.0 and v0.2.0 ledgers through
+Version 0.4.0 upgrades recognized v0.1.0, v0.2.0 and v0.3.0 ledgers through
 checksum-verified forward migrations. It preserves Books, journal rows, request
 outcomes, connections, originals and local keys. Missing, altered, gapped or
 unknown migration receipts stop startup

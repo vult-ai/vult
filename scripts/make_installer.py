@@ -32,7 +32,7 @@ fi
 if ! /usr/sbin/installer -pkg "$stage/vult.pkg" -target /; then
     echo 'Vult: Installation did not complete. Check the system install log before trying again.' >&2; exit 1
 fi
-echo 'Run /Library/PrivilegedHelperTools/ai.vult.ledger/vult init from your own terminal.'
+echo 'Vult installed. Next: /Library/PrivilegedHelperTools/ai.vult.ledger/vult mcp install, then /Library/PrivilegedHelperTools/ai.vult.ledger/vult setup.'
 """
 
 

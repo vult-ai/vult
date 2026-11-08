@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -196,9 +198,10 @@ func TestHTTPMCPPreservesExactJournalAndLostReplyOutcome(t *testing.T) {
 	h := f.network(t, nil)
 	m := connectRemote(t, ctx, h, tokens.Access, true)
 	catalog, e := m.ListTools(ctx, nil)
-	if e != nil || len(catalog.Tools) != 11 {
+	if e != nil {
 		t.Fatal("write catalog changed", e)
 	}
+	expectRemoteTools(t, catalog.Tools, []string{"create_account", "execute_proposal", "get_balance", "get_book", "get_journal", "get_operation_proposal", "get_request_outcome", "get_trial_balance", "list_accounts", "list_journals", "post_journal", "prepare_operation", "reverse_journal", "revise_account", "search_book", "set_book_logo"})
 	for _, tool := range catalog.Tools {
 		if strings.Contains(tool.Name, "owner") || strings.Contains(tool.Name, "admin") {
 			t.Fatal("agent gained owner tools")
@@ -262,9 +265,10 @@ func TestHTTPMCPReadScopeAndSanitizedAdmissionFailure(t *testing.T) {
 	h := f.network(t, nil)
 	m := connectRemote(t, ctx, h, tokens.Access, false)
 	catalog, e := m.ListTools(ctx, nil)
-	if e != nil || len(catalog.Tools) != 7 {
+	if e != nil {
 		t.Fatal("read catalog expanded", e)
 	}
+	expectRemoteTools(t, catalog.Tools, []string{"get_balance", "get_book", "get_journal", "get_operation_proposal", "get_request_outcome", "get_trial_balance", "list_accounts", "list_journals", "search_book"})
 	result, e := m.CallTool(ctx, &mcp.CallToolParams{Name: "create_account", Arguments: ledger.CreateAccount{RequestKey: "denied", Class: "asset", Code: "1000", Name: "Example"}})
 	if e == nil && !result.IsError {
 		t.Fatal("read credential gained write tool")
@@ -286,6 +290,18 @@ func TestHTTPMCPReadScopeAndSanitizedAdmissionFailure(t *testing.T) {
 	var n int
 	if e = f.db.Admin.QueryRow(ctx, "SELECT count(*) FROM public.accounts WHERE book_id=$1", scope.BookID).Scan(&n); e != nil || n != 0 {
 		t.Fatal("denied admission wrote financial data")
+	}
+}
+
+func expectRemoteTools(t *testing.T, tools []*mcp.Tool, want []string) {
+	t.Helper()
+	got := make([]string, len(tools))
+	for i, tool := range tools {
+		got[i] = tool.Name
+	}
+	sort.Strings(got)
+	if !slices.Equal(got, want) {
+		t.Fatalf("remote catalog differs: got %v, want %v", got, want)
 	}
 }
 

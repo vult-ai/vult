@@ -1,0 +1,10 @@
+@page {
+  size: auto;
+  margin: 14mm 12mm;
+  @bottom-right {
+    content: "Page " counter(page) " of " counter(pages);
+    font-family: var(--font-sans);
+    font-size: var(--text-vult-metadata);
+    color: #555;
+  }
+}

@@ -35,12 +35,17 @@ identity mappings, one owner per tenant and bounded, revocable sessions. Remote
 owner operations use `access.Service.WithOwner` with separate restricted
 credentials. Row policies require a live session, origin and stored ownership;
 selecting a tenant UUID cannot grant access. Session and ownership rows remain
-locked through completion, including concurrent revocation. Owner changes need
-authentication from the preceding five minutes. Installation provisioning and
-identity recovery remain offline operator actions.
+locked through completion, including concurrent revocation. Owner administration
+needs authentication from the preceding five minutes. Sources uploads use the
+live owner session and CSRF proof. Installation provisioning and identity
+recovery remain offline operator actions.
 
 Migrations apply in filename order. Existing receipt checksums and sequence must
-match before any forward change. The original ledger checksum remains the v1
+match before any forward change. Vult 0.4 upgrades the released v0.1, v0.2 and
+v0.3 ledgers through one v0.4 migration, [0004_recorded_book.sql](../ledger/migrations/0004_recorded_book.sql),
+which includes owner document retention. The three published migrations keep
+their original checksums. An unrecognized migration receipt requires recovery.
+The original ledger checksum remains the v1
 data-backup identifier; authentication and connection grants are separate from
 the financial snapshot and must not be revived by data-only restore.
 

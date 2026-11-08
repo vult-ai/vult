@@ -1,0 +1,176 @@
+/* A compact record of the agent's work: finished steps stack above the
+   current one, which carries its detail, timer and any action for the owner. */
+.agent-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: min(520px, 100%);
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-2xl);
+  background: var(--color-bg-secondary);
+  box-shadow: var(--shadow-lg);
+  text-align: left;
+}
+.agent-status-steps {
+  display: grid;
+  margin: 0;
+  padding: 4px 6px 6px;
+  list-style: none;
+}
+.agent-status-steps li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 4px;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+  animation: agent-status-in 240ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.agent-status-steps svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-inline: 3px;
+  color: var(--color-fg-success-primary);
+}
+.agent-status-step-label {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.agent-status-step-label small {
+  overflow: hidden;
+  color: var(--color-text-quaternary);
+  font-size: var(--text-vult-metadata);
+  line-height: var(--text-vult-metadata--line-height);
+  text-overflow: ellipsis;
+}
+.agent-status time {
+  flex: none;
+  color: var(--color-text-quaternary);
+  font-family: var(--font-log);
+  font-size: var(--text-vult-log);
+  line-height: var(--text-vult-log--line-height);
+  font-variant-numeric: tabular-nums;
+}
+.agent-status-panel {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-primary);
+}
+.agent-status-indicator {
+  display: grid;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+}
+.agent-status-dots {
+  display: flex;
+  gap: 3px;
+}
+.agent-status-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: var(--color-fg-secondary);
+  animation: agent-status-pulse 1s ease-in-out infinite;
+}
+.agent-status-dots span:nth-child(2) {
+  animation-delay: 160ms;
+}
+.agent-status-dots span:nth-child(3) {
+  animation-delay: 320ms;
+}
+.agent-status-dots[data-state="waiting"] span {
+  animation-duration: 2s;
+  background: var(--color-fg-quaternary);
+}
+.agent-status-final {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
+  color: var(--color-fg-success-primary);
+  animation: agent-status-pop 240ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.agent-status-final[data-state="paused"] {
+  color: var(--color-fg-tertiary);
+}
+.agent-status-final svg {
+  width: 12px;
+  height: 12px;
+}
+.agent-status-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.agent-status-label {
+  overflow: hidden;
+  font-size: var(--text-vult-ui);
+  font-weight: var(--text-vult-label--font-weight);
+  line-height: var(--text-vult-ui--line-height);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: agent-status-swap 240ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.agent-status-detail {
+  overflow: hidden;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-log);
+  font-size: var(--text-vult-log);
+  line-height: var(--text-vult-log--line-height);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: agent-status-slide 240ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.agent-status-more {
+  padding: 12px 8px 6px;
+}
+.agent-status-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+@keyframes agent-status-in {
+  from { opacity: 0; transform: translateY(8px); }
+}
+@keyframes agent-status-swap {
+  from { opacity: 0; transform: translateY(100%); }
+}
+@keyframes agent-status-slide {
+  from { opacity: 0; transform: translateX(6px); }
+}
+@keyframes agent-status-pop {
+  from { opacity: 0; transform: scale(0.9); }
+}
+@keyframes agent-status-pulse {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-status *,
+  .agent-status *::before {
+    animation: none !important;
+  }
+}

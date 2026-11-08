@@ -280,7 +280,8 @@ func (f *Files) get(ctx context.Context, input json.RawMessage) (json.RawMessage
 	return json.Marshal(struct {
 		Document ledger.Document `json:"document"`
 		Output   string          `json:"output"`
-	}{inspection.Document, q.Output})
+		Path     string          `json:"path"`
+	}{inspection.Document, q.Output, filepath.Join(f.exports.Name(), q.Output)})
 }
 
 func (f *Files) checkExportFolder() error {

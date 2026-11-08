@@ -1,0 +1,59 @@
+.dashboard-report-actions,
+.dashboard-attention-row,
+.dashboard-account-filter,
+.dashboard-recovery {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.dashboard-report-actions {
+  padding: 12px 24px 16px;
+  border-top: 1px solid var(--color-border-secondary);
+}
+.dashboard-explanation {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--color-text-tertiary);
+  max-width: 560px;
+}
+.dashboard-explanation summary {
+  cursor: pointer;
+}
+.dashboard-explanation p {
+  margin-top: 8px;
+}
+.dashboard-attention-row {
+  padding: 14px 24px;
+}
+.dashboard-attention-row + .dashboard-attention-row {
+  border-top: 1px solid var(--color-border-secondary);
+}
+.dashboard-attention-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dashboard-attention-row strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.dashboard-attention-row svg,
+.dashboard-report-actions svg {
+  width: 16px;
+  height: 16px;
+}
+.dashboard-account-filter {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.dashboard-recovery {
+  margin-bottom: 16px;
+}
+@media (max-width: 640px) {
+  .dashboard-report-actions,
+  .dashboard-attention-row {
+    flex-wrap: wrap;
+    padding-inline: 16px;
+  }
+}

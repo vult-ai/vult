@@ -1,0 +1,68 @@
+.trigger[aria-expanded="true"] {
+  background: var(--vult-control-secondary-hover);
+}
+
+.reset[data-loading] {
+  cursor: pointer;
+}
+
+@container (width < 480px) {
+  button.trigger {
+    width: 32px;
+    min-width: 32px;
+    padding-inline: 0;
+    column-gap: 0;
+  }
+
+  button.trigger:not([data-filter-count="0"]) {
+    width: 44px;
+    min-width: 44px;
+    column-gap: 4px;
+  }
+
+  .trigger .label {
+    display: none;
+  }
+}
+
+.popover {
+  --filter-lift: -4px;
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  transform-origin: var(--trigger-anchor-point);
+  transition-property: opacity, transform;
+  transition-duration: var(--vult-motion-overlay-enter);
+  transition-timing-function: var(--vult-ease-settle);
+}
+
+.popover[data-entering],
+.popover[data-exiting] {
+  opacity: 0;
+  transform: translate3d(0, var(--filter-lift), 0) scale(0.985);
+  will-change: opacity, transform;
+}
+
+.popover[data-placement="top"] {
+  --filter-lift: 4px;
+}
+
+.popover[data-exiting] {
+  transition-duration: var(--vult-motion-overlay-exit);
+}
+
+.popover[data-motion="instant"] {
+  transition-duration: 1ms;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popover {
+    transition-property: opacity;
+    transition-duration: 80ms;
+  }
+
+  .popover[data-entering],
+  .popover[data-exiting] {
+    transform: none;
+  }
+}

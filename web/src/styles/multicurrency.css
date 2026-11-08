@@ -1,0 +1,132 @@
+/* Existing multi-currency layout; operations and values remain owned by that feature. */
+
+.native-balances {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-xl);
+}
+.native-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+.native-balances h2,
+.native-balances h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.native-balances h3 {
+  margin-top: 1rem;
+}
+.native-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+.native-position {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 1rem;
+  min-width: 0;
+  font-size: 0.875rem;
+}
+.native-position > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.native-position strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.native-position small,
+.journal td small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+}
+.check-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  margin: 0.75rem 0;
+}
+.check-field input {
+  width: 1rem;
+  height: 1rem;
+}
+.rate-preview {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem;
+}
+.rate-preview p {
+  margin: 0.25rem 0;
+}
+.quote-detail {
+  display: contents;
+}
+.negative {
+  color: var(--color-text-error-primary) !important;
+}
+.native-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+.native-columns h3 {
+  margin-top: 0.5rem;
+}
+@media (max-width: 640px) {
+  .native-columns {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+}
+
+.currency-overview {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  padding-inline: 16px;
+}
+.currency-overview > span:first-child {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+.currency-overview > span:last-child {
+  text-align: right;
+}
+.currency-overview small {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--color-text-tertiary);
+}
+.native-position strong {
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+@media (width < 768px) {
+  .currency-overview {
+    order: 3;
+    flex-basis: 100%;
+    padding-inline: 0;
+    justify-content: space-between;
+  }
+}

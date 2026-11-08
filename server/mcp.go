@@ -59,6 +59,18 @@ func remoteCall(ctx context.Context, db *pgxpool.Pool, sessions *access.Service,
 		vault = transfers.vault
 	}
 	store := remoteStore(db, sessions, token, admission, vault)
+	if admission != nil && (method == "prepare_operation" || method == "execute_proposal") {
+		authorize := store.Authorize
+		store.Authorize = func(ctx context.Context, tx pgx.Tx, s ledger.Scope, actual string, args json.RawMessage) error {
+			if err := authorize(ctx, tx, s, actual, args); err != nil {
+				return err
+			}
+			if actual != method && admission.Check(ctx, s, actual) != nil {
+				return ledger.ErrDenied
+			}
+			return nil
+		}
+	}
 	result, e := store.Call(ctx, scope, method, input)
 	if e == nil && method == "get_document" && transfers != nil {
 		var inspection ledger.DocumentInspection
@@ -68,7 +80,7 @@ func remoteCall(ctx context.Context, db *pgxpool.Pool, sessions *access.Service,
 		result, e = transfers.issue(scope, token, inspection)
 	}
 	if e != nil {
-		for _, safe := range []error{ledger.ErrInvalid, ledger.ErrDenied, ledger.ErrConflict, ledger.ErrNotFound, ledger.ErrUncertain, ErrResponseLimit, documents.ErrIntegrity, documents.ErrUnavailable} {
+		for _, safe := range []error{ledger.ErrInvalid, ledger.ErrDenied, ledger.ErrConflict, ledger.ErrNotFound, ledger.ErrUncertain, ledger.ErrProposalStale, ledger.ErrProposalExpired, ledger.ErrApprovalRequired, ErrResponseLimit, documents.ErrIntegrity, documents.ErrUnavailable} {
 			if errors.Is(e, safe) {
 				return nil, safe
 			}

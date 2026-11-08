@@ -1,0 +1,200 @@
+{
+ "performance": {
+  "period": {
+   "from": "2026-01-01",
+   "to": "2026-04-30"
+  },
+  "unit": "month",
+  "timezone": "America/New_York",
+  "status": "recorded",
+  "income_minor": "790000",
+  "expenses_minor": "522000",
+  "buckets": [
+   {
+    "from": "2026-01-01",
+    "to": "2026-02-01",
+    "covered_from": "2026-01-01",
+    "covered_to": "2026-02-01",
+    "income": {
+     "total_minor": "400000",
+     "positive_minor": "400000",
+     "negative_minor": "0",
+     "accounts": [
+      {
+       "account_id": "21325255-dffb-41f5-9db1-883e7c37863a",
+       "name": "Sales",
+       "amount_minor": "400000",
+       "positive_minor": "400000",
+       "negative_minor": "0",
+       "posting_count": 1
+      }
+     ]
+    },
+    "expenses": {
+     "total_minor": "157000",
+     "positive_minor": "160000",
+     "negative_minor": "-3000",
+     "accounts": [
+      {
+       "account_id": "0bcb4383-2990-453c-9013-9b8dc4a238e8",
+       "name": "Rent",
+       "amount_minor": "150000",
+       "positive_minor": "150000",
+       "negative_minor": "0",
+       "posting_count": 1
+      },
+      {
+       "account_id": "53e525ea-7948-432c-84a8-c0a1ff83464d",
+       "name": "Software",
+       "amount_minor": "7000",
+       "positive_minor": "10000",
+       "negative_minor": "-3000",
+       "posting_count": 2
+      }
+     ]
+    }
+   },
+   {
+    "from": "2026-02-01",
+    "to": "2026-03-01",
+    "covered_from": "2026-02-01",
+    "covered_to": "2026-03-01",
+    "income": {
+     "total_minor": "120000",
+     "positive_minor": "120000",
+     "negative_minor": "0",
+     "accounts": [
+      {
+       "account_id": "7e7a5140-eb23-457d-be6c-acbe9e97f312",
+       "name": "Consulting",
+       "amount_minor": "120000",
+       "positive_minor": "120000",
+       "negative_minor": "0",
+       "posting_count": 1
+      }
+     ]
+    },
+    "expenses": {
+     "total_minor": "165000",
+     "positive_minor": "190000",
+     "negative_minor": "-25000",
+     "accounts": [
+      {
+       "account_id": "0bcb4383-2990-453c-9013-9b8dc4a238e8",
+       "name": "Rent",
+       "amount_minor": "150000",
+       "positive_minor": "150000",
+       "negative_minor": "0",
+       "posting_count": 1
+      },
+      {
+       "account_id": "53e525ea-7948-432c-84a8-c0a1ff83464d",
+       "name": "Software",
+       "amount_minor": "-25000",
+       "positive_minor": "0",
+       "negative_minor": "-25000",
+       "posting_count": 1
+      },
+      {
+       "account_id": "6cca0a45-9050-4419-ab95-29905be9b74e",
+       "name": "Travel",
+       "amount_minor": "40000",
+       "positive_minor": "40000",
+       "negative_minor": "0",
+       "posting_count": 1
+      }
+     ]
+    }
+   },
+   {
+    "from": "2026-03-01",
+    "to": "2026-04-01",
+    "covered_from": "2026-03-01",
+    "covered_to": "2026-04-01",
+    "income": {
+     "total_minor": "180000",
+     "positive_minor": "180000",
+     "negative_minor": "0",
+     "accounts": [
+      {
+       "account_id": "21325255-dffb-41f5-9db1-883e7c37863a",
+       "name": "Sales",
+       "amount_minor": "180000",
+       "positive_minor": "180000",
+       "negative_minor": "0",
+       "posting_count": 1
+      }
+     ]
+    },
+    "expenses": {
+     "total_minor": "180000",
+     "positive_minor": "185000",
+     "negative_minor": "-5000",
+     "accounts": [
+      {
+       "account_id": "0bcb4383-2990-453c-9013-9b8dc4a238e8",
+       "name": "Rent",
+       "amount_minor": "150000",
+       "positive_minor": "150000",
+       "negative_minor": "0",
+       "posting_count": 1
+      },
+      {
+       "account_id": "53e525ea-7948-432c-84a8-c0a1ff83464d",
+       "name": "Software",
+       "amount_minor": "5000",
+       "positive_minor": "5000",
+       "negative_minor": "0",
+       "posting_count": 1
+      },
+      {
+       "account_id": "6cca0a45-9050-4419-ab95-29905be9b74e",
+       "name": "Travel",
+       "amount_minor": "25000",
+       "positive_minor": "30000",
+       "negative_minor": "-5000",
+       "posting_count": 2
+      }
+     ]
+    }
+   },
+   {
+    "from": "2026-04-01",
+    "to": "2026-05-01",
+    "covered_from": "2026-04-01",
+    "covered_to": "2026-05-01",
+    "income": {
+     "total_minor": "90000",
+     "positive_minor": "90000",
+     "negative_minor": "0",
+     "accounts": [
+      {
+       "account_id": "21325255-dffb-41f5-9db1-883e7c37863a",
+       "name": "Sales",
+       "amount_minor": "90000",
+       "positive_minor": "90000",
+       "negative_minor": "0",
+       "posting_count": 1
+      }
+     ]
+    },
+    "expenses": {
+     "total_minor": "20000",
+     "positive_minor": "20000",
+     "negative_minor": "0",
+     "accounts": [
+      {
+       "account_id": "6cca0a45-9050-4419-ab95-29905be9b74e",
+       "name": "Travel",
+       "amount_minor": "20000",
+       "positive_minor": "20000",
+       "negative_minor": "0",
+       "posting_count": 1
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "state_revision": "d9e43792fd164f710ec6feaf13ea7ece2f00867645b8d8dd548d617a5594204b"
+}

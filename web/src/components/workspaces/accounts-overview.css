@@ -1,0 +1,192 @@
+/* The Accounts overview, beside the tree before an account is chosen. It
+   uses the Dashboard's panels: a shell with an icon and a simple title, and a
+   white card holding the content. Rows run edge to edge inside the card. */
+.accounts-overview {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 0 24px;
+  container-type: inline-size;
+}
+/* The panel scrolls; its parts keep their height. */
+.accounts-overview > * {
+  flex: none;
+}
+.accounts-overview dl,
+.accounts-overview dd {
+  margin: 0;
+}
+.accounts-overview .dash-panel-body {
+  gap: 0;
+  padding: 4px 0;
+  overflow: hidden;
+}
+
+/* Title over metadata, used by every row. */
+.accounts-overview-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.accounts-overview-stack > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One row per class: name and count, weekly activity, figure. */
+.accounts-overview-rows {
+  display: flex;
+  flex-direction: column;
+}
+.accounts-overview-class {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(96px, 160px) minmax(120px, auto);
+  align-items: center;
+  gap: 24px;
+  min-height: 60px;
+  padding: 10px 16px;
+  text-align: start;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.accounts-overview-class + .accounts-overview-class,
+.accounts-overview-facts > li + li,
+.accounts-overview-group + .accounts-overview-group {
+  border-top: 1px solid var(--color-border-secondary);
+}
+.accounts-overview-class:hover,
+.accounts-overview-fact:hover {
+  background: var(--dash-fill);
+}
+.accounts-overview-spark {
+  display: flex;
+  height: 28px;
+  color: var(--color-text-quaternary);
+}
+.accounts-overview-class:hover .accounts-overview-spark {
+  color: var(--color-text-tertiary);
+}
+.accounts-overview-spark .account-activity-sparkline {
+  width: 100%;
+  height: 100%;
+}
+.accounts-overview-amount {
+  text-align: end;
+  white-space: nowrap;
+}
+
+/* The balance check: its state in the header, the equation in the card. */
+.accounts-overview-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-fg-success-primary);
+  white-space: nowrap;
+}
+.accounts-overview-equation {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+}
+.accounts-overview-term {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 16px;
+}
+.accounts-overview-operator {
+  flex: none;
+}
+/* Narrow: one term per line, operators leading. */
+@container (width < 760px) {
+  .accounts-overview-equation {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .accounts-overview-term + .accounts-overview-term {
+    border-top: 1px solid var(--color-border-secondary);
+  }
+  .accounts-overview-term:first-child {
+    padding-inline-start: 36px;
+  }
+  .accounts-overview-term {
+    padding-block: 10px;
+  }
+  .accounts-overview-operator {
+    width: 8px;
+  }
+  /* Label at the start, figure at the end, as in a sum. */
+  .accounts-overview-term > .accounts-overview-stack {
+    flex: 1;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+  }
+}
+/* Very narrow: the class rows drop their activity line. */
+@container (width < 480px) {
+  .accounts-overview-class {
+    grid-template-columns: minmax(0, 1fr) minmax(112px, auto);
+  }
+  .accounts-overview-spark {
+    display: none;
+  }
+}
+
+/* Worth a look: one group per fact, divided by a line; its accounts below. */
+.accounts-overview-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px 8px;
+}
+.accounts-overview-group[data-group="unused"] .accounts-overview-group-head {
+  padding-bottom: 12px;
+}
+.accounts-overview-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.accounts-overview-count {
+  flex: none;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--dash-fill);
+  text-align: center;
+}
+.accounts-overview-facts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.accounts-overview-fact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 16px;
+  text-align: start;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.accounts-overview-fact > .vult-type-number {
+  flex: none;
+  white-space: nowrap;
+}
+.accounts-overview-group-foot {
+  display: flex;
+  padding: 4px 16px 10px;
+}

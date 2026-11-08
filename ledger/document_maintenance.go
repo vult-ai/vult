@@ -23,7 +23,7 @@ func (a Admin) ExpiredDocumentBooks(ctx context.Context, limit int) ([]string, e
 	}
 	rows, err := a.DB.Query(ctx, `SELECT b.id::text FROM public.books b CROSS JOIN LATERAL(
  SELECT d.expires_at FROM public.documents d WHERE d.tenant_id=b.tenant_id AND d.book_id=b.id
- AND d.used_at IS NULL AND d.state<>'expired' ORDER BY d.expires_at,d.id LIMIT 1) oldest
+ AND d.used_at IS NULL AND d.state<>'expired' AND d.expires_at IS NOT NULL ORDER BY d.expires_at,d.id LIMIT 1) oldest
  WHERE oldest.expires_at<=clock_timestamp() ORDER BY oldest.expires_at,b.id LIMIT $1`, limit)
 	if err != nil {
 		return nil, dbError(err)

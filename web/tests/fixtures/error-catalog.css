@@ -1,0 +1,43 @@
+.copy-catalog {
+  display: grid;
+  gap: 16px;
+}
+.copy-catalog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.copy-catalog-header h2,
+.copy-group h3,
+.copy-example-label {
+  margin: 0;
+}
+.copy-catalog-header [data-native-field] {
+  width: auto;
+}
+.copy-group {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 16px;
+  background: var(--color-bg-secondary);
+}
+.copy-group h3 {
+  padding: 8px;
+}
+.copy-example {
+  min-width: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--color-bg-primary);
+}
+.copy-example-label {
+  color: var(--color-text-tertiary);
+  margin-bottom: 4px;
+}
+
+.copy-group[hidden] {
+  display: none;
+}

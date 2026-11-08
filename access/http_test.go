@@ -93,10 +93,12 @@ func TestSignInHTTPCookiesCSRFAndLogout(t *testing.T) {
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	var info struct {
+		Mode    string   `json:"mode"`
+		UserID  string   `json:"user_id"`
 		Tenants []string `json:"tenants"`
 		CSRF    string   `json:"csrf"`
 	}
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &info) != nil || len(info.Tenants) != 1 || info.Tenants[0] != tenant || info.CSRF == "" || strings.Contains(w.Body.String(), id.Subject) {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &info) != nil || info.Mode != "server" || len(info.UserID) != 64 || len(info.Tenants) != 1 || info.Tenants[0] != tenant || info.CSRF == "" || strings.Contains(w.Body.String(), id.Subject) || strings.Contains(w.Body.String(), id.Issuer) {
 		t.Fatal("session response incorrect")
 	}
 	for _, valid := range []bool{false, true} {

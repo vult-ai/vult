@@ -15,13 +15,18 @@ import (
 	"github.com/vult-ai/vult/internal/strictjson"
 )
 
-const (
-	SocketPath  = "/Library/Application Support/ai.vult.ledger/socket/service.sock"
-	BinaryPath  = "/Library/PrivilegedHelperTools/ai.vult.ledger/vult"
-	DataPath    = "/Library/Application Support/ai.vult.ledger/data"
-	ServiceUser = "_vultledger"
-	MaxMessage  = 128 << 20
-)
+const MaxMessage = 128 << 20
+
+type BrowserStatus struct {
+	Origin string `json:"origin"`
+	Ready  bool   `json:"ready"`
+}
+
+type BrowserSetup struct {
+	Origin        string   `json:"origin"`
+	SetupURL      string   `json:"setup_url"`
+	RecoveryCodes []string `json:"recovery_codes,omitempty"`
+}
 
 type Request struct {
 	Method        string          `json:"method"`
@@ -65,6 +70,8 @@ func (c Client) Call(ctx context.Context, method, authorization string, payload 
 		return nil, e
 	}
 	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer stop()
 	header, e := json.Marshal(Header{Method: method, Authorization: authorization, Size: len(b)})
 	if e != nil || len(b) > MaxMessage {
 		return nil, errors.New("request exceeds supported size")

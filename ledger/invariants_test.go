@@ -3,6 +3,7 @@ package ledger_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -36,16 +37,22 @@ func insertDirectEntry(t *testing.T, db *testutil.Database, tx pgx.Tx, scope led
 	if err != nil {
 		t.Fatal(err)
 	}
+	request := ledger.PostJournal{RequestKey: key, EconomicDate: entry.EconomicDate, AccountingDate: entry.AccountingDate, Description: entry.Description}
 	for i, account := range []string{debit, credit} {
-		line := ledger.Line{ID: ledger.ID(), AccountID: account, Side: []string{"debit", "credit"}[i], AmountMinor: amount}
-		if _, err = tx.Exec(db.Context, `INSERT INTO public.lines(tenant_id,book_id,id,entry_id,position,account_id,side,amount_minor)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8::bigint)`, scope.TenantID, scope.BookID, line.ID, entry.ID, i+1, account, line.Side, line.AmountMinor); err != nil {
+		input := measuredMoney("USD", 2, amount)
+		input.UnitDefinition = "book"
+		line := ledger.Line{ID: ledger.ID(), AccountID: account, Side: []string{"debit", "credit"}[i], AmountMinor: amount,
+			Valuation: &ledger.Valuation{Basis: "manual", Policy: "supplied-book-value-v1", Input: &input}}
+		if _, err = tx.Exec(db.Context, `INSERT INTO public.lines(tenant_id,book_id,id,entry_id,position,account_id,side,amount_minor,valuation)
+			VALUES($1,$2,$3,$4,$5,$6,$7,$8::bigint,$9)`, scope.TenantID, scope.BookID, line.ID, entry.ID, i+1, account, line.Side, amount, line.Valuation); err != nil {
 			t.Fatal(err)
 		}
+
+		request.Lines = append(request.Lines, ledger.PostLine{AccountID: account, Side: line.Side, AmountMinor: amount, Valuation: line.Valuation})
 		entry.Lines = append(entry.Lines, line)
 	}
 	if _, err = tx.Exec(db.Context, `INSERT INTO public.requests(tenant_id,book_id,id,actor_id,request_key,operation,request_bytes,result_bytes)
- VALUES($1,$2,$3,$4,$5,'post_journal',$6,$7)`, scope.TenantID, scope.BookID, entry.ReceiptID, scope.ActorID, key, []byte(value(map[string]string{"request_key": key})), []byte(value(entry))); err != nil {
+ VALUES($1,$2,$3,$4,$5,'post_journal',$6,$7)`, scope.TenantID, scope.BookID, entry.ReceiptID, scope.ActorID, key, []byte(value(request)), []byte(value(entry))); err != nil {
 		t.Fatal(err)
 	}
 	return entry
@@ -115,7 +122,7 @@ func TestIntermediateBalanceOverflowCannotBeHiddenByLaterEntry(t *testing.T) {
 func TestHistoricalBalanceValidationRequiresLiveScopedWriteAccess(t *testing.T) {
 	db, _, scope, debit, credit := setup(t)
 	var receipts []string
-	if err := db.Admin.QueryRow(db.Context, "SELECT array_agg(filename ORDER BY filename) FROM public.schema_receipts").Scan(&receipts); err != nil || strings.Join(receipts, ",") != "0001_ledger.sql,0002_server_access.sql,0003_documents.sql" {
+	if err := db.Admin.QueryRow(db.Context, "SELECT array_agg(filename ORDER BY filename) FROM public.schema_receipts").Scan(&receipts); err != nil || strings.Join(receipts, ",") != "0001_ledger.sql,0002_server_access.sql,0003_documents.sql,0004_recorded_book.sql" {
 		t.Fatal("fresh installation has an unexpected migration sequence", err)
 	}
 	var definer, trustedOwner, runtimeAccess, directValidator, directLine, directRestore, directHistory bool
@@ -238,6 +245,12 @@ func TestRestoreRejectsIntermediateOverflowAndRollsBack(t *testing.T) {
 				}
 				if id == first.ID {
 					row["amount_minor"] = json.RawMessage("9223372036854775807")
+					var valuation ledger.Valuation
+					if err = json.Unmarshal(row["valuation"], &valuation); err != nil {
+						t.Fatal(err)
+					}
+					valuation.Input.AmountMinor = "9223372036854775807"
+					row["valuation"] = value(valuation)
 				}
 			} else {
 				if err = json.Unmarshal(row["id"], &id); err != nil {
@@ -246,8 +259,28 @@ func TestRestoreRejectsIntermediateOverflowAndRollsBack(t *testing.T) {
 				if id == first.ReceiptID {
 					for i := range first.Lines {
 						first.Lines[i].AmountMinor = "9223372036854775807"
+						first.Lines[i].Valuation.Input.AmountMinor = "9223372036854775807"
 					}
 					row["result_bytes"] = value("\\x" + hex.EncodeToString(value(first)))
+					var requested ledger.PostJournal
+					var encoded string
+					if err = json.Unmarshal(row["request_bytes"], &encoded); err != nil {
+						t.Fatal(err)
+					}
+					data, decodeErr := hex.DecodeString(strings.TrimPrefix(encoded, "\\x"))
+					if decodeErr != nil {
+						t.Fatal(decodeErr)
+					}
+					if err = json.Unmarshal(data, &requested); err != nil {
+						t.Fatal(err)
+					}
+					for i := range requested.Lines {
+						requested.Lines[i].AmountMinor = "9223372036854775807"
+					}
+					data = value(requested)
+					hash := sha256.Sum256(data)
+					row["request_bytes"] = value("\\x" + hex.EncodeToString(data))
+					row["request_sha256"] = value(hex.EncodeToString(hash[:]))
 				}
 			}
 		}

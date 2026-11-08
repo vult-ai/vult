@@ -86,7 +86,7 @@ func (a TenantAdmin) books(ctx context.Context, limit int) ([]Book, error) {
 	if !a.valid() {
 		return nil, ErrDenied
 	}
-	query := "SELECT tenant_id::text,id::text,name,currency,scale,created_at FROM public.books WHERE tenant_id=$1 ORDER BY created_at,id"
+	query := "SELECT " + bookColumns + bookFrom + " WHERE b.tenant_id=$1 ORDER BY b.created_at,b.id"
 	args := []any{a.tenantID}
 	if limit > 0 {
 		query += " LIMIT $2"
@@ -99,9 +99,9 @@ func (a TenantAdmin) books(ctx context.Context, limit int) ([]Book, error) {
 	defer rows.Close()
 	out := []Book{}
 	for rows.Next() {
-		var b Book
-		if e = rows.Scan(&b.TenantID, &b.ID, &b.Name, &b.Currency, &b.Scale, &b.CreatedAt); e != nil {
-			return nil, dbError(e)
+		b, err := scanBook(rows)
+		if err != nil {
+			return nil, dbError(err)
 		}
 		out = append(out, b)
 	}
@@ -118,12 +118,8 @@ func (a TenantAdmin) Book(ctx context.Context, book string) (Book, error) {
 	if !ValidID(book) {
 		return Book{}, ErrInvalid
 	}
-	var b Book
-	e := a.db.QueryRow(ctx, "SELECT tenant_id::text,id::text,name,currency,scale,created_at FROM public.books WHERE tenant_id=$1 AND id=$2", a.tenantID, book).Scan(&b.TenantID, &b.ID, &b.Name, &b.Currency, &b.Scale, &b.CreatedAt)
-	if e != nil {
-		return Book{}, dbError(e)
-	}
-	return b, nil
+	b, err := scanBook(a.db.QueryRow(ctx, "SELECT "+bookColumns+bookFrom+" WHERE b.tenant_id=$1 AND b.id=$2", a.tenantID, book))
+	return b, dbError(err)
 }
 
 func (a TenantAdmin) CreateConnection(ctx context.Context, book, name, access string) (Connection, error) {
@@ -144,19 +140,32 @@ func (a TenantAdmin) CreateConnection(ctx context.Context, book, name, access st
 }
 
 func (a TenantAdmin) Connections(ctx context.Context) ([]Connection, error) {
-	return a.connections(ctx, 0)
+	return a.connections(ctx, 0, false)
 }
 func (a TenantAdmin) ConnectionsBounded(ctx context.Context, limit int) ([]Connection, error) {
+	return a.connectionsBounded(ctx, limit, false)
+}
+
+func (a TenantAdmin) ActiveConnectionsBounded(ctx context.Context, limit int) ([]Connection, error) {
+	return a.connectionsBounded(ctx, limit, true)
+}
+
+func (a TenantAdmin) connectionsBounded(ctx context.Context, limit int, activeOnly bool) ([]Connection, error) {
 	if limit < 1 || limit > 1000 {
 		return nil, ErrInvalid
 	}
-	return a.connections(ctx, limit)
+	return a.connections(ctx, limit, activeOnly)
 }
-func (a TenantAdmin) connections(ctx context.Context, limit int) ([]Connection, error) {
+
+func (a TenantAdmin) connections(ctx context.Context, limit int, activeOnly bool) ([]Connection, error) {
 	if !a.valid() {
 		return nil, ErrDenied
 	}
-	query := "SELECT id::text,tenant_id::text,book_id::text,actor_id::text,name,access,created_at,revoked_at FROM public.connections WHERE tenant_id=$1 ORDER BY created_at,id"
+	query := "SELECT id::text,tenant_id::text,book_id::text,actor_id::text,name,access,created_at,revoked_at FROM public.connections WHERE tenant_id=$1"
+	if activeOnly {
+		query += " AND revoked_at IS NULL"
+	}
+	query += " ORDER BY created_at,id"
 	args := []any{a.tenantID}
 	if limit > 0 {
 		query += " LIMIT $2"
@@ -182,6 +191,15 @@ func (a TenantAdmin) connections(ctx context.Context, limit int) ([]Connection, 
 }
 
 func (a TenantAdmin) Connection(ctx context.Context, id string) (Connection, error) {
+	return a.connection(ctx, id, false)
+}
+
+// ConnectionRecord includes revoked connections for owner inspection.
+func (a TenantAdmin) ConnectionRecord(ctx context.Context, id string) (Connection, error) {
+	return a.connection(ctx, id, true)
+}
+
+func (a TenantAdmin) connection(ctx context.Context, id string, includeRevoked bool) (Connection, error) {
 	if !a.valid() {
 		return Connection{}, ErrDenied
 	}
@@ -189,7 +207,11 @@ func (a TenantAdmin) Connection(ctx context.Context, id string) (Connection, err
 		return Connection{}, ErrInvalid
 	}
 	var c Connection
-	e := a.db.QueryRow(ctx, "SELECT id::text,tenant_id::text,book_id::text,actor_id::text,name,access,created_at,revoked_at FROM public.connections WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL", a.tenantID, id).Scan(&c.ID, &c.TenantID, &c.BookID, &c.ActorID, &c.Name, &c.Access, &c.CreatedAt, &c.RevokedAt)
+	query := "SELECT id::text,tenant_id::text,book_id::text,actor_id::text,name,access,created_at,revoked_at FROM public.connections WHERE tenant_id=$1 AND id=$2"
+	if !includeRevoked {
+		query += " AND revoked_at IS NULL"
+	}
+	e := a.db.QueryRow(ctx, query, a.tenantID, id).Scan(&c.ID, &c.TenantID, &c.BookID, &c.ActorID, &c.Name, &c.Access, &c.CreatedAt, &c.RevokedAt)
 	if e != nil {
 		return Connection{}, dbError(e)
 	}

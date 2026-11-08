@@ -1,0 +1,103 @@
+.dialog-content.personal-settings-dialog:not(.dialog-navigation) {
+  padding: 0;
+}
+.personal-settings-dialog .dialog-heading {
+  padding: 16px 24px;
+  border-bottom: 0;
+}
+.personal-settings-dialog .dialog-close {
+  top: 12px;
+}
+.personal-settings-dialog .dialog-body {
+  padding: 0 24px 24px;
+  max-height: calc(100dvh - 144px);
+  overflow-y: auto;
+}
+/* Placement only; the strip's look comes from the tab standard. */
+.personal-settings-tabs .vult-tab-strip-scroll {
+  margin-bottom: 24px;
+}
+.personal-settings-panel {
+  min-height: 184px;
+  outline: none;
+}
+.personal-settings-panel[data-inert] {
+  display: none;
+}
+.personal-settings-photo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.personal-settings-photo-controls {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.personal-settings-photo-controls p,
+.personal-settings-preference p {
+  margin: 0;
+  color: var(--color-text-tertiary);
+}
+.personal-settings-photo-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.personal-settings-field {
+  display: grid;
+  gap: 8px;
+}
+.personal-settings-preference {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+.personal-settings-preference p {
+  margin-top: 4px;
+}
+.personal-settings-preference + .personal-settings-preference {
+  margin-top: 16px;
+}
+.personal-settings-status {
+  margin: 16px 0 0;
+  color: var(--color-text-tertiary);
+}
+.personal-settings-status:empty {
+  margin: 0;
+}
+@media (width < 420px) {
+  .personal-settings-dialog .dialog-heading {
+    padding: 16px 20px;
+  }
+  .personal-settings-dialog .dialog-body {
+    padding: 0 20px 20px;
+  }
+  .personal-settings-photo {
+    align-items: flex-start;
+  }
+  .personal-settings-preference {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.personal-settings-legacy {
+  display: grid;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-secondary);
+}
+.personal-settings-legacy p {
+  margin: 0;
+}
+.personal-settings-legacy .vult-type-metadata {
+  color: var(--color-text-tertiary);
+}
+.personal-settings-legacy-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}

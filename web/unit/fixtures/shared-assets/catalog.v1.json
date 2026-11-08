@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "institutions": [
+    {
+      "id": "mercury",
+      "name": "Mercury",
+      "domain": "harbor-bank.example",
+      "asset": {
+        "sha256": "f9d25181af926bb2bd465fc3ca20b64181be44faba98ec37443d6d9e0ba9c209",
+        "media_type": "image/svg+xml",
+        "bytes": 228
+      },
+      "source_url": "https://harbor-bank.example/mark.svg",
+      "source_page": "https://harbor-bank.example/",
+      "verified_on": "2026-11-07",
+      "presentation": {
+        "mode": "monochrome",
+        "light": {
+          "background": "#f4f5f9",
+          "foreground": "#272735"
+        },
+        "dark": {
+          "background": "#272735",
+          "foreground": "#f4f5f9"
+        }
+      }
+    },
+    {
+      "id": "wise",
+      "name": "Wise",
+      "domain": "pine-card.example",
+      "asset": {
+        "sha256": "d66fd1f1be4a10004af988a9af56be5510b18b5ac4dd5740826fee2a92dd54c3",
+        "media_type": "image/svg+xml",
+        "bytes": 170
+      },
+      "source_url": "https://pine-card.example/mark.svg",
+      "source_page": "https://pine-card.example/",
+      "verified_on": "2026-11-07",
+      "presentation": {
+        "mode": "monochrome",
+        "light": {
+          "background": "#87ea5c",
+          "foreground": "#083400"
+        },
+        "dark": {
+          "background": "#87ea5c",
+          "foreground": "#083400"
+        }
+      }
+    }
+  ]
+}

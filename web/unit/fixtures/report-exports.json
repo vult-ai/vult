@@ -1,0 +1,3838 @@
+[
+  {
+    "name": "balance_sheet",
+    "result": {
+      "schema_version": 1,
+      "report": "balance_sheet",
+      "title": "Balance Sheet",
+      "book": {
+        "id": "book-example",
+        "name": "Example Book",
+        "currency": "USD",
+        "scale": 2,
+        "start_date": "2024-01-01",
+        "fiscal_year_start_month": 1,
+        "fiscal_year_start_day": 1,
+        "recognition_basis": "accrual",
+        "reporting_framework": "unknown"
+      },
+      "request": {
+        "book_id": "book-example",
+        "report": "balance_sheet",
+        "as_of": "2024-12-31",
+        "currency": "USD",
+        "comparison": "previous_year"
+      },
+      "scope": {
+        "mode": "live",
+        "period": {
+          "to": "2024-12-31"
+        },
+        "comparison": {
+          "to": "2023-12-31"
+        },
+        "fiscal_start": "2024-01-01",
+        "ledger_revision": "ledger-r1",
+        "knowledge_cutoff": "2025-01-01T00:00:00Z",
+        "mapping_version": "report-v1",
+        "hierarchy_basis": "explicit_current_presentation",
+        "generated_at": "2025-01-02T00:00:00Z",
+        "population_digest": "500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17",
+        "coverage": "complete",
+        "opening_balances": "confirmed"
+      },
+      "columns": [
+        {
+          "id": "current",
+          "label": "Current",
+          "kind": "amount",
+          "period": {
+            "to": "2024-12-31"
+          }
+        },
+        {
+          "id": "prior",
+          "label": "Comparison",
+          "kind": "amount",
+          "period": {
+            "to": "2023-12-31"
+          }
+        },
+        {
+          "id": "variance",
+          "label": "Change",
+          "kind": "amount",
+          "period": {
+            "to": "2024-12-31"
+          }
+        }
+      ],
+      "rows": [
+        {
+          "id": "section:assets",
+          "label": "Assets",
+          "role": "section",
+          "values": {
+            "current": "11300",
+            "prior": "0",
+            "variance": "11300"
+          },
+          "children": [
+            {
+              "id": "account:cash",
+              "label": "Cash",
+              "role": "account",
+              "account_id": "cash",
+              "account_code": "1000",
+              "values": {
+                "current": "10400",
+                "prior": "0",
+                "variance": "10400"
+              },
+              "own_values": {
+                "current": "10400",
+                "prior": "0",
+                "variance": "10400"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            },
+            {
+              "id": "account:equipment",
+              "label": "Equipment",
+              "role": "account",
+              "account_id": "equipment",
+              "account_code": "1200",
+              "values": {
+                "current": "900",
+                "prior": "0",
+                "variance": "900"
+              },
+              "own_values": {
+                "current": "1000",
+                "prior": "0",
+                "variance": "1000"
+              },
+              "children": [
+                {
+                  "id": "direct:equipment",
+                  "label": "Direct postings",
+                  "role": "direct",
+                  "account_id": "equipment",
+                  "account_code": "1200",
+                  "values": {
+                    "current": "1000",
+                    "prior": "0",
+                    "variance": "1000"
+                  },
+                  "own_values": {
+                    "current": "1000",
+                    "prior": "0",
+                    "variance": "1000"
+                  },
+                  "children": [],
+                  "drilldown": {
+                    "account_ids": [
+                      "equipment"
+                    ],
+                    "to": "2024-12-31",
+                    "exclude_closing": false,
+                    "exclude_opening": false
+                  }
+                },
+                {
+                  "id": "account:contra",
+                  "label": "Accumulated allowance",
+                  "role": "account",
+                  "account_id": "contra",
+                  "account_code": "1210",
+                  "values": {
+                    "current": "-100",
+                    "prior": "0",
+                    "variance": "-100"
+                  },
+                  "own_values": {
+                    "current": "-100",
+                    "prior": "0",
+                    "variance": "-100"
+                  },
+                  "children": [],
+                  "drilldown": {
+                    "account_ids": [
+                      "contra"
+                    ],
+                    "to": "2024-12-31",
+                    "exclude_closing": false,
+                    "exclude_opening": false
+                  }
+                }
+              ],
+              "drilldown": {
+                "account_ids": [
+                  "contra",
+                  "equipment"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [
+              "cash",
+              "contra",
+              "equipment"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        },
+        {
+          "id": "section:liabilities",
+          "label": "Liabilities",
+          "role": "section",
+          "values": {
+            "current": "0",
+            "prior": "0",
+            "variance": "0"
+          },
+          "children": [],
+          "drilldown": {
+            "account_ids": [],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        },
+        {
+          "id": "section:equity",
+          "label": "Equity",
+          "role": "section",
+          "values": {
+            "current": "11300",
+            "prior": "0",
+            "variance": "11300"
+          },
+          "children": [
+            {
+              "id": "account:capital",
+              "label": "Capital",
+              "role": "account",
+              "account_id": "capital",
+              "account_code": "3000",
+              "values": {
+                "current": "10000",
+                "prior": "0",
+                "variance": "10000"
+              },
+              "own_values": {
+                "current": "10000",
+                "prior": "0",
+                "variance": "10000"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "capital"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            },
+            {
+              "id": "equity:unclosed_result",
+              "label": "Unclosed accumulated result",
+              "role": "total",
+              "values": {
+                "current": "1300",
+                "prior": "0",
+                "variance": "1300"
+              },
+              "children": [
+                {
+                  "id": "equity:prior_unclosed_result",
+                  "label": "Prior fiscal unclosed result",
+                  "role": "total",
+                  "values": {
+                    "current": "0",
+                    "prior": "0",
+                    "variance": "0"
+                  },
+                  "children": [],
+                  "drilldown": {
+                    "account_ids": [
+                      "costs",
+                      "detail",
+                      "sales",
+                      "services"
+                    ],
+                    "to": "2023-12-31",
+                    "exclude_closing": false,
+                    "exclude_opening": false,
+                    "comparison": {
+                      "to": "2022-12-31"
+                    }
+                  }
+                },
+                {
+                  "id": "equity:current_unclosed_result",
+                  "label": "Current fiscal unclosed result",
+                  "role": "total",
+                  "values": {
+                    "current": "1300",
+                    "prior": "0",
+                    "variance": "1300"
+                  },
+                  "children": [],
+                  "drilldown": {
+                    "account_ids": [
+                      "costs",
+                      "detail",
+                      "sales",
+                      "services"
+                    ],
+                    "from": "2024-01-01",
+                    "to": "2024-12-31",
+                    "exclude_closing": false,
+                    "exclude_opening": false,
+                    "comparison": {
+                      "from": "2023-01-01",
+                      "to": "2023-12-31"
+                    }
+                  }
+                }
+              ],
+              "drilldown": {
+                "account_ids": [
+                  "costs",
+                  "detail",
+                  "sales",
+                  "services"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [
+              "capital",
+              "costs",
+              "detail",
+              "sales",
+              "services"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        }
+      ],
+      "checks": [
+        {
+          "id": "ledger_population",
+          "status": "pass",
+          "message": "Every supplied entry balances with unique posting identities."
+        },
+        {
+          "id": "source_coverage",
+          "status": "pass",
+          "message": "Coverage describes the supplied population; balance alone does not establish completeness."
+        },
+        {
+          "id": "opening_balances",
+          "status": "pass",
+          "message": "Opening-balance provenance is separate from mathematical ledger balance."
+        },
+        {
+          "id": "balance_sheet_equation",
+          "status": "pass",
+          "message": "Recorded assets equal recorded liabilities plus posted equity and unclosed results."
+        },
+        {
+          "id": "fiscal_result_bridge",
+          "status": "pass",
+          "message": "Current fiscal unclosed balances reconcile to earned activity, typed opening balances and closing transfers without duplicate equity."
+        }
+      ],
+      "limitations": [
+        "Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.",
+        "Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made."
+      ],
+      "reconciliation": {
+        "assets": "11300",
+        "current_fiscal_closing": "0",
+        "current_fiscal_opening": "0",
+        "current_fiscal_profit": "1300",
+        "current_unclosed_result": "1300",
+        "equity_total": "11300",
+        "liabilities": "0",
+        "posted_equity": "10000",
+        "prior_unclosed_result": "0"
+      },
+      "status": "ready",
+      "digest": "3301857a2158c014d2bf9d34e791cabefb0b56b688a9fce0b0676c3979e1b7e4"
+    },
+    "csv": "Report,Balance Sheet\nBook,Example Book\nBook ID,book-example\nCurrency,USD\nRecognition basis,accrual\nReporting framework,unknown\nMode,live\nStatus,ready\nFrom,\nThrough,2024-12-31\nLedger revision,ledger-r1\nKnowledge cutoff,2025-01-01T00:00:00Z\nMapping version,report-v1\nHierarchy basis,explicit_current_presentation\nPopulation digest,500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17\nResult digest,3301857a2158c014d2bf9d34e791cabefb0b56b688a9fce0b0676c3979e1b7e4\nCoverage,complete\nOpening balances,confirmed\nComparison from,\nComparison through,2023-12-31\nCheck,ledger_population,pass,Every supplied entry balances with unique posting identities.\nCheck,source_coverage,pass,Coverage describes the supplied population; balance alone does not establish completeness.\nCheck,opening_balances,pass,Opening-balance provenance is separate from mathematical ledger balance.\nCheck,balance_sheet_equation,pass,Recorded assets equal recorded liabilities plus posted equity and unclosed results.\nCheck,fiscal_result_bridge,pass,\"Current fiscal unclosed balances reconcile to earned activity, typed opening balances and closing transfers without duplicate equity.\"\nLimitation,Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.\nLimitation,\"Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.\"\n\nRow ID,Parent row ID,Depth,Role,Account ID,Account code,Label,Date,Entry ID,Posting ID,Current (USD),Comparison (USD),Change (USD),GL code\nsection:assets,,0,section,,,Assets,,,,113.00,0.00,113.00,\naccount:cash,section:assets,1,account,cash,1000,Cash,,,,104.00,0.00,104.00,\naccount:equipment,section:assets,1,account,equipment,1200,Equipment,,,,9.00,0.00,9.00,\ndirect:equipment,account:equipment,2,direct,equipment,1200,Direct postings,,,,10.00,0.00,10.00,\naccount:contra,account:equipment,2,account,contra,1210,Accumulated allowance,,,,-1.00,0.00,-1.00,\nsection:liabilities,,0,section,,,Liabilities,,,,0.00,0.00,0.00,\nsection:equity,,0,section,,,Equity,,,,113.00,0.00,113.00,\naccount:capital,section:equity,1,account,capital,3000,Capital,,,,100.00,0.00,100.00,\nequity:unclosed_result,section:equity,1,total,,,Unclosed accumulated result,,,,13.00,0.00,13.00,\nequity:prior_unclosed_result,equity:unclosed_result,2,total,,,Prior fiscal unclosed result,,,,0.00,0.00,0.00,\nequity:current_unclosed_result,equity:unclosed_result,2,total,,,Current fiscal unclosed result,,,,13.00,0.00,13.00,\n"
+  },
+  {
+    "name": "profit_loss",
+    "result": {
+      "schema_version": 1,
+      "report": "profit_loss",
+      "title": "Profit \u0026 Loss",
+      "book": {
+        "id": "book-example",
+        "name": "Example Book",
+        "currency": "USD",
+        "scale": 2,
+        "start_date": "2024-01-01",
+        "fiscal_year_start_month": 1,
+        "fiscal_year_start_day": 1,
+        "recognition_basis": "accrual",
+        "reporting_framework": "unknown"
+      },
+      "request": {
+        "book_id": "book-example",
+        "report": "profit_loss",
+        "from": "2024-01-01",
+        "to": "2024-12-31",
+        "currency": "USD",
+        "comparison": "previous_year"
+      },
+      "scope": {
+        "mode": "live",
+        "period": {
+          "from": "2024-01-01",
+          "to": "2024-12-31"
+        },
+        "comparison": {
+          "from": "2023-01-01",
+          "to": "2023-12-31"
+        },
+        "fiscal_start": "2024-01-01",
+        "ledger_revision": "ledger-r1",
+        "knowledge_cutoff": "2025-01-01T00:00:00Z",
+        "mapping_version": "report-v1",
+        "hierarchy_basis": "explicit_current_presentation",
+        "generated_at": "2025-01-02T00:00:00Z",
+        "population_digest": "500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17",
+        "coverage": "complete",
+        "opening_balances": "confirmed"
+      },
+      "columns": [
+        {
+          "id": "current",
+          "label": "Current",
+          "kind": "amount",
+          "period": {
+            "from": "2024-01-01",
+            "to": "2024-12-31"
+          }
+        },
+        {
+          "id": "prior",
+          "label": "Comparison",
+          "kind": "amount",
+          "period": {
+            "from": "2023-01-01",
+            "to": "2023-12-31"
+          }
+        },
+        {
+          "id": "variance",
+          "label": "Change",
+          "kind": "amount",
+          "period": {
+            "from": "2024-01-01",
+            "to": "2024-12-31"
+          }
+        }
+      ],
+      "rows": [
+        {
+          "id": "section:income",
+          "label": "Income",
+          "role": "section",
+          "values": {
+            "current": "2000",
+            "prior": "0",
+            "variance": "2000"
+          },
+          "children": [
+            {
+              "id": "account:sales",
+              "label": "Revenue",
+              "role": "account",
+              "account_id": "sales",
+              "account_code": "4000",
+              "values": {
+                "current": "2000",
+                "prior": "0",
+                "variance": "2000"
+              },
+              "own_values": {
+                "current": "2000",
+                "prior": "0",
+                "variance": "2000"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "sales"
+                ],
+                "from": "2024-01-01",
+                "to": "2024-12-31",
+                "exclude_closing": true,
+                "exclude_opening": true
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [
+              "sales"
+            ],
+            "from": "2024-01-01",
+            "to": "2024-12-31",
+            "exclude_closing": true,
+            "exclude_opening": true
+          }
+        },
+        {
+          "id": "section:expenses",
+          "label": "Expenses",
+          "role": "section",
+          "values": {
+            "current": "700",
+            "prior": "0",
+            "variance": "700"
+          },
+          "children": [
+            {
+              "id": "account:costs",
+              "label": "Costs",
+              "role": "account",
+              "account_id": "costs",
+              "account_code": "5000",
+              "values": {
+                "current": "700",
+                "prior": "0",
+                "variance": "700"
+              },
+              "own_values": {
+                "current": "100",
+                "prior": "0",
+                "variance": "100"
+              },
+              "children": [
+                {
+                  "id": "direct:costs",
+                  "label": "Direct postings",
+                  "role": "direct",
+                  "account_id": "costs",
+                  "account_code": "5000",
+                  "values": {
+                    "current": "100",
+                    "prior": "0",
+                    "variance": "100"
+                  },
+                  "own_values": {
+                    "current": "100",
+                    "prior": "0",
+                    "variance": "100"
+                  },
+                  "children": [],
+                  "drilldown": {
+                    "account_ids": [
+                      "costs"
+                    ],
+                    "from": "2024-01-01",
+                    "to": "2024-12-31",
+                    "exclude_closing": true,
+                    "exclude_opening": true
+                  }
+                },
+                {
+                  "id": "account:services",
+                  "label": "Services",
+                  "role": "account",
+                  "account_id": "services",
+                  "account_code": "5010",
+                  "values": {
+                    "current": "600",
+                    "prior": "0",
+                    "variance": "600"
+                  },
+                  "own_values": {
+                    "current": "200",
+                    "prior": "0",
+                    "variance": "200"
+                  },
+                  "children": [
+                    {
+                      "id": "direct:services",
+                      "label": "Direct postings",
+                      "role": "direct",
+                      "account_id": "services",
+                      "account_code": "5010",
+                      "values": {
+                        "current": "200",
+                        "prior": "0",
+                        "variance": "200"
+                      },
+                      "own_values": {
+                        "current": "200",
+                        "prior": "0",
+                        "variance": "200"
+                      },
+                      "children": [],
+                      "drilldown": {
+                        "account_ids": [
+                          "services"
+                        ],
+                        "from": "2024-01-01",
+                        "to": "2024-12-31",
+                        "exclude_closing": true,
+                        "exclude_opening": true
+                      }
+                    },
+                    {
+                      "id": "account:detail",
+                      "label": "Detail",
+                      "role": "account",
+                      "account_id": "detail",
+                      "account_code": "5020",
+                      "values": {
+                        "current": "400",
+                        "prior": "0",
+                        "variance": "400"
+                      },
+                      "own_values": {
+                        "current": "400",
+                        "prior": "0",
+                        "variance": "400"
+                      },
+                      "children": [],
+                      "drilldown": {
+                        "account_ids": [
+                          "detail"
+                        ],
+                        "from": "2024-01-01",
+                        "to": "2024-12-31",
+                        "exclude_closing": true,
+                        "exclude_opening": true
+                      }
+                    }
+                  ],
+                  "drilldown": {
+                    "account_ids": [
+                      "detail",
+                      "services"
+                    ],
+                    "from": "2024-01-01",
+                    "to": "2024-12-31",
+                    "exclude_closing": true,
+                    "exclude_opening": true
+                  }
+                }
+              ],
+              "drilldown": {
+                "account_ids": [
+                  "costs",
+                  "detail",
+                  "services"
+                ],
+                "from": "2024-01-01",
+                "to": "2024-12-31",
+                "exclude_closing": true,
+                "exclude_opening": true
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [
+              "costs",
+              "detail",
+              "services"
+            ],
+            "from": "2024-01-01",
+            "to": "2024-12-31",
+            "exclude_closing": true,
+            "exclude_opening": true
+          }
+        },
+        {
+          "id": "total:result",
+          "label": "Recorded result",
+          "role": "total",
+          "values": {
+            "current": "1300",
+            "prior": "0",
+            "variance": "1300"
+          },
+          "children": [],
+          "drilldown": {
+            "account_ids": [
+              "costs",
+              "detail",
+              "sales",
+              "services"
+            ],
+            "from": "2024-01-01",
+            "to": "2024-12-31",
+            "exclude_closing": true,
+            "exclude_opening": true
+          }
+        }
+      ],
+      "checks": [
+        {
+          "id": "ledger_population",
+          "status": "pass",
+          "message": "Every supplied entry balances with unique posting identities."
+        },
+        {
+          "id": "source_coverage",
+          "status": "pass",
+          "message": "Coverage describes the supplied population; balance alone does not establish completeness."
+        },
+        {
+          "id": "opening_balances",
+          "status": "pass",
+          "message": "Opening-balance provenance is separate from mathematical ledger balance."
+        },
+        {
+          "id": "profit_loss_reconstruction",
+          "status": "pass",
+          "message": "The result reconstructs the selected income and expense postings, excluding explicitly typed openings and closes."
+        }
+      ],
+      "limitations": [
+        "Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.",
+        "Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made."
+      ],
+      "reconciliation": {
+        "expenses": "700",
+        "income": "2000",
+        "result": "1300"
+      },
+      "status": "ready",
+      "digest": "f1ea0fb237e24f74196e9b51546f557ea864ec4a53f2bfaabc0a0707deb5e725"
+    },
+    "csv": "Report,Profit \u0026 Loss\nBook,Example Book\nBook ID,book-example\nCurrency,USD\nRecognition basis,accrual\nReporting framework,unknown\nMode,live\nStatus,ready\nFrom,2024-01-01\nThrough,2024-12-31\nLedger revision,ledger-r1\nKnowledge cutoff,2025-01-01T00:00:00Z\nMapping version,report-v1\nHierarchy basis,explicit_current_presentation\nPopulation digest,500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17\nResult digest,f1ea0fb237e24f74196e9b51546f557ea864ec4a53f2bfaabc0a0707deb5e725\nCoverage,complete\nOpening balances,confirmed\nComparison from,2023-01-01\nComparison through,2023-12-31\nCheck,ledger_population,pass,Every supplied entry balances with unique posting identities.\nCheck,source_coverage,pass,Coverage describes the supplied population; balance alone does not establish completeness.\nCheck,opening_balances,pass,Opening-balance provenance is separate from mathematical ledger balance.\nCheck,profit_loss_reconstruction,pass,\"The result reconstructs the selected income and expense postings, excluding explicitly typed openings and closes.\"\nLimitation,Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.\nLimitation,\"Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.\"\n\nRow ID,Parent row ID,Depth,Role,Account ID,Account code,Label,Date,Entry ID,Posting ID,Current (USD),Comparison (USD),Change (USD),GL code\nsection:income,,0,section,,,Income,,,,20.00,0.00,20.00,\naccount:sales,section:income,1,account,sales,4000,Revenue,,,,20.00,0.00,20.00,\nsection:expenses,,0,section,,,Expenses,,,,7.00,0.00,7.00,\naccount:costs,section:expenses,1,account,costs,5000,Costs,,,,7.00,0.00,7.00,\ndirect:costs,account:costs,2,direct,costs,5000,Direct postings,,,,1.00,0.00,1.00,\naccount:services,account:costs,2,account,services,5010,Services,,,,6.00,0.00,6.00,\ndirect:services,account:services,3,direct,services,5010,Direct postings,,,,2.00,0.00,2.00,\naccount:detail,account:services,3,account,detail,5020,Detail,,,,4.00,0.00,4.00,\ntotal:result,,0,total,,,Recorded result,,,,13.00,0.00,13.00,\n"
+  },
+  {
+    "name": "trial_balance",
+    "result": {
+      "schema_version": 1,
+      "report": "trial_balance",
+      "title": "Trial Balance",
+      "book": {
+        "id": "book-example",
+        "name": "Example Book",
+        "currency": "USD",
+        "scale": 2,
+        "start_date": "2024-01-01",
+        "fiscal_year_start_month": 1,
+        "fiscal_year_start_day": 1,
+        "recognition_basis": "accrual",
+        "reporting_framework": "unknown"
+      },
+      "request": {
+        "book_id": "book-example",
+        "report": "trial_balance",
+        "as_of": "2024-12-31",
+        "currency": "USD",
+        "comparison": "previous_year"
+      },
+      "scope": {
+        "mode": "live",
+        "period": {
+          "to": "2024-12-31"
+        },
+        "comparison": {
+          "to": "2023-12-31"
+        },
+        "fiscal_start": "2024-01-01",
+        "ledger_revision": "ledger-r1",
+        "knowledge_cutoff": "2025-01-01T00:00:00Z",
+        "mapping_version": "report-v1",
+        "hierarchy_basis": "explicit_current_presentation",
+        "generated_at": "2025-01-02T00:00:00Z",
+        "population_digest": "500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17",
+        "coverage": "complete",
+        "opening_balances": "confirmed"
+      },
+      "columns": [
+        {
+          "id": "debit",
+          "label": "Debit",
+          "kind": "amount",
+          "period": {
+            "to": "2024-12-31"
+          }
+        },
+        {
+          "id": "credit",
+          "label": "Credit",
+          "kind": "amount",
+          "period": {
+            "to": "2024-12-31"
+          }
+        },
+        {
+          "id": "prior_debit",
+          "label": "Prior debit",
+          "kind": "amount",
+          "period": {
+            "to": "2023-12-31"
+          }
+        },
+        {
+          "id": "prior_credit",
+          "label": "Prior credit",
+          "kind": "amount",
+          "period": {
+            "to": "2023-12-31"
+          }
+        },
+        {
+          "id": "variance",
+          "label": "Net change",
+          "kind": "amount",
+          "period": {
+            "to": "2024-12-31"
+          }
+        }
+      ],
+      "rows": [
+        {
+          "id": "account:cash",
+          "label": "Cash",
+          "role": "account",
+          "account_id": "cash",
+          "account_code": "1000",
+          "values": {
+            "credit": "0",
+            "debit": "10400",
+            "prior_credit": "0",
+            "prior_debit": "0",
+            "variance": "10400"
+          },
+          "own_values": {
+            "credit": "0",
+            "debit": "10400",
+            "prior_credit": "0",
+            "prior_debit": "0",
+            "variance": "10400"
+          },
+          "children": [],
+          "drilldown": {
+            "account_ids": [
+              "cash"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        },
+        {
+          "id": "account:equipment",
+          "label": "Equipment",
+          "role": "account",
+          "account_id": "equipment",
+          "account_code": "1200",
+          "values": {
+            "credit": "100",
+            "debit": "1000",
+            "prior_credit": "0",
+            "prior_debit": "0",
+            "variance": "900"
+          },
+          "own_values": {
+            "credit": "0",
+            "debit": "1000",
+            "prior_credit": "0",
+            "prior_debit": "0",
+            "variance": "1000"
+          },
+          "children": [
+            {
+              "id": "direct:equipment",
+              "label": "Direct account balance",
+              "role": "direct",
+              "account_id": "equipment",
+              "account_code": "1200",
+              "values": {
+                "credit": "0",
+                "debit": "1000",
+                "prior_credit": "0",
+                "prior_debit": "0",
+                "variance": "1000"
+              },
+              "own_values": {
+                "credit": "0",
+                "debit": "1000",
+                "prior_credit": "0",
+                "prior_debit": "0",
+                "variance": "1000"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "equipment"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            },
+            {
+              "id": "account:contra",
+              "label": "Accumulated allowance",
+              "role": "account",
+              "account_id": "contra",
+              "account_code": "1210",
+              "values": {
+                "credit": "100",
+                "debit": "0",
+                "prior_credit": "0",
+                "prior_debit": "0",
+                "variance": "-100"
+              },
+              "own_values": {
+                "credit": "100",
+                "debit": "0",
+                "prior_credit": "0",
+                "prior_debit": "0",
+                "variance": "-100"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "contra"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [
+              "contra",
+              "equipment"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        },
+        {
+          "id": "account:capital",
+          "label": "Capital",
+          "role": "account",
+          "account_id": "capital",
+          "account_code": "3000",
+          "values": {
+            "credit": "10000",
+            "debit": "0",
+            "prior_credit": "0",
+            "prior_debit": "0",
+            "variance": "-10000"
+          },
+          "own_values": {
+            "credit": "10000",
+            "debit": "0",
+            "prior_credit": "0",
+            "prior_debit": "0",
+            "variance": "-10000"
+          },
+          "children": [],
+          "drilldown": {
+            "account_ids": [
+              "capital"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        },
+        {
+          "id": "account:sales",
+          "label": "Revenue",
+          "role": "account",
+          "account_id": "sales",
+          "account_code": "4000",
+          "values": {
+            "credit": "2000",
+            "debit": "0",
+            "prior_credit": "0",
+            "prior_debit": "0",
+            "variance": "-2000"
+          },
+          "own_values": {
+            "credit": "2000",
+            "debit": "0",
+            "prior_credit": "0",
+            "prior_debit": "0",
+            "variance": "-2000"
+          },
+          "children": [],
+          "drilldown": {
+            "account_ids": [
+              "sales"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        },
+        {
+          "id": "account:costs",
+          "label": "Costs",
+          "role": "account",
+          "account_id": "costs",
+          "account_code": "5000",
+          "values": {
+            "credit": "0",
+            "debit": "700",
+            "prior_credit": "0",
+            "prior_debit": "0",
+            "variance": "700"
+          },
+          "own_values": {
+            "credit": "0",
+            "debit": "100",
+            "prior_credit": "0",
+            "prior_debit": "0",
+            "variance": "100"
+          },
+          "children": [
+            {
+              "id": "direct:costs",
+              "label": "Direct account balance",
+              "role": "direct",
+              "account_id": "costs",
+              "account_code": "5000",
+              "values": {
+                "credit": "0",
+                "debit": "100",
+                "prior_credit": "0",
+                "prior_debit": "0",
+                "variance": "100"
+              },
+              "own_values": {
+                "credit": "0",
+                "debit": "100",
+                "prior_credit": "0",
+                "prior_debit": "0",
+                "variance": "100"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "costs"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            },
+            {
+              "id": "account:services",
+              "label": "Services",
+              "role": "account",
+              "account_id": "services",
+              "account_code": "5010",
+              "values": {
+                "credit": "0",
+                "debit": "600",
+                "prior_credit": "0",
+                "prior_debit": "0",
+                "variance": "600"
+              },
+              "own_values": {
+                "credit": "0",
+                "debit": "200",
+                "prior_credit": "0",
+                "prior_debit": "0",
+                "variance": "200"
+              },
+              "children": [
+                {
+                  "id": "direct:services",
+                  "label": "Direct account balance",
+                  "role": "direct",
+                  "account_id": "services",
+                  "account_code": "5010",
+                  "values": {
+                    "credit": "0",
+                    "debit": "200",
+                    "prior_credit": "0",
+                    "prior_debit": "0",
+                    "variance": "200"
+                  },
+                  "own_values": {
+                    "credit": "0",
+                    "debit": "200",
+                    "prior_credit": "0",
+                    "prior_debit": "0",
+                    "variance": "200"
+                  },
+                  "children": [],
+                  "drilldown": {
+                    "account_ids": [
+                      "services"
+                    ],
+                    "to": "2024-12-31",
+                    "exclude_closing": false,
+                    "exclude_opening": false
+                  }
+                },
+                {
+                  "id": "account:detail",
+                  "label": "Detail",
+                  "role": "account",
+                  "account_id": "detail",
+                  "account_code": "5020",
+                  "values": {
+                    "credit": "0",
+                    "debit": "400",
+                    "prior_credit": "0",
+                    "prior_debit": "0",
+                    "variance": "400"
+                  },
+                  "own_values": {
+                    "credit": "0",
+                    "debit": "400",
+                    "prior_credit": "0",
+                    "prior_debit": "0",
+                    "variance": "400"
+                  },
+                  "children": [],
+                  "drilldown": {
+                    "account_ids": [
+                      "detail"
+                    ],
+                    "to": "2024-12-31",
+                    "exclude_closing": false,
+                    "exclude_opening": false
+                  }
+                }
+              ],
+              "drilldown": {
+                "account_ids": [
+                  "detail",
+                  "services"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [
+              "costs",
+              "detail",
+              "services"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        },
+        {
+          "id": "total:trial_balance",
+          "label": "Total",
+          "role": "total",
+          "values": {
+            "credit": "12100",
+            "debit": "12100",
+            "prior_credit": "0",
+            "prior_debit": "0",
+            "variance": "0"
+          },
+          "children": [],
+          "drilldown": {
+            "account_ids": [
+              "capital",
+              "cash",
+              "contra",
+              "costs",
+              "detail",
+              "equipment",
+              "sales",
+              "services"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        }
+      ],
+      "checks": [
+        {
+          "id": "ledger_population",
+          "status": "pass",
+          "message": "Every supplied entry balances with unique posting identities."
+        },
+        {
+          "id": "source_coverage",
+          "status": "pass",
+          "message": "Coverage describes the supplied population; balance alone does not establish completeness."
+        },
+        {
+          "id": "opening_balances",
+          "status": "pass",
+          "message": "Opening-balance provenance is separate from mathematical ledger balance."
+        },
+        {
+          "id": "trial_balance",
+          "status": "pass",
+          "message": "Closing debit and credit account balances reconcile to the supplied journal population."
+        }
+      ],
+      "limitations": [
+        "Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.",
+        "Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made."
+      ],
+      "reconciliation": {
+        "credit": "12100",
+        "debit": "12100"
+      },
+      "status": "ready",
+      "digest": "2310df3dc43af56b39833531bdf0e692ebd85409480b54cf15aa4b04787b0e52"
+    },
+    "csv": "Report,Trial Balance\nBook,Example Book\nBook ID,book-example\nCurrency,USD\nRecognition basis,accrual\nReporting framework,unknown\nMode,live\nStatus,ready\nFrom,\nThrough,2024-12-31\nLedger revision,ledger-r1\nKnowledge cutoff,2025-01-01T00:00:00Z\nMapping version,report-v1\nHierarchy basis,explicit_current_presentation\nPopulation digest,500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17\nResult digest,2310df3dc43af56b39833531bdf0e692ebd85409480b54cf15aa4b04787b0e52\nCoverage,complete\nOpening balances,confirmed\nComparison from,\nComparison through,2023-12-31\nCheck,ledger_population,pass,Every supplied entry balances with unique posting identities.\nCheck,source_coverage,pass,Coverage describes the supplied population; balance alone does not establish completeness.\nCheck,opening_balances,pass,Opening-balance provenance is separate from mathematical ledger balance.\nCheck,trial_balance,pass,Closing debit and credit account balances reconcile to the supplied journal population.\nLimitation,Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.\nLimitation,\"Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.\"\n\nRow ID,Parent row ID,Depth,Role,Account ID,Account code,Label,Date,Entry ID,Posting ID,Debit (USD),Credit (USD),Prior debit (USD),Prior credit (USD),Net change (USD),GL code\naccount:cash,,0,account,cash,1000,Cash,,,,104.00,0.00,0.00,0.00,104.00,\naccount:equipment,,0,account,equipment,1200,Equipment,,,,10.00,1.00,0.00,0.00,9.00,\ndirect:equipment,account:equipment,1,direct,equipment,1200,Direct account balance,,,,10.00,0.00,0.00,0.00,10.00,\naccount:contra,account:equipment,1,account,contra,1210,Accumulated allowance,,,,0.00,1.00,0.00,0.00,-1.00,\naccount:capital,,0,account,capital,3000,Capital,,,,0.00,100.00,0.00,0.00,-100.00,\naccount:sales,,0,account,sales,4000,Revenue,,,,0.00,20.00,0.00,0.00,-20.00,\naccount:costs,,0,account,costs,5000,Costs,,,,7.00,0.00,0.00,0.00,7.00,\ndirect:costs,account:costs,1,direct,costs,5000,Direct account balance,,,,1.00,0.00,0.00,0.00,1.00,\naccount:services,account:costs,1,account,services,5010,Services,,,,6.00,0.00,0.00,0.00,6.00,\ndirect:services,account:services,2,direct,services,5010,Direct account balance,,,,2.00,0.00,0.00,0.00,2.00,\naccount:detail,account:services,2,account,detail,5020,Detail,,,,4.00,0.00,0.00,0.00,4.00,\ntotal:trial_balance,,0,total,,,Total,,,,121.00,121.00,0.00,0.00,0.00,\n"
+  },
+  {
+    "name": "general_ledger",
+    "result": {
+      "schema_version": 1,
+      "report": "general_ledger",
+      "title": "General Ledger",
+      "book": {
+        "id": "book-example",
+        "name": "Example Book",
+        "currency": "USD",
+        "scale": 2,
+        "start_date": "2024-01-01",
+        "fiscal_year_start_month": 1,
+        "fiscal_year_start_day": 1,
+        "recognition_basis": "accrual",
+        "reporting_framework": "unknown"
+      },
+      "request": {
+        "book_id": "book-example",
+        "report": "general_ledger",
+        "from": "2024-01-01",
+        "to": "2024-12-31",
+        "currency": "USD",
+        "comparison": "none"
+      },
+      "scope": {
+        "mode": "live",
+        "period": {
+          "from": "2024-01-01",
+          "to": "2024-12-31"
+        },
+        "fiscal_start": "2024-01-01",
+        "ledger_revision": "ledger-r1",
+        "knowledge_cutoff": "2025-01-01T00:00:00Z",
+        "mapping_version": "report-v1",
+        "hierarchy_basis": "explicit_current_presentation",
+        "generated_at": "2025-01-02T00:00:00Z",
+        "population_digest": "500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17",
+        "coverage": "complete",
+        "opening_balances": "confirmed"
+      },
+      "columns": [
+        {
+          "id": "debit",
+          "label": "Debit",
+          "kind": "amount",
+          "period": {
+            "from": "2024-01-01",
+            "to": "2024-12-31"
+          }
+        },
+        {
+          "id": "credit",
+          "label": "Credit",
+          "kind": "amount",
+          "period": {
+            "from": "2024-01-01",
+            "to": "2024-12-31"
+          }
+        },
+        {
+          "id": "balance",
+          "label": "Debit balance",
+          "kind": "amount",
+          "period": {
+            "from": "2024-01-01",
+            "to": "2024-12-31"
+          }
+        }
+      ],
+      "rows": [
+        {
+          "id": "account:cash",
+          "label": "Cash",
+          "role": "account",
+          "account_id": "cash",
+          "account_code": "1000",
+          "values": {
+            "balance": "10400",
+            "credit": "1600",
+            "debit": "12000"
+          },
+          "own_values": {
+            "balance": "10400",
+            "credit": "1600",
+            "debit": "12000"
+          },
+          "children": [
+            {
+              "id": "opening:cash",
+              "label": "Opening balance",
+              "role": "opening",
+              "values": {
+                "balance": "0",
+                "credit": "0",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "to": "2023-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            },
+            {
+              "id": "posting:open-cash-debit",
+              "label": "Journal posting",
+              "role": "posting",
+              "account_id": "cash",
+              "account_code": "1000",
+              "date": "2024-01-01",
+              "entry_id": "open",
+              "posting_id": "open-cash-debit",
+              "values": {
+                "balance": "10000",
+                "credit": "0",
+                "debit": "10000"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "from": "2024-01-01",
+                "to": "2024-01-01",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "open",
+                "posting_id": "open-cash-debit"
+              }
+            },
+            {
+              "id": "posting:sale-cash-debit",
+              "label": "Journal posting",
+              "role": "posting",
+              "account_id": "cash",
+              "account_code": "1000",
+              "date": "2024-06-01",
+              "entry_id": "sale",
+              "posting_id": "sale-cash-debit",
+              "values": {
+                "balance": "12000",
+                "credit": "0",
+                "debit": "2000"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "from": "2024-06-01",
+                "to": "2024-06-01",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "sale",
+                "posting_id": "sale-cash-debit"
+              }
+            },
+            {
+              "id": "posting:cost-a-cash-credit",
+              "label": "Journal posting",
+              "role": "posting",
+              "account_id": "cash",
+              "account_code": "1000",
+              "date": "2024-06-02",
+              "entry_id": "cost-a",
+              "posting_id": "cost-a-cash-credit",
+              "values": {
+                "balance": "11900",
+                "credit": "100",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "from": "2024-06-02",
+                "to": "2024-06-02",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "cost-a",
+                "posting_id": "cost-a-cash-credit"
+              }
+            },
+            {
+              "id": "posting:cost-b-cash-credit",
+              "label": "Journal posting",
+              "role": "posting",
+              "account_id": "cash",
+              "account_code": "1000",
+              "date": "2024-06-02",
+              "entry_id": "cost-b",
+              "posting_id": "cost-b-cash-credit",
+              "values": {
+                "balance": "11700",
+                "credit": "200",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "from": "2024-06-02",
+                "to": "2024-06-02",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "cost-b",
+                "posting_id": "cost-b-cash-credit"
+              }
+            },
+            {
+              "id": "posting:cost-c-cash-credit",
+              "label": "Journal posting",
+              "role": "posting",
+              "account_id": "cash",
+              "account_code": "1000",
+              "date": "2024-06-02",
+              "entry_id": "cost-c",
+              "posting_id": "cost-c-cash-credit",
+              "values": {
+                "balance": "11400",
+                "credit": "300",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "from": "2024-06-02",
+                "to": "2024-06-02",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "cost-c",
+                "posting_id": "cost-c-cash-credit"
+              }
+            },
+            {
+              "id": "posting:asset-cash-credit",
+              "label": "Journal posting",
+              "role": "posting",
+              "account_id": "cash",
+              "account_code": "1000",
+              "date": "2024-06-03",
+              "entry_id": "asset",
+              "posting_id": "asset-cash-credit",
+              "values": {
+                "balance": "10400",
+                "credit": "1000",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "from": "2024-06-03",
+                "to": "2024-06-03",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "asset",
+                "posting_id": "asset-cash-credit"
+              }
+            },
+            {
+              "id": "closing:cash",
+              "label": "Closing balance",
+              "role": "closing",
+              "values": {
+                "balance": "10400",
+                "credit": "1600",
+                "debit": "12000"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [
+              "cash"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        },
+        {
+          "id": "account:equipment",
+          "label": "Equipment",
+          "role": "account",
+          "account_id": "equipment",
+          "account_code": "1200",
+          "values": {
+            "balance": "1000",
+            "credit": "0",
+            "debit": "1000"
+          },
+          "own_values": {
+            "balance": "1000",
+            "credit": "0",
+            "debit": "1000"
+          },
+          "children": [
+            {
+              "id": "opening:equipment",
+              "label": "Opening balance",
+              "role": "opening",
+              "values": {
+                "balance": "0",
+                "credit": "0",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "equipment"
+                ],
+                "to": "2023-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            },
+            {
+              "id": "posting:asset-equipment-debit",
+              "label": "Journal posting",
+              "role": "posting",
+              "account_id": "equipment",
+              "account_code": "1200",
+              "date": "2024-06-03",
+              "entry_id": "asset",
+              "posting_id": "asset-equipment-debit",
+              "values": {
+                "balance": "1000",
+                "credit": "0",
+                "debit": "1000"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "equipment"
+                ],
+                "from": "2024-06-03",
+                "to": "2024-06-03",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "asset",
+                "posting_id": "asset-equipment-debit"
+              }
+            },
+            {
+              "id": "closing:equipment",
+              "label": "Closing balance",
+              "role": "closing",
+              "values": {
+                "balance": "1000",
+                "credit": "0",
+                "debit": "1000"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "equipment"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [
+              "equipment"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        },
+        {
+          "id": "account:contra",
+          "label": "Accumulated allowance",
+          "role": "account",
+          "account_id": "contra",
+          "account_code": "1210",
+          "values": {
+            "balance": "-100",
+            "credit": "100",
+            "debit": "0"
+          },
+          "own_values": {
+            "balance": "-100",
+            "credit": "100",
+            "debit": "0"
+          },
+          "children": [
+            {
+              "id": "opening:contra",
+              "label": "Opening balance",
+              "role": "opening",
+              "values": {
+                "balance": "0",
+                "credit": "0",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "contra"
+                ],
+                "to": "2023-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            },
+            {
+              "id": "posting:allowance-contra-credit",
+              "label": "Journal posting",
+              "role": "posting",
+              "account_id": "contra",
+              "account_code": "1210",
+              "date": "2024-06-04",
+              "entry_id": "allowance",
+              "posting_id": "allowance-contra-credit",
+              "values": {
+                "balance": "-100",
+                "credit": "100",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "contra"
+                ],
+                "from": "2024-06-04",
+                "to": "2024-06-04",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "allowance",
+                "posting_id": "allowance-contra-credit"
+              }
+            },
+            {
+              "id": "closing:contra",
+              "label": "Closing balance",
+              "role": "closing",
+              "values": {
+                "balance": "-100",
+                "credit": "100",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "contra"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [
+              "contra"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        },
+        {
+          "id": "account:capital",
+          "label": "Capital",
+          "role": "account",
+          "account_id": "capital",
+          "account_code": "3000",
+          "values": {
+            "balance": "-10000",
+            "credit": "10000",
+            "debit": "0"
+          },
+          "own_values": {
+            "balance": "-10000",
+            "credit": "10000",
+            "debit": "0"
+          },
+          "children": [
+            {
+              "id": "opening:capital",
+              "label": "Opening balance",
+              "role": "opening",
+              "values": {
+                "balance": "0",
+                "credit": "0",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "capital"
+                ],
+                "to": "2023-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            },
+            {
+              "id": "posting:open-capital-credit",
+              "label": "Journal posting",
+              "role": "posting",
+              "account_id": "capital",
+              "account_code": "3000",
+              "date": "2024-01-01",
+              "entry_id": "open",
+              "posting_id": "open-capital-credit",
+              "values": {
+                "balance": "-10000",
+                "credit": "10000",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "capital"
+                ],
+                "from": "2024-01-01",
+                "to": "2024-01-01",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "open",
+                "posting_id": "open-capital-credit"
+              }
+            },
+            {
+              "id": "closing:capital",
+              "label": "Closing balance",
+              "role": "closing",
+              "values": {
+                "balance": "-10000",
+                "credit": "10000",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "capital"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [
+              "capital"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        },
+        {
+          "id": "account:sales",
+          "label": "Revenue",
+          "role": "account",
+          "account_id": "sales",
+          "account_code": "4000",
+          "values": {
+            "balance": "-2000",
+            "credit": "2000",
+            "debit": "0"
+          },
+          "own_values": {
+            "balance": "-2000",
+            "credit": "2000",
+            "debit": "0"
+          },
+          "children": [
+            {
+              "id": "opening:sales",
+              "label": "Opening balance",
+              "role": "opening",
+              "values": {
+                "balance": "0",
+                "credit": "0",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "sales"
+                ],
+                "to": "2023-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            },
+            {
+              "id": "posting:sale-sales-credit",
+              "label": "Journal posting",
+              "role": "posting",
+              "account_id": "sales",
+              "account_code": "4000",
+              "date": "2024-06-01",
+              "entry_id": "sale",
+              "posting_id": "sale-sales-credit",
+              "values": {
+                "balance": "-2000",
+                "credit": "2000",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "sales"
+                ],
+                "from": "2024-06-01",
+                "to": "2024-06-01",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "sale",
+                "posting_id": "sale-sales-credit"
+              }
+            },
+            {
+              "id": "closing:sales",
+              "label": "Closing balance",
+              "role": "closing",
+              "values": {
+                "balance": "-2000",
+                "credit": "2000",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "sales"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [
+              "sales"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        },
+        {
+          "id": "account:costs",
+          "label": "Costs",
+          "role": "account",
+          "account_id": "costs",
+          "account_code": "5000",
+          "values": {
+            "balance": "100",
+            "credit": "0",
+            "debit": "100"
+          },
+          "own_values": {
+            "balance": "100",
+            "credit": "0",
+            "debit": "100"
+          },
+          "children": [
+            {
+              "id": "opening:costs",
+              "label": "Opening balance",
+              "role": "opening",
+              "values": {
+                "balance": "0",
+                "credit": "0",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "costs"
+                ],
+                "to": "2023-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            },
+            {
+              "id": "posting:cost-a-costs-debit",
+              "label": "Journal posting",
+              "role": "posting",
+              "account_id": "costs",
+              "account_code": "5000",
+              "date": "2024-06-02",
+              "entry_id": "cost-a",
+              "posting_id": "cost-a-costs-debit",
+              "values": {
+                "balance": "100",
+                "credit": "0",
+                "debit": "100"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "costs"
+                ],
+                "from": "2024-06-02",
+                "to": "2024-06-02",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "cost-a",
+                "posting_id": "cost-a-costs-debit"
+              }
+            },
+            {
+              "id": "closing:costs",
+              "label": "Closing balance",
+              "role": "closing",
+              "values": {
+                "balance": "100",
+                "credit": "0",
+                "debit": "100"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "costs"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [
+              "costs"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        },
+        {
+          "id": "account:services",
+          "label": "Services",
+          "role": "account",
+          "account_id": "services",
+          "account_code": "5010",
+          "values": {
+            "balance": "200",
+            "credit": "0",
+            "debit": "200"
+          },
+          "own_values": {
+            "balance": "200",
+            "credit": "0",
+            "debit": "200"
+          },
+          "children": [
+            {
+              "id": "opening:services",
+              "label": "Opening balance",
+              "role": "opening",
+              "values": {
+                "balance": "0",
+                "credit": "0",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "services"
+                ],
+                "to": "2023-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            },
+            {
+              "id": "posting:cost-b-services-debit",
+              "label": "Journal posting",
+              "role": "posting",
+              "account_id": "services",
+              "account_code": "5010",
+              "date": "2024-06-02",
+              "entry_id": "cost-b",
+              "posting_id": "cost-b-services-debit",
+              "values": {
+                "balance": "200",
+                "credit": "0",
+                "debit": "200"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "services"
+                ],
+                "from": "2024-06-02",
+                "to": "2024-06-02",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "cost-b",
+                "posting_id": "cost-b-services-debit"
+              }
+            },
+            {
+              "id": "closing:services",
+              "label": "Closing balance",
+              "role": "closing",
+              "values": {
+                "balance": "200",
+                "credit": "0",
+                "debit": "200"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "services"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [
+              "services"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        },
+        {
+          "id": "account:detail",
+          "label": "Detail",
+          "role": "account",
+          "account_id": "detail",
+          "account_code": "5020",
+          "values": {
+            "balance": "400",
+            "credit": "0",
+            "debit": "400"
+          },
+          "own_values": {
+            "balance": "400",
+            "credit": "0",
+            "debit": "400"
+          },
+          "children": [
+            {
+              "id": "opening:detail",
+              "label": "Opening balance",
+              "role": "opening",
+              "values": {
+                "balance": "0",
+                "credit": "0",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "detail"
+                ],
+                "to": "2023-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            },
+            {
+              "id": "posting:cost-c-detail-debit",
+              "label": "Journal posting",
+              "role": "posting",
+              "account_id": "detail",
+              "account_code": "5020",
+              "date": "2024-06-02",
+              "entry_id": "cost-c",
+              "posting_id": "cost-c-detail-debit",
+              "values": {
+                "balance": "300",
+                "credit": "0",
+                "debit": "300"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "detail"
+                ],
+                "from": "2024-06-02",
+                "to": "2024-06-02",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "cost-c",
+                "posting_id": "cost-c-detail-debit"
+              }
+            },
+            {
+              "id": "posting:allowance-detail-debit",
+              "label": "Journal posting",
+              "role": "posting",
+              "account_id": "detail",
+              "account_code": "5020",
+              "date": "2024-06-04",
+              "entry_id": "allowance",
+              "posting_id": "allowance-detail-debit",
+              "values": {
+                "balance": "400",
+                "credit": "0",
+                "debit": "100"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "detail"
+                ],
+                "from": "2024-06-04",
+                "to": "2024-06-04",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "allowance",
+                "posting_id": "allowance-detail-debit"
+              }
+            },
+            {
+              "id": "closing:detail",
+              "label": "Closing balance",
+              "role": "closing",
+              "values": {
+                "balance": "400",
+                "credit": "0",
+                "debit": "400"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "detail"
+                ],
+                "to": "2024-12-31",
+                "exclude_closing": false,
+                "exclude_opening": false
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [
+              "detail"
+            ],
+            "to": "2024-12-31",
+            "exclude_closing": false,
+            "exclude_opening": false
+          }
+        }
+      ],
+      "checks": [
+        {
+          "id": "ledger_population",
+          "status": "pass",
+          "message": "Every supplied entry balances with unique posting identities."
+        },
+        {
+          "id": "source_coverage",
+          "status": "pass",
+          "message": "Coverage describes the supplied population; balance alone does not establish completeness."
+        },
+        {
+          "id": "opening_balances",
+          "status": "pass",
+          "message": "Opening-balance provenance is separate from mathematical ledger balance."
+        },
+        {
+          "id": "general_ledger_reconstruction",
+          "status": "pass",
+          "message": "Every selected posting is retained once, including zero-valued postings, with opening and closing balances."
+        }
+      ],
+      "limitations": [
+        "Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.",
+        "General Ledger running balances use debit-positive, credit-negative signs.",
+        "Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made."
+      ],
+      "reconciliation": {},
+      "status": "ready",
+      "digest": "0f5593a05f21bc3aaa0c276f31833c69ccb712bcc77682a54d468aad7c1ca816"
+    },
+    "csv": "Report,General Ledger\nBook,Example Book\nBook ID,book-example\nCurrency,USD\nRecognition basis,accrual\nReporting framework,unknown\nMode,live\nStatus,ready\nFrom,2024-01-01\nThrough,2024-12-31\nLedger revision,ledger-r1\nKnowledge cutoff,2025-01-01T00:00:00Z\nMapping version,report-v1\nHierarchy basis,explicit_current_presentation\nPopulation digest,500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17\nResult digest,0f5593a05f21bc3aaa0c276f31833c69ccb712bcc77682a54d468aad7c1ca816\nCoverage,complete\nOpening balances,confirmed\nCheck,ledger_population,pass,Every supplied entry balances with unique posting identities.\nCheck,source_coverage,pass,Coverage describes the supplied population; balance alone does not establish completeness.\nCheck,opening_balances,pass,Opening-balance provenance is separate from mathematical ledger balance.\nCheck,general_ledger_reconstruction,pass,\"Every selected posting is retained once, including zero-valued postings, with opening and closing balances.\"\nLimitation,Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.\nLimitation,\"General Ledger running balances use debit-positive, credit-negative signs.\"\nLimitation,\"Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.\"\n\nRow ID,Parent row ID,Depth,Role,Account ID,Account code,Label,Date,Entry ID,Posting ID,Debit (USD),Credit (USD),Debit balance (USD),GL code\naccount:cash,,0,account,cash,1000,Cash,,,,120.00,16.00,104.00,\nopening:cash,account:cash,1,opening,,,Opening balance,,,,0.00,0.00,0.00,\nposting:open-cash-debit,account:cash,1,posting,cash,1000,Journal posting,2024-01-01,open,open-cash-debit,100.00,0.00,100.00,\nposting:sale-cash-debit,account:cash,1,posting,cash,1000,Journal posting,2024-06-01,sale,sale-cash-debit,20.00,0.00,120.00,\nposting:cost-a-cash-credit,account:cash,1,posting,cash,1000,Journal posting,2024-06-02,cost-a,cost-a-cash-credit,0.00,1.00,119.00,\nposting:cost-b-cash-credit,account:cash,1,posting,cash,1000,Journal posting,2024-06-02,cost-b,cost-b-cash-credit,0.00,2.00,117.00,\nposting:cost-c-cash-credit,account:cash,1,posting,cash,1000,Journal posting,2024-06-02,cost-c,cost-c-cash-credit,0.00,3.00,114.00,\nposting:asset-cash-credit,account:cash,1,posting,cash,1000,Journal posting,2024-06-03,asset,asset-cash-credit,0.00,10.00,104.00,\nclosing:cash,account:cash,1,closing,,,Closing balance,,,,120.00,16.00,104.00,\naccount:equipment,,0,account,equipment,1200,Equipment,,,,10.00,0.00,10.00,\nopening:equipment,account:equipment,1,opening,,,Opening balance,,,,0.00,0.00,0.00,\nposting:asset-equipment-debit,account:equipment,1,posting,equipment,1200,Journal posting,2024-06-03,asset,asset-equipment-debit,10.00,0.00,10.00,\nclosing:equipment,account:equipment,1,closing,,,Closing balance,,,,10.00,0.00,10.00,\naccount:contra,,0,account,contra,1210,Accumulated allowance,,,,0.00,1.00,-1.00,\nopening:contra,account:contra,1,opening,,,Opening balance,,,,0.00,0.00,0.00,\nposting:allowance-contra-credit,account:contra,1,posting,contra,1210,Journal posting,2024-06-04,allowance,allowance-contra-credit,0.00,1.00,-1.00,\nclosing:contra,account:contra,1,closing,,,Closing balance,,,,0.00,1.00,-1.00,\naccount:capital,,0,account,capital,3000,Capital,,,,0.00,100.00,-100.00,\nopening:capital,account:capital,1,opening,,,Opening balance,,,,0.00,0.00,0.00,\nposting:open-capital-credit,account:capital,1,posting,capital,3000,Journal posting,2024-01-01,open,open-capital-credit,0.00,100.00,-100.00,\nclosing:capital,account:capital,1,closing,,,Closing balance,,,,0.00,100.00,-100.00,\naccount:sales,,0,account,sales,4000,Revenue,,,,0.00,20.00,-20.00,\nopening:sales,account:sales,1,opening,,,Opening balance,,,,0.00,0.00,0.00,\nposting:sale-sales-credit,account:sales,1,posting,sales,4000,Journal posting,2024-06-01,sale,sale-sales-credit,0.00,20.00,-20.00,\nclosing:sales,account:sales,1,closing,,,Closing balance,,,,0.00,20.00,-20.00,\naccount:costs,,0,account,costs,5000,Costs,,,,1.00,0.00,1.00,\nopening:costs,account:costs,1,opening,,,Opening balance,,,,0.00,0.00,0.00,\nposting:cost-a-costs-debit,account:costs,1,posting,costs,5000,Journal posting,2024-06-02,cost-a,cost-a-costs-debit,1.00,0.00,1.00,\nclosing:costs,account:costs,1,closing,,,Closing balance,,,,1.00,0.00,1.00,\naccount:services,,0,account,services,5010,Services,,,,2.00,0.00,2.00,\nopening:services,account:services,1,opening,,,Opening balance,,,,0.00,0.00,0.00,\nposting:cost-b-services-debit,account:services,1,posting,services,5010,Journal posting,2024-06-02,cost-b,cost-b-services-debit,2.00,0.00,2.00,\nclosing:services,account:services,1,closing,,,Closing balance,,,,2.00,0.00,2.00,\naccount:detail,,0,account,detail,5020,Detail,,,,4.00,0.00,4.00,\nopening:detail,account:detail,1,opening,,,Opening balance,,,,0.00,0.00,0.00,\nposting:cost-c-detail-debit,account:detail,1,posting,detail,5020,Journal posting,2024-06-02,cost-c,cost-c-detail-debit,3.00,0.00,3.00,\nposting:allowance-detail-debit,account:detail,1,posting,detail,5020,Journal posting,2024-06-04,allowance,allowance-detail-debit,1.00,0.00,4.00,\nclosing:detail,account:detail,1,closing,,,Closing balance,,,,4.00,0.00,4.00,\n"
+  },
+  {
+    "name": "journal",
+    "result": {
+      "schema_version": 1,
+      "report": "journal",
+      "title": "Journal",
+      "book": {
+        "id": "book-example",
+        "name": "Example Book",
+        "currency": "USD",
+        "scale": 2,
+        "start_date": "2024-01-01",
+        "fiscal_year_start_month": 1,
+        "fiscal_year_start_day": 1,
+        "recognition_basis": "accrual",
+        "reporting_framework": "unknown"
+      },
+      "request": {
+        "book_id": "book-example",
+        "report": "journal",
+        "from": "2024-01-01",
+        "to": "2024-12-31",
+        "currency": "USD",
+        "comparison": "none"
+      },
+      "scope": {
+        "mode": "live",
+        "period": {
+          "from": "2024-01-01",
+          "to": "2024-12-31"
+        },
+        "fiscal_start": "2024-01-01",
+        "ledger_revision": "ledger-r1",
+        "knowledge_cutoff": "2025-01-01T00:00:00Z",
+        "mapping_version": "report-v1",
+        "hierarchy_basis": "explicit_current_presentation",
+        "generated_at": "2025-01-02T00:00:00Z",
+        "population_digest": "500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17",
+        "coverage": "complete",
+        "opening_balances": "confirmed"
+      },
+      "columns": [
+        {
+          "id": "debit",
+          "label": "Debit",
+          "kind": "amount",
+          "period": {
+            "from": "2024-01-01",
+            "to": "2024-12-31"
+          }
+        },
+        {
+          "id": "credit",
+          "label": "Credit",
+          "kind": "amount",
+          "period": {
+            "from": "2024-01-01",
+            "to": "2024-12-31"
+          }
+        }
+      ],
+      "rows": [
+        {
+          "id": "entry:open",
+          "label": "Journal entry",
+          "role": "entry",
+          "date": "2024-01-01",
+          "entry_id": "open",
+          "values": {
+            "credit": "10000",
+            "debit": "10000"
+          },
+          "children": [
+            {
+              "id": "posting:open-capital-credit",
+              "label": "Capital",
+              "role": "posting",
+              "account_id": "capital",
+              "account_code": "3000",
+              "date": "2024-01-01",
+              "entry_id": "open",
+              "posting_id": "open-capital-credit",
+              "values": {
+                "credit": "10000",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "capital"
+                ],
+                "from": "2024-01-01",
+                "to": "2024-01-01",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "open",
+                "posting_id": "open-capital-credit"
+              }
+            },
+            {
+              "id": "posting:open-cash-debit",
+              "label": "Cash",
+              "role": "posting",
+              "account_id": "cash",
+              "account_code": "1000",
+              "date": "2024-01-01",
+              "entry_id": "open",
+              "posting_id": "open-cash-debit",
+              "values": {
+                "credit": "0",
+                "debit": "10000"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "from": "2024-01-01",
+                "to": "2024-01-01",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "open",
+                "posting_id": "open-cash-debit"
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [],
+            "from": "2024-01-01",
+            "to": "2024-01-01",
+            "exclude_closing": false,
+            "exclude_opening": false,
+            "entry_id": "open"
+          }
+        },
+        {
+          "id": "entry:sale",
+          "label": "Journal entry",
+          "role": "entry",
+          "date": "2024-06-01",
+          "entry_id": "sale",
+          "values": {
+            "credit": "2000",
+            "debit": "2000"
+          },
+          "children": [
+            {
+              "id": "posting:sale-cash-debit",
+              "label": "Cash",
+              "role": "posting",
+              "account_id": "cash",
+              "account_code": "1000",
+              "date": "2024-06-01",
+              "entry_id": "sale",
+              "posting_id": "sale-cash-debit",
+              "values": {
+                "credit": "0",
+                "debit": "2000"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "from": "2024-06-01",
+                "to": "2024-06-01",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "sale",
+                "posting_id": "sale-cash-debit"
+              }
+            },
+            {
+              "id": "posting:sale-sales-credit",
+              "label": "Revenue",
+              "role": "posting",
+              "account_id": "sales",
+              "account_code": "4000",
+              "date": "2024-06-01",
+              "entry_id": "sale",
+              "posting_id": "sale-sales-credit",
+              "values": {
+                "credit": "2000",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "sales"
+                ],
+                "from": "2024-06-01",
+                "to": "2024-06-01",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "sale",
+                "posting_id": "sale-sales-credit"
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [],
+            "from": "2024-06-01",
+            "to": "2024-06-01",
+            "exclude_closing": false,
+            "exclude_opening": false,
+            "entry_id": "sale"
+          }
+        },
+        {
+          "id": "entry:cost-a",
+          "label": "Journal entry",
+          "role": "entry",
+          "date": "2024-06-02",
+          "entry_id": "cost-a",
+          "values": {
+            "credit": "100",
+            "debit": "100"
+          },
+          "children": [
+            {
+              "id": "posting:cost-a-cash-credit",
+              "label": "Cash",
+              "role": "posting",
+              "account_id": "cash",
+              "account_code": "1000",
+              "date": "2024-06-02",
+              "entry_id": "cost-a",
+              "posting_id": "cost-a-cash-credit",
+              "values": {
+                "credit": "100",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "from": "2024-06-02",
+                "to": "2024-06-02",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "cost-a",
+                "posting_id": "cost-a-cash-credit"
+              }
+            },
+            {
+              "id": "posting:cost-a-costs-debit",
+              "label": "Costs",
+              "role": "posting",
+              "account_id": "costs",
+              "account_code": "5000",
+              "date": "2024-06-02",
+              "entry_id": "cost-a",
+              "posting_id": "cost-a-costs-debit",
+              "values": {
+                "credit": "0",
+                "debit": "100"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "costs"
+                ],
+                "from": "2024-06-02",
+                "to": "2024-06-02",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "cost-a",
+                "posting_id": "cost-a-costs-debit"
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [],
+            "from": "2024-06-02",
+            "to": "2024-06-02",
+            "exclude_closing": false,
+            "exclude_opening": false,
+            "entry_id": "cost-a"
+          }
+        },
+        {
+          "id": "entry:cost-b",
+          "label": "Journal entry",
+          "role": "entry",
+          "date": "2024-06-02",
+          "entry_id": "cost-b",
+          "values": {
+            "credit": "200",
+            "debit": "200"
+          },
+          "children": [
+            {
+              "id": "posting:cost-b-cash-credit",
+              "label": "Cash",
+              "role": "posting",
+              "account_id": "cash",
+              "account_code": "1000",
+              "date": "2024-06-02",
+              "entry_id": "cost-b",
+              "posting_id": "cost-b-cash-credit",
+              "values": {
+                "credit": "200",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "from": "2024-06-02",
+                "to": "2024-06-02",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "cost-b",
+                "posting_id": "cost-b-cash-credit"
+              }
+            },
+            {
+              "id": "posting:cost-b-services-debit",
+              "label": "Services",
+              "role": "posting",
+              "account_id": "services",
+              "account_code": "5010",
+              "date": "2024-06-02",
+              "entry_id": "cost-b",
+              "posting_id": "cost-b-services-debit",
+              "values": {
+                "credit": "0",
+                "debit": "200"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "services"
+                ],
+                "from": "2024-06-02",
+                "to": "2024-06-02",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "cost-b",
+                "posting_id": "cost-b-services-debit"
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [],
+            "from": "2024-06-02",
+            "to": "2024-06-02",
+            "exclude_closing": false,
+            "exclude_opening": false,
+            "entry_id": "cost-b"
+          }
+        },
+        {
+          "id": "entry:cost-c",
+          "label": "Journal entry",
+          "role": "entry",
+          "date": "2024-06-02",
+          "entry_id": "cost-c",
+          "values": {
+            "credit": "300",
+            "debit": "300"
+          },
+          "children": [
+            {
+              "id": "posting:cost-c-cash-credit",
+              "label": "Cash",
+              "role": "posting",
+              "account_id": "cash",
+              "account_code": "1000",
+              "date": "2024-06-02",
+              "entry_id": "cost-c",
+              "posting_id": "cost-c-cash-credit",
+              "values": {
+                "credit": "300",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "from": "2024-06-02",
+                "to": "2024-06-02",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "cost-c",
+                "posting_id": "cost-c-cash-credit"
+              }
+            },
+            {
+              "id": "posting:cost-c-detail-debit",
+              "label": "Detail",
+              "role": "posting",
+              "account_id": "detail",
+              "account_code": "5020",
+              "date": "2024-06-02",
+              "entry_id": "cost-c",
+              "posting_id": "cost-c-detail-debit",
+              "values": {
+                "credit": "0",
+                "debit": "300"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "detail"
+                ],
+                "from": "2024-06-02",
+                "to": "2024-06-02",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "cost-c",
+                "posting_id": "cost-c-detail-debit"
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [],
+            "from": "2024-06-02",
+            "to": "2024-06-02",
+            "exclude_closing": false,
+            "exclude_opening": false,
+            "entry_id": "cost-c"
+          }
+        },
+        {
+          "id": "entry:asset",
+          "label": "Journal entry",
+          "role": "entry",
+          "date": "2024-06-03",
+          "entry_id": "asset",
+          "values": {
+            "credit": "1000",
+            "debit": "1000"
+          },
+          "children": [
+            {
+              "id": "posting:asset-cash-credit",
+              "label": "Cash",
+              "role": "posting",
+              "account_id": "cash",
+              "account_code": "1000",
+              "date": "2024-06-03",
+              "entry_id": "asset",
+              "posting_id": "asset-cash-credit",
+              "values": {
+                "credit": "1000",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "cash"
+                ],
+                "from": "2024-06-03",
+                "to": "2024-06-03",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "asset",
+                "posting_id": "asset-cash-credit"
+              }
+            },
+            {
+              "id": "posting:asset-equipment-debit",
+              "label": "Equipment",
+              "role": "posting",
+              "account_id": "equipment",
+              "account_code": "1200",
+              "date": "2024-06-03",
+              "entry_id": "asset",
+              "posting_id": "asset-equipment-debit",
+              "values": {
+                "credit": "0",
+                "debit": "1000"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "equipment"
+                ],
+                "from": "2024-06-03",
+                "to": "2024-06-03",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "asset",
+                "posting_id": "asset-equipment-debit"
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [],
+            "from": "2024-06-03",
+            "to": "2024-06-03",
+            "exclude_closing": false,
+            "exclude_opening": false,
+            "entry_id": "asset"
+          }
+        },
+        {
+          "id": "entry:allowance",
+          "label": "Journal entry",
+          "role": "entry",
+          "date": "2024-06-04",
+          "entry_id": "allowance",
+          "values": {
+            "credit": "100",
+            "debit": "100"
+          },
+          "children": [
+            {
+              "id": "posting:allowance-contra-credit",
+              "label": "Accumulated allowance",
+              "role": "posting",
+              "account_id": "contra",
+              "account_code": "1210",
+              "date": "2024-06-04",
+              "entry_id": "allowance",
+              "posting_id": "allowance-contra-credit",
+              "values": {
+                "credit": "100",
+                "debit": "0"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "contra"
+                ],
+                "from": "2024-06-04",
+                "to": "2024-06-04",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "allowance",
+                "posting_id": "allowance-contra-credit"
+              }
+            },
+            {
+              "id": "posting:allowance-detail-debit",
+              "label": "Detail",
+              "role": "posting",
+              "account_id": "detail",
+              "account_code": "5020",
+              "date": "2024-06-04",
+              "entry_id": "allowance",
+              "posting_id": "allowance-detail-debit",
+              "values": {
+                "credit": "0",
+                "debit": "100"
+              },
+              "children": [],
+              "drilldown": {
+                "account_ids": [
+                  "detail"
+                ],
+                "from": "2024-06-04",
+                "to": "2024-06-04",
+                "exclude_closing": false,
+                "exclude_opening": false,
+                "entry_id": "allowance",
+                "posting_id": "allowance-detail-debit"
+              }
+            }
+          ],
+          "drilldown": {
+            "account_ids": [],
+            "from": "2024-06-04",
+            "to": "2024-06-04",
+            "exclude_closing": false,
+            "exclude_opening": false,
+            "entry_id": "allowance"
+          }
+        }
+      ],
+      "checks": [
+        {
+          "id": "ledger_population",
+          "status": "pass",
+          "message": "Every supplied entry balances with unique posting identities."
+        },
+        {
+          "id": "source_coverage",
+          "status": "pass",
+          "message": "Coverage describes the supplied population; balance alone does not establish completeness."
+        },
+        {
+          "id": "opening_balances",
+          "status": "pass",
+          "message": "Opening-balance provenance is separate from mathematical ledger balance."
+        },
+        {
+          "id": "journal_reconstruction",
+          "status": "pass",
+          "message": "Selected complete entries preserve every posting identity and debit/credit amount."
+        }
+      ],
+      "limitations": [
+        "Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.",
+        "Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made."
+      ],
+      "reconciliation": {
+        "credit": "13700",
+        "debit": "13700"
+      },
+      "status": "ready",
+      "digest": "873c4ee64d2a560974c20014f7ddb53f039af966e1370954d78c200f935cfeb7"
+    },
+    "csv": "Report,Journal\nBook,Example Book\nBook ID,book-example\nCurrency,USD\nRecognition basis,accrual\nReporting framework,unknown\nMode,live\nStatus,ready\nFrom,2024-01-01\nThrough,2024-12-31\nLedger revision,ledger-r1\nKnowledge cutoff,2025-01-01T00:00:00Z\nMapping version,report-v1\nHierarchy basis,explicit_current_presentation\nPopulation digest,500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17\nResult digest,873c4ee64d2a560974c20014f7ddb53f039af966e1370954d78c200f935cfeb7\nCoverage,complete\nOpening balances,confirmed\nCheck,ledger_population,pass,Every supplied entry balances with unique posting identities.\nCheck,source_coverage,pass,Coverage describes the supplied population; balance alone does not establish completeness.\nCheck,opening_balances,pass,Opening-balance provenance is separate from mathematical ledger balance.\nCheck,journal_reconstruction,pass,Selected complete entries preserve every posting identity and debit/credit amount.\nLimitation,Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.\nLimitation,\"Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.\"\n\nRow ID,Parent row ID,Depth,Role,Account ID,Account code,Label,Date,Entry ID,Posting ID,Debit (USD),Credit (USD),GL code\nentry:open,,0,entry,,,Journal entry,2024-01-01,open,,100.00,100.00,\nposting:open-capital-credit,entry:open,1,posting,capital,3000,Capital,2024-01-01,open,open-capital-credit,0.00,100.00,\nposting:open-cash-debit,entry:open,1,posting,cash,1000,Cash,2024-01-01,open,open-cash-debit,100.00,0.00,\nentry:sale,,0,entry,,,Journal entry,2024-06-01,sale,,20.00,20.00,\nposting:sale-cash-debit,entry:sale,1,posting,cash,1000,Cash,2024-06-01,sale,sale-cash-debit,20.00,0.00,\nposting:sale-sales-credit,entry:sale,1,posting,sales,4000,Revenue,2024-06-01,sale,sale-sales-credit,0.00,20.00,\nentry:cost-a,,0,entry,,,Journal entry,2024-06-02,cost-a,,1.00,1.00,\nposting:cost-a-cash-credit,entry:cost-a,1,posting,cash,1000,Cash,2024-06-02,cost-a,cost-a-cash-credit,0.00,1.00,\nposting:cost-a-costs-debit,entry:cost-a,1,posting,costs,5000,Costs,2024-06-02,cost-a,cost-a-costs-debit,1.00,0.00,\nentry:cost-b,,0,entry,,,Journal entry,2024-06-02,cost-b,,2.00,2.00,\nposting:cost-b-cash-credit,entry:cost-b,1,posting,cash,1000,Cash,2024-06-02,cost-b,cost-b-cash-credit,0.00,2.00,\nposting:cost-b-services-debit,entry:cost-b,1,posting,services,5010,Services,2024-06-02,cost-b,cost-b-services-debit,2.00,0.00,\nentry:cost-c,,0,entry,,,Journal entry,2024-06-02,cost-c,,3.00,3.00,\nposting:cost-c-cash-credit,entry:cost-c,1,posting,cash,1000,Cash,2024-06-02,cost-c,cost-c-cash-credit,0.00,3.00,\nposting:cost-c-detail-debit,entry:cost-c,1,posting,detail,5020,Detail,2024-06-02,cost-c,cost-c-detail-debit,3.00,0.00,\nentry:asset,,0,entry,,,Journal entry,2024-06-03,asset,,10.00,10.00,\nposting:asset-cash-credit,entry:asset,1,posting,cash,1000,Cash,2024-06-03,asset,asset-cash-credit,0.00,10.00,\nposting:asset-equipment-debit,entry:asset,1,posting,equipment,1200,Equipment,2024-06-03,asset,asset-equipment-debit,10.00,0.00,\nentry:allowance,,0,entry,,,Journal entry,2024-06-04,allowance,,1.00,1.00,\nposting:allowance-contra-credit,entry:allowance,1,posting,contra,1210,Accumulated allowance,2024-06-04,allowance,allowance-contra-credit,0.00,1.00,\nposting:allowance-detail-debit,entry:allowance,1,posting,detail,5020,Detail,2024-06-04,allowance,allowance-detail-debit,1.00,0.00,\n"
+  },
+  {
+    "name": "cash_flows",
+    "result": {
+      "schema_version": 1,
+      "report": "cash_flows",
+      "title": "Cash Flows",
+      "book": {
+        "id": "book-example",
+        "name": "Example Book",
+        "currency": "USD",
+        "scale": 2,
+        "start_date": "2024-01-01",
+        "fiscal_year_start_month": 1,
+        "fiscal_year_start_day": 1,
+        "recognition_basis": "accrual",
+        "reporting_framework": "unknown"
+      },
+      "request": {
+        "book_id": "book-example",
+        "report": "cash_flows",
+        "from": "2024-01-01",
+        "to": "2024-12-31",
+        "currency": "USD",
+        "comparison": "previous_year"
+      },
+      "scope": {
+        "mode": "live",
+        "period": {
+          "from": "2024-01-01",
+          "to": "2024-12-31"
+        },
+        "comparison": {
+          "from": "2023-01-01",
+          "to": "2023-12-31"
+        },
+        "fiscal_start": "2024-01-01",
+        "ledger_revision": "ledger-r1",
+        "knowledge_cutoff": "2025-01-01T00:00:00Z",
+        "mapping_version": "report-v1",
+        "hierarchy_basis": "explicit_current_presentation",
+        "generated_at": "2025-01-02T00:00:00Z",
+        "population_digest": "500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17",
+        "coverage": "complete",
+        "opening_balances": "confirmed"
+      },
+      "columns": [
+        {
+          "id": "current",
+          "label": "Current",
+          "kind": "amount",
+          "period": {
+            "from": "2024-01-01",
+            "to": "2024-12-31"
+          }
+        },
+        {
+          "id": "prior",
+          "label": "Comparison",
+          "kind": "amount",
+          "period": {
+            "from": "2023-01-01",
+            "to": "2023-12-31"
+          }
+        },
+        {
+          "id": "variance",
+          "label": "Change",
+          "kind": "amount",
+          "period": {
+            "from": "2024-01-01",
+            "to": "2024-12-31"
+          }
+        }
+      ],
+      "rows": [],
+      "checks": [
+        {
+          "id": "ledger_population",
+          "status": "pass",
+          "message": "Every supplied entry balances with unique posting identities."
+        },
+        {
+          "id": "source_coverage",
+          "status": "pass",
+          "message": "Coverage describes the supplied population; balance alone does not establish completeness."
+        },
+        {
+          "id": "opening_balances",
+          "status": "pass",
+          "message": "Opening-balance provenance is separate from mathematical ledger balance."
+        },
+        {
+          "id": "extension_account_classification",
+          "status": "pass",
+          "message": "Unknown account classifications remain separate from arithmetic reconciliation."
+        },
+        {
+          "id": "cash_equivalent_scope",
+          "status": "unknown",
+          "message": "Cash and cash-equivalent scope and its policy must be explicitly confirmed before cash-flow totals are shown."
+        }
+      ],
+      "limitations": [
+        "Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.",
+        "Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.",
+        "The existing Cash movement report remains available independently; no cash-equivalent scope or formal classification is inferred."
+      ],
+      "reconciliation": {
+        "policy_sha256": "f893267ae077fbf08aa752be8b7a387ea58f971f0c1aa43d396d174512700958"
+      },
+      "status": "unsupported",
+      "digest": "0e5501df924cb841f068a26cd70d46ada751a3a9f76ab96cac1a88d31331bdb3"
+    },
+    "csv": "Report,Cash Flows\nBook,Example Book\nBook ID,book-example\nCurrency,USD\nRecognition basis,accrual\nReporting framework,unknown\nMode,live\nStatus,unsupported\nFrom,2024-01-01\nThrough,2024-12-31\nLedger revision,ledger-r1\nKnowledge cutoff,2025-01-01T00:00:00Z\nMapping version,report-v1\nHierarchy basis,explicit_current_presentation\nPopulation digest,500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17\nResult digest,0e5501df924cb841f068a26cd70d46ada751a3a9f76ab96cac1a88d31331bdb3\nCoverage,complete\nOpening balances,confirmed\nComparison from,2023-01-01\nComparison through,2023-12-31\nCheck,ledger_population,pass,Every supplied entry balances with unique posting identities.\nCheck,source_coverage,pass,Coverage describes the supplied population; balance alone does not establish completeness.\nCheck,opening_balances,pass,Opening-balance provenance is separate from mathematical ledger balance.\nCheck,extension_account_classification,pass,Unknown account classifications remain separate from arithmetic reconciliation.\nCheck,cash_equivalent_scope,unknown,Cash and cash-equivalent scope and its policy must be explicitly confirmed before cash-flow totals are shown.\nLimitation,Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.\nLimitation,\"Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.\"\nLimitation,The existing Cash movement report remains available independently; no cash-equivalent scope or formal classification is inferred.\n\nRow ID,Parent row ID,Depth,Role,Account ID,Account code,Label,Date,Entry ID,Posting ID,Current (USD),Comparison (USD),Change (USD),GL code\n"
+  },
+  {
+    "name": "changes_in_equity",
+    "result": {
+      "schema_version": 1,
+      "report": "changes_in_equity",
+      "title": "Changes in Equity",
+      "book": {
+        "id": "book-example",
+        "name": "Example Book",
+        "currency": "USD",
+        "scale": 2,
+        "start_date": "2024-01-01",
+        "fiscal_year_start_month": 1,
+        "fiscal_year_start_day": 1,
+        "recognition_basis": "accrual",
+        "reporting_framework": "unknown"
+      },
+      "request": {
+        "book_id": "book-example",
+        "report": "changes_in_equity",
+        "from": "2024-01-01",
+        "to": "2024-12-31",
+        "currency": "USD",
+        "comparison": "previous_year"
+      },
+      "scope": {
+        "mode": "live",
+        "period": {
+          "from": "2024-01-01",
+          "to": "2024-12-31"
+        },
+        "comparison": {
+          "from": "2023-01-01",
+          "to": "2023-12-31"
+        },
+        "fiscal_start": "2024-01-01",
+        "ledger_revision": "ledger-r1",
+        "knowledge_cutoff": "2025-01-01T00:00:00Z",
+        "mapping_version": "report-v1",
+        "hierarchy_basis": "explicit_current_presentation",
+        "generated_at": "2025-01-02T00:00:00Z",
+        "population_digest": "500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17",
+        "coverage": "complete",
+        "opening_balances": "confirmed"
+      },
+      "columns": [
+        {
+          "id": "current",
+          "label": "Current",
+          "kind": "amount",
+          "period": {
+            "from": "2024-01-01",
+            "to": "2024-12-31"
+          }
+        },
+        {
+          "id": "prior",
+          "label": "Comparison",
+          "kind": "amount",
+          "period": {
+            "from": "2023-01-01",
+            "to": "2023-12-31"
+          }
+        },
+        {
+          "id": "variance",
+          "label": "Change",
+          "kind": "amount",
+          "period": {
+            "from": "2024-01-01",
+            "to": "2024-12-31"
+          }
+        }
+      ],
+      "rows": [
+        {
+          "id": "equity:opening",
+          "label": "Opening total equity",
+          "role": "opening",
+          "values": {
+            "current": "10000",
+            "prior": "0",
+            "variance": "10000"
+          },
+          "children": [],
+          "allocations": [
+            {
+              "posting_id": "open-capital-credit",
+              "column_id": "current",
+              "amount_minor": "10000",
+              "category": "equity_position",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "open-capital-credit",
+              "column_id": "variance",
+              "amount_minor": "10000",
+              "category": "equity_position",
+              "treatment_reference": "ledger:recorded"
+            }
+          ]
+        },
+        {
+          "id": "equity:movements",
+          "label": "Changes in equity",
+          "role": "section",
+          "values": {
+            "current": "1300",
+            "prior": "0",
+            "variance": "1300"
+          },
+          "children": [
+            {
+              "id": "equity:profit",
+              "label": "Recognized profit / loss",
+              "role": "total",
+              "values": {
+                "current": "1300",
+                "prior": "0",
+                "variance": "1300"
+              },
+              "children": [],
+              "allocations": [
+                {
+                  "posting_id": "allowance-detail-debit",
+                  "column_id": "current",
+                  "amount_minor": "-100",
+                  "category": "recognized_profit",
+                  "treatment_reference": "ledger:recorded"
+                },
+                {
+                  "posting_id": "cost-a-costs-debit",
+                  "column_id": "current",
+                  "amount_minor": "-100",
+                  "category": "recognized_profit",
+                  "treatment_reference": "ledger:recorded"
+                },
+                {
+                  "posting_id": "cost-b-services-debit",
+                  "column_id": "current",
+                  "amount_minor": "-200",
+                  "category": "recognized_profit",
+                  "treatment_reference": "ledger:recorded"
+                },
+                {
+                  "posting_id": "cost-c-detail-debit",
+                  "column_id": "current",
+                  "amount_minor": "-300",
+                  "category": "recognized_profit",
+                  "treatment_reference": "ledger:recorded"
+                },
+                {
+                  "posting_id": "sale-sales-credit",
+                  "column_id": "current",
+                  "amount_minor": "2000",
+                  "category": "recognized_profit",
+                  "treatment_reference": "ledger:recorded"
+                },
+                {
+                  "posting_id": "allowance-detail-debit",
+                  "column_id": "variance",
+                  "amount_minor": "-100",
+                  "category": "recognized_profit",
+                  "treatment_reference": "ledger:recorded"
+                },
+                {
+                  "posting_id": "cost-a-costs-debit",
+                  "column_id": "variance",
+                  "amount_minor": "-100",
+                  "category": "recognized_profit",
+                  "treatment_reference": "ledger:recorded"
+                },
+                {
+                  "posting_id": "cost-b-services-debit",
+                  "column_id": "variance",
+                  "amount_minor": "-200",
+                  "category": "recognized_profit",
+                  "treatment_reference": "ledger:recorded"
+                },
+                {
+                  "posting_id": "cost-c-detail-debit",
+                  "column_id": "variance",
+                  "amount_minor": "-300",
+                  "category": "recognized_profit",
+                  "treatment_reference": "ledger:recorded"
+                },
+                {
+                  "posting_id": "sale-sales-credit",
+                  "column_id": "variance",
+                  "amount_minor": "2000",
+                  "category": "recognized_profit",
+                  "treatment_reference": "ledger:recorded"
+                }
+              ]
+            },
+            {
+              "id": "equity:contribution",
+              "label": "Contributions",
+              "role": "total",
+              "values": {
+                "current": "0",
+                "prior": "0",
+                "variance": "0"
+              },
+              "children": []
+            },
+            {
+              "id": "equity:distribution",
+              "label": "Distributions",
+              "role": "total",
+              "values": {
+                "current": "0",
+                "prior": "0",
+                "variance": "0"
+              },
+              "children": []
+            },
+            {
+              "id": "equity:restatement",
+              "label": "Explicit adjustments and restatements",
+              "role": "total",
+              "values": {
+                "current": "0",
+                "prior": "0",
+                "variance": "0"
+              },
+              "children": []
+            },
+            {
+              "id": "equity:transfer",
+              "label": "Internal equity transfers",
+              "role": "total",
+              "values": {
+                "current": "0",
+                "prior": "0",
+                "variance": "0"
+              },
+              "children": []
+            },
+            {
+              "id": "equity:other",
+              "label": "Other reviewed equity changes",
+              "role": "total",
+              "values": {
+                "current": "0",
+                "prior": "0",
+                "variance": "0"
+              },
+              "children": []
+            },
+            {
+              "id": "equity:closing_transfer",
+              "label": "Closing transfers across equity and earnings",
+              "role": "total",
+              "values": {
+                "current": "0",
+                "prior": "0",
+                "variance": "0"
+              },
+              "children": []
+            },
+            {
+              "id": "equity:unresolved",
+              "label": "Unresolved equity movements",
+              "role": "total",
+              "values": {
+                "current": "0",
+                "prior": "0",
+                "variance": "0"
+              },
+              "children": []
+            }
+          ],
+          "allocations": [
+            {
+              "posting_id": "allowance-detail-debit",
+              "column_id": "current",
+              "amount_minor": "-100",
+              "category": "recognized_profit",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "cost-a-costs-debit",
+              "column_id": "current",
+              "amount_minor": "-100",
+              "category": "recognized_profit",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "cost-b-services-debit",
+              "column_id": "current",
+              "amount_minor": "-200",
+              "category": "recognized_profit",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "cost-c-detail-debit",
+              "column_id": "current",
+              "amount_minor": "-300",
+              "category": "recognized_profit",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "sale-sales-credit",
+              "column_id": "current",
+              "amount_minor": "2000",
+              "category": "recognized_profit",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "allowance-detail-debit",
+              "column_id": "variance",
+              "amount_minor": "-100",
+              "category": "recognized_profit",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "cost-a-costs-debit",
+              "column_id": "variance",
+              "amount_minor": "-100",
+              "category": "recognized_profit",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "cost-b-services-debit",
+              "column_id": "variance",
+              "amount_minor": "-200",
+              "category": "recognized_profit",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "cost-c-detail-debit",
+              "column_id": "variance",
+              "amount_minor": "-300",
+              "category": "recognized_profit",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "sale-sales-credit",
+              "column_id": "variance",
+              "amount_minor": "2000",
+              "category": "recognized_profit",
+              "treatment_reference": "ledger:recorded"
+            }
+          ]
+        },
+        {
+          "id": "equity:closing",
+          "label": "Closing total equity",
+          "role": "closing",
+          "values": {
+            "current": "11300",
+            "prior": "0",
+            "variance": "11300"
+          },
+          "children": [],
+          "allocations": [
+            {
+              "posting_id": "allowance-detail-debit",
+              "column_id": "current",
+              "amount_minor": "-100",
+              "category": "equity_position",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "cost-a-costs-debit",
+              "column_id": "current",
+              "amount_minor": "-100",
+              "category": "equity_position",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "cost-b-services-debit",
+              "column_id": "current",
+              "amount_minor": "-200",
+              "category": "equity_position",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "cost-c-detail-debit",
+              "column_id": "current",
+              "amount_minor": "-300",
+              "category": "equity_position",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "open-capital-credit",
+              "column_id": "current",
+              "amount_minor": "10000",
+              "category": "equity_position",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "sale-sales-credit",
+              "column_id": "current",
+              "amount_minor": "2000",
+              "category": "equity_position",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "allowance-detail-debit",
+              "column_id": "variance",
+              "amount_minor": "-100",
+              "category": "equity_position",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "cost-a-costs-debit",
+              "column_id": "variance",
+              "amount_minor": "-100",
+              "category": "equity_position",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "cost-b-services-debit",
+              "column_id": "variance",
+              "amount_minor": "-200",
+              "category": "equity_position",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "cost-c-detail-debit",
+              "column_id": "variance",
+              "amount_minor": "-300",
+              "category": "equity_position",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "open-capital-credit",
+              "column_id": "variance",
+              "amount_minor": "10000",
+              "category": "equity_position",
+              "treatment_reference": "ledger:recorded"
+            },
+            {
+              "posting_id": "sale-sales-credit",
+              "column_id": "variance",
+              "amount_minor": "2000",
+              "category": "equity_position",
+              "treatment_reference": "ledger:recorded"
+            }
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "id": "ledger_population",
+          "status": "pass",
+          "message": "Every supplied entry balances with unique posting identities."
+        },
+        {
+          "id": "source_coverage",
+          "status": "pass",
+          "message": "Coverage describes the supplied population; balance alone does not establish completeness."
+        },
+        {
+          "id": "opening_balances",
+          "status": "pass",
+          "message": "Opening-balance provenance is separate from mathematical ledger balance."
+        },
+        {
+          "id": "extension_account_classification",
+          "status": "pass",
+          "message": "Unknown account classifications remain separate from arithmetic reconciliation."
+        },
+        {
+          "id": "equity_bridge",
+          "status": "pass",
+          "message": "Opening equity plus reported movements reconciles to closing equity."
+        },
+        {
+          "id": "equity_treatments",
+          "status": "pass",
+          "message": "Each equity posting component needs explicit reviewed treatment; unresolved gross activity is retained."
+        },
+        {
+          "id": "equity_internal_transfers",
+          "status": "pass",
+          "message": "Reviewed internal equity transfers must net to zero within each entry."
+        },
+        {
+          "id": "equity_closing_transfers",
+          "status": "pass",
+          "message": "Explicit closing transfers must preserve total equity across equity and earnings."
+        },
+        {
+          "id": "equity_supported_scope",
+          "status": "unknown",
+          "message": "Simple-entity ownership and equity treatment scope requires explicit review; unsupported OCI or ownership changes are not inferred."
+        }
+      ],
+      "limitations": [
+        "Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.",
+        "Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.",
+        "This roll-forward is a ledger explanation, not independent recognition, ownership, OCI, disclosure or standards-compliance qualification."
+      ],
+      "reconciliation": {
+        "current_bridge_difference": "0",
+        "current_closing": "11300",
+        "current_closing_transfer": "0",
+        "current_contribution": "0",
+        "current_distribution": "0",
+        "current_opening": "10000",
+        "current_other": "0",
+        "current_profit": "1300",
+        "current_restatement": "0",
+        "current_transfer": "0",
+        "current_unresolved": "0",
+        "current_unresolved_count": "0",
+        "current_unresolved_gross_minor": "0",
+        "policy_sha256": "32da3d8ed66b50ffbe84d23e69a490d3404174575964590d0404818df20dd915",
+        "prior_bridge_difference": "0",
+        "prior_closing": "0",
+        "prior_closing_transfer": "0",
+        "prior_contribution": "0",
+        "prior_distribution": "0",
+        "prior_opening": "0",
+        "prior_other": "0",
+        "prior_profit": "0",
+        "prior_restatement": "0",
+        "prior_transfer": "0",
+        "prior_unresolved": "0",
+        "prior_unresolved_count": "0",
+        "prior_unresolved_gross_minor": "0"
+      },
+      "status": "partial",
+      "digest": "5d6d7d52f39e832966fb9418c1dabb790b0c6501a52384f16c998e57e6d72359"
+    },
+    "csv": "Report,Changes in Equity\nBook,Example Book\nBook ID,book-example\nCurrency,USD\nRecognition basis,accrual\nReporting framework,unknown\nMode,live\nStatus,partial\nFrom,2024-01-01\nThrough,2024-12-31\nLedger revision,ledger-r1\nKnowledge cutoff,2025-01-01T00:00:00Z\nMapping version,report-v1\nHierarchy basis,explicit_current_presentation\nPopulation digest,500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17\nResult digest,5d6d7d52f39e832966fb9418c1dabb790b0c6501a52384f16c998e57e6d72359\nCoverage,complete\nOpening balances,confirmed\nComparison from,2023-01-01\nComparison through,2023-12-31\nCheck,ledger_population,pass,Every supplied entry balances with unique posting identities.\nCheck,source_coverage,pass,Coverage describes the supplied population; balance alone does not establish completeness.\nCheck,opening_balances,pass,Opening-balance provenance is separate from mathematical ledger balance.\nCheck,extension_account_classification,pass,Unknown account classifications remain separate from arithmetic reconciliation.\nCheck,equity_bridge,pass,Opening equity plus reported movements reconciles to closing equity.\nCheck,equity_treatments,pass,Each equity posting component needs explicit reviewed treatment; unresolved gross activity is retained.\nCheck,equity_internal_transfers,pass,Reviewed internal equity transfers must net to zero within each entry.\nCheck,equity_closing_transfers,pass,Explicit closing transfers must preserve total equity across equity and earnings.\nCheck,equity_supported_scope,unknown,Simple-entity ownership and equity treatment scope requires explicit review; unsupported OCI or ownership changes are not inferred.\nLimitation,Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.\nLimitation,\"Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.\"\nLimitation,\"This roll-forward is a ledger explanation, not independent recognition, ownership, OCI, disclosure or standards-compliance qualification.\"\n\nRow ID,Parent row ID,Depth,Role,Account ID,Account code,Label,Date,Entry ID,Posting ID,Current (USD),Comparison (USD),Change (USD),GL code\nequity:opening,,0,opening,,,Opening total equity,,,,100.00,0.00,100.00,\nequity:movements,,0,section,,,Changes in equity,,,,13.00,0.00,13.00,\nequity:profit,equity:movements,1,total,,,Recognized profit / loss,,,,13.00,0.00,13.00,\nequity:contribution,equity:movements,1,total,,,Contributions,,,,0.00,0.00,0.00,\nequity:distribution,equity:movements,1,total,,,Distributions,,,,0.00,0.00,0.00,\nequity:restatement,equity:movements,1,total,,,Explicit adjustments and restatements,,,,0.00,0.00,0.00,\nequity:transfer,equity:movements,1,total,,,Internal equity transfers,,,,0.00,0.00,0.00,\nequity:other,equity:movements,1,total,,,Other reviewed equity changes,,,,0.00,0.00,0.00,\nequity:closing_transfer,equity:movements,1,total,,,Closing transfers across equity and earnings,,,,0.00,0.00,0.00,\nequity:unresolved,equity:movements,1,total,,,Unresolved equity movements,,,,0.00,0.00,0.00,\nequity:closing,,0,closing,,,Closing total equity,,,,113.00,0.00,113.00,\n"
+  },
+  {
+    "name": "quoting-hierarchy-omissions-large-integers",
+    "result": {
+      "schema_version": 1,
+      "report": "profit_loss",
+      "title": "leading NEL",
+      "book": {
+        "id": "book-example",
+        "name": "\t=unsafe, \"company\"\r\nΩ 日本語",
+        "currency": "USD",
+        "scale": 2,
+        "start_date": "2024-01-01",
+        "fiscal_year_start_month": 1,
+        "fiscal_year_start_day": 1,
+        "recognition_basis": "accrual",
+        "reporting_framework": "unknown"
+      },
+      "request": {
+        "book_id": "book-example",
+        "report": "profit_loss",
+        "from": "2024-01-01",
+        "to": "2024-12-31",
+        "currency": "USD",
+        "comparison": "none"
+      },
+      "scope": {
+        "mode": "live",
+        "period": {
+          "from": "2024-01-01",
+          "to": "2024-12-31"
+        },
+        "fiscal_start": "2024-01-01",
+        "ledger_revision": "ledger-r1",
+        "knowledge_cutoff": "2025-01-01T00:00:00Z",
+        "mapping_version": "report-v1",
+        "hierarchy_basis": "explicit_current_presentation",
+        "generated_at": "2025-01-02T00:00:00Z",
+        "population_digest": "500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17",
+        "coverage": "complete",
+        "opening_balances": "confirmed"
+      },
+      "columns": [
+        {
+          "id": "current",
+          "label": "Current",
+          "kind": "amount",
+          "period": {
+            "from": "2024-01-01",
+            "to": "2024-12-31"
+          }
+        }
+      ],
+      "rows": [
+        {
+          "id": "=row",
+          "label": "+unsafe",
+          "role": "account",
+          "account_id": "id",
+          "account_code": "001",
+          "gl_code": "@code",
+          "values": {
+            "current": "-900719925474099312345",
+            "prior": "-0"
+          },
+          "children": [
+            {
+              "id": "child",
+              "label": "missing prior is empty",
+              "role": "account",
+              "values": {
+                "current": "1"
+              },
+              "children": []
+            }
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "id": "ledger_population",
+          "status": "pass",
+          "message": "Every supplied entry balances with unique posting identities."
+        },
+        {
+          "id": "source_coverage",
+          "status": "pass",
+          "message": "Coverage describes the supplied population; balance alone does not establish completeness."
+        },
+        {
+          "id": "opening_balances",
+          "status": "pass",
+          "message": "Opening-balance provenance is separate from mathematical ledger balance."
+        },
+        {
+          "id": "profit_loss_reconstruction",
+          "status": "pass",
+          "message": "The result reconstructs the selected income and expense postings, excluding explicitly typed openings and closes."
+        }
+      ],
+      "limitations": [
+        "Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.",
+        "Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.",
+        "@formula",
+        " leading space",
+        "\\.",
+        "﻿BOM",
+        " NBSP",
+        "multiline\ntext",
+        "carriage\rreturn"
+      ],
+      "reconciliation": {
+        "expenses": "700",
+        "income": "2000",
+        "result": "1300"
+      },
+      "status": "ready",
+      "digest": "737ddb37dc40bb9dd00c75bcb7fcdd938ba89d3f825892c7a05d74cc68708a2d"
+    },
+    "csv": "Report,\"leading NEL\"\nBook,\"'\t=unsafe, \"\"company\"\"\r\nΩ 日本語\"\nBook ID,book-example\nCurrency,USD\nRecognition basis,accrual\nReporting framework,unknown\nMode,live\nStatus,ready\nFrom,2024-01-01\nThrough,2024-12-31\nLedger revision,ledger-r1\nKnowledge cutoff,2025-01-01T00:00:00Z\nMapping version,report-v1\nHierarchy basis,explicit_current_presentation\nPopulation digest,500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17\nResult digest,737ddb37dc40bb9dd00c75bcb7fcdd938ba89d3f825892c7a05d74cc68708a2d\nCoverage,complete\nOpening balances,confirmed\nCheck,ledger_population,pass,Every supplied entry balances with unique posting identities.\nCheck,source_coverage,pass,Coverage describes the supplied population; balance alone does not establish completeness.\nCheck,opening_balances,pass,Opening-balance provenance is separate from mathematical ledger balance.\nCheck,profit_loss_reconstruction,pass,\"The result reconstructs the selected income and expense postings, excluding explicitly typed openings and closes.\"\nLimitation,Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.\nLimitation,\"Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.\"\nLimitation,'@formula\nLimitation,\" leading space\"\nLimitation,\"\\.\"\nLimitation,﻿BOM\nLimitation,\" NBSP\"\nLimitation,\"multiline\ntext\"\nLimitation,\"'carriage\rreturn\"\n\nRow ID,Parent row ID,Depth,Role,Account ID,Account code,Label,Date,Entry ID,Posting ID,Current (USD),GL code\n'=row,,0,account,id,001,'+unsafe,,,,-9007199254740993123.45,'@code\nchild,'=row,1,account,,,missing prior is empty,,,,0.01,\n"
+  },
+  {
+    "name": "scale-0",
+    "result": {
+      "schema_version": 1,
+      "report": "profit_loss",
+      "title": "leading NEL",
+      "book": {
+        "id": "book-example",
+        "name": "\t=unsafe, \"company\"\r\nΩ 日本語",
+        "currency": "USD",
+        "scale": 0,
+        "start_date": "2024-01-01",
+        "fiscal_year_start_month": 1,
+        "fiscal_year_start_day": 1,
+        "recognition_basis": "accrual",
+        "reporting_framework": "unknown"
+      },
+      "request": {
+        "book_id": "book-example",
+        "report": "profit_loss",
+        "from": "2024-01-01",
+        "to": "2024-12-31",
+        "currency": "USD",
+        "comparison": "none"
+      },
+      "scope": {
+        "mode": "live",
+        "period": {
+          "from": "2024-01-01",
+          "to": "2024-12-31"
+        },
+        "fiscal_start": "2024-01-01",
+        "ledger_revision": "ledger-r1",
+        "knowledge_cutoff": "2025-01-01T00:00:00Z",
+        "mapping_version": "report-v1",
+        "hierarchy_basis": "explicit_current_presentation",
+        "generated_at": "2025-01-02T00:00:00Z",
+        "population_digest": "500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17",
+        "coverage": "complete",
+        "opening_balances": "confirmed"
+      },
+      "columns": [
+        {
+          "id": "current",
+          "label": "Current",
+          "kind": "amount",
+          "period": {
+            "from": "2024-01-01",
+            "to": "2024-12-31"
+          }
+        }
+      ],
+      "rows": [
+        {
+          "id": "=row",
+          "label": "+unsafe",
+          "role": "account",
+          "account_id": "id",
+          "account_code": "001",
+          "gl_code": "@code",
+          "values": {
+            "current": "-900719925474099312345",
+            "prior": "-0"
+          },
+          "children": [
+            {
+              "id": "child",
+              "label": "missing prior is empty",
+              "role": "account",
+              "values": {
+                "current": "1"
+              },
+              "children": []
+            }
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "id": "ledger_population",
+          "status": "pass",
+          "message": "Every supplied entry balances with unique posting identities."
+        },
+        {
+          "id": "source_coverage",
+          "status": "pass",
+          "message": "Coverage describes the supplied population; balance alone does not establish completeness."
+        },
+        {
+          "id": "opening_balances",
+          "status": "pass",
+          "message": "Opening-balance provenance is separate from mathematical ledger balance."
+        },
+        {
+          "id": "profit_loss_reconstruction",
+          "status": "pass",
+          "message": "The result reconstructs the selected income and expense postings, excluding explicitly typed openings and closes."
+        }
+      ],
+      "limitations": [
+        "Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.",
+        "Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.",
+        "@formula",
+        " leading space",
+        "\\.",
+        "﻿BOM",
+        " NBSP",
+        "multiline\ntext",
+        "carriage\rreturn"
+      ],
+      "reconciliation": {
+        "expenses": "700",
+        "income": "2000",
+        "result": "1300"
+      },
+      "status": "ready",
+      "digest": "559e591506cce73d5396733daa5dbccda2814d271b9d68e1caf85bf8eeabd459"
+    },
+    "csv": "Report,\"leading NEL\"\nBook,\"'\t=unsafe, \"\"company\"\"\r\nΩ 日本語\"\nBook ID,book-example\nCurrency,USD\nRecognition basis,accrual\nReporting framework,unknown\nMode,live\nStatus,ready\nFrom,2024-01-01\nThrough,2024-12-31\nLedger revision,ledger-r1\nKnowledge cutoff,2025-01-01T00:00:00Z\nMapping version,report-v1\nHierarchy basis,explicit_current_presentation\nPopulation digest,500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17\nResult digest,559e591506cce73d5396733daa5dbccda2814d271b9d68e1caf85bf8eeabd459\nCoverage,complete\nOpening balances,confirmed\nCheck,ledger_population,pass,Every supplied entry balances with unique posting identities.\nCheck,source_coverage,pass,Coverage describes the supplied population; balance alone does not establish completeness.\nCheck,opening_balances,pass,Opening-balance provenance is separate from mathematical ledger balance.\nCheck,profit_loss_reconstruction,pass,\"The result reconstructs the selected income and expense postings, excluding explicitly typed openings and closes.\"\nLimitation,Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.\nLimitation,\"Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.\"\nLimitation,'@formula\nLimitation,\" leading space\"\nLimitation,\"\\.\"\nLimitation,﻿BOM\nLimitation,\" NBSP\"\nLimitation,\"multiline\ntext\"\nLimitation,\"'carriage\rreturn\"\n\nRow ID,Parent row ID,Depth,Role,Account ID,Account code,Label,Date,Entry ID,Posting ID,Current (USD),GL code\n'=row,,0,account,id,001,'+unsafe,,,,-900719925474099312345,'@code\nchild,'=row,1,account,,,missing prior is empty,,,,1,\n"
+  },
+  {
+    "name": "scale-9",
+    "result": {
+      "schema_version": 1,
+      "report": "profit_loss",
+      "title": "leading NEL",
+      "book": {
+        "id": "book-example",
+        "name": "\t=unsafe, \"company\"\r\nΩ 日本語",
+        "currency": "USD",
+        "scale": 9,
+        "start_date": "2024-01-01",
+        "fiscal_year_start_month": 1,
+        "fiscal_year_start_day": 1,
+        "recognition_basis": "accrual",
+        "reporting_framework": "unknown"
+      },
+      "request": {
+        "book_id": "book-example",
+        "report": "profit_loss",
+        "from": "2024-01-01",
+        "to": "2024-12-31",
+        "currency": "USD",
+        "comparison": "none"
+      },
+      "scope": {
+        "mode": "live",
+        "period": {
+          "from": "2024-01-01",
+          "to": "2024-12-31"
+        },
+        "fiscal_start": "2024-01-01",
+        "ledger_revision": "ledger-r1",
+        "knowledge_cutoff": "2025-01-01T00:00:00Z",
+        "mapping_version": "report-v1",
+        "hierarchy_basis": "explicit_current_presentation",
+        "generated_at": "2025-01-02T00:00:00Z",
+        "population_digest": "500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17",
+        "coverage": "complete",
+        "opening_balances": "confirmed"
+      },
+      "columns": [
+        {
+          "id": "current",
+          "label": "Current",
+          "kind": "amount",
+          "period": {
+            "from": "2024-01-01",
+            "to": "2024-12-31"
+          }
+        }
+      ],
+      "rows": [
+        {
+          "id": "=row",
+          "label": "+unsafe",
+          "role": "account",
+          "account_id": "id",
+          "account_code": "001",
+          "gl_code": "@code",
+          "values": {
+            "current": "-900719925474099312345",
+            "prior": "-0"
+          },
+          "children": [
+            {
+              "id": "child",
+              "label": "missing prior is empty",
+              "role": "account",
+              "values": {
+                "current": "1"
+              },
+              "children": []
+            }
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "id": "ledger_population",
+          "status": "pass",
+          "message": "Every supplied entry balances with unique posting identities."
+        },
+        {
+          "id": "source_coverage",
+          "status": "pass",
+          "message": "Coverage describes the supplied population; balance alone does not establish completeness."
+        },
+        {
+          "id": "opening_balances",
+          "status": "pass",
+          "message": "Opening-balance provenance is separate from mathematical ledger balance."
+        },
+        {
+          "id": "profit_loss_reconstruction",
+          "status": "pass",
+          "message": "The result reconstructs the selected income and expense postings, excluding explicitly typed openings and closes."
+        }
+      ],
+      "limitations": [
+        "Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.",
+        "Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.",
+        "@formula",
+        " leading space",
+        "\\.",
+        "﻿BOM",
+        " NBSP",
+        "multiline\ntext",
+        "carriage\rreturn"
+      ],
+      "reconciliation": {
+        "expenses": "700",
+        "income": "2000",
+        "result": "1300"
+      },
+      "status": "ready",
+      "digest": "337434a86ee2aa49ef2be0afab53efd0c6bbe94de6784b5df78135da19253f5e"
+    },
+    "csv": "Report,\"leading NEL\"\nBook,\"'\t=unsafe, \"\"company\"\"\r\nΩ 日本語\"\nBook ID,book-example\nCurrency,USD\nRecognition basis,accrual\nReporting framework,unknown\nMode,live\nStatus,ready\nFrom,2024-01-01\nThrough,2024-12-31\nLedger revision,ledger-r1\nKnowledge cutoff,2025-01-01T00:00:00Z\nMapping version,report-v1\nHierarchy basis,explicit_current_presentation\nPopulation digest,500511f5e17a59ed4bf3937a962496deb783efc81aad56f501911028582a2b17\nResult digest,337434a86ee2aa49ef2be0afab53efd0c6bbe94de6784b5df78135da19253f5e\nCoverage,complete\nOpening balances,confirmed\nCheck,ledger_population,pass,Every supplied entry balances with unique posting identities.\nCheck,source_coverage,pass,Coverage describes the supplied population; balance alone does not establish completeness.\nCheck,opening_balances,pass,Opening-balance provenance is separate from mathematical ledger balance.\nCheck,profit_loss_reconstruction,pass,\"The result reconstructs the selected income and expense postings, excluding explicitly typed openings and closes.\"\nLimitation,Amounts are recorded Book-currency values; no new currency translation or period-end remeasurement is performed.\nLimitation,\"Live recorded-ledger report; no audited, statutory or standards-compliance assertion is made.\"\nLimitation,'@formula\nLimitation,\" leading space\"\nLimitation,\"\\.\"\nLimitation,﻿BOM\nLimitation,\" NBSP\"\nLimitation,\"multiline\ntext\"\nLimitation,\"'carriage\rreturn\"\n\nRow ID,Parent row ID,Depth,Role,Account ID,Account code,Label,Date,Entry ID,Posting ID,Current (USD),GL code\n'=row,,0,account,id,001,'+unsafe,,,,-900719925474.099312345,'@code\nchild,'=row,1,account,,,missing prior is empty,,,,0.000000001,\n"
+  }
+]

@@ -1,0 +1,12 @@
+.vult-particles {
+  --vult-particle-brightness: 1;
+  pointer-events: none;
+}
+
+.dark-mode .vult-particles {
+  --vult-particle-brightness: 1.8;
+}
+
+.vult-particles > canvas {
+  filter: brightness(var(--vult-particle-brightness));
+}

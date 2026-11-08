@@ -1,0 +1,256 @@
+[
+  {
+    "id": "first-load",
+    "status": 503,
+    "intent": "read",
+    "context": {
+      "resource": "dashboard"
+    },
+    "message": "We couldn’t load your dashboard.",
+    "recovery": "retry",
+    "outcome": "read"
+  },
+  {
+    "id": "refresh",
+    "status": 503,
+    "intent": "read",
+    "context": {
+      "resource": "dashboard",
+      "retained": "view"
+    },
+    "message": "We couldn’t refresh your dashboard.",
+    "recovery": "retry",
+    "outcome": "read"
+  },
+  {
+    "id": "connection",
+    "status": 0,
+    "intent": "read",
+    "context": {
+      "resource": "dashboard"
+    },
+    "message": "We couldn’t connect. Check your connection.",
+    "recovery": "retry",
+    "outcome": "read"
+  },
+  {
+    "id": "sign-in",
+    "status": 401,
+    "intent": "read",
+    "message": "Sign in to continue.",
+    "recovery": "sign-in",
+    "outcome": "rejected"
+  },
+  {
+    "id": "access",
+    "status": 403,
+    "intent": "read",
+    "message": "You don’t have permission to do that.",
+    "recovery": "none",
+    "outcome": "rejected"
+  },
+  {
+    "id": "unavailable-item",
+    "status": 404,
+    "intent": "read",
+    "message": "We can’t open this right now.",
+    "recovery": "none",
+    "outcome": "rejected"
+  },
+  {
+    "id": "busy-read",
+    "status": 429,
+    "intent": "read",
+    "message": "Give us a moment, then try again.",
+    "recovery": "retry",
+    "outcome": "read"
+  },
+  {
+    "id": "uncertain-save",
+    "status": 503,
+    "intent": "write",
+    "message": "Your change may already be saved. Check before trying again.",
+    "recovery": "review",
+    "outcome": "unknown"
+  },
+  {
+    "id": "conflict",
+    "status": 409,
+    "intent": "write",
+    "message": "Check the saved version before trying again.",
+    "recovery": "review",
+    "outcome": "unknown"
+  },
+  {
+    "id": "validation",
+    "status": 400,
+    "intent": "write",
+    "message": "Check your details and try again.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "large-file",
+    "status": 413,
+    "intent": "write",
+    "message": "This file is too large. Choose a smaller one.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "unsupported-type",
+    "status": 415,
+    "intent": "write",
+    "message": "This file type isn’t supported.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "empty-file",
+    "local": "This document is empty.",
+    "message": "This file is empty. Choose another copy."
+  },
+  {
+    "id": "unreadable-file",
+    "status": 400,
+    "intent": "write",
+    "raw": "receipt PDF is malformed",
+    "message": "We couldn’t read this file. Try another copy.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "receipt-size",
+    "status": 400,
+    "intent": "write",
+    "raw": "receipt must be between 1 byte and 10 MiB",
+    "message": "Choose a receipt with content, up to 10 MB.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "receipt-type",
+    "status": 400,
+    "intent": "write",
+    "raw": "receipt must be a PNG, JPEG, or PDF matching its declared type",
+    "message": "Use a PDF, PNG or JPG for the receipt.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "filename",
+    "status": 400,
+    "intent": "write",
+    "raw": "receipt filename must be a plain filename of at most 180 characters",
+    "message": "Rename the file without slashes, using up to 180 characters.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "rate-review",
+    "status": 400,
+    "intent": "write",
+    "raw": "selected conversion does not match this currency pair and date",
+    "message": "Refresh the exchange rate for this entry.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "amount-positive",
+    "status": 400,
+    "intent": "write",
+    "raw": "amount must be positive",
+    "message": "Enter an amount greater than zero.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "amount-format",
+    "local": "Enter a positive decimal amount without separators.",
+    "message": "Use numbers without commas or currency symbols."
+  },
+  {
+    "id": "invalid-date",
+    "status": 400,
+    "intent": "write",
+    "raw": "invalid date",
+    "message": "Enter a valid date.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "entry-totals",
+    "status": 400,
+    "intent": "write",
+    "raw": "journal debits and credits must balance and match the entry total",
+    "message": "The amounts on both sides need to match.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "same-currency",
+    "status": 400,
+    "intent": "write",
+    "raw": "same-currency source and bank amounts must match; record identified fees separately",
+    "message": "These amounts should match. Record any fees separately.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "card-settlement",
+    "status": 400,
+    "intent": "write",
+    "raw": "same-currency card settlements must match; record identified fees separately",
+    "message": "These amounts should match. Record any fees separately.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "opening-currency",
+    "status": 400,
+    "intent": "write",
+    "raw": "opening currency must match the selected account",
+    "message": "Use the selected account’s currency for its opening balance.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "insufficient-recorded-balance",
+    "status": 400,
+    "intent": "write",
+    "raw": "insufficient cash balance",
+    "message": "This amount is more than the account’s recorded balance.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "busy-save",
+    "status": 429,
+    "intent": "write",
+    "message": "Your change may already be saved. Check before trying again.",
+    "recovery": "review",
+    "outcome": "unknown"
+  },
+  {
+    "id": "unavailable-action",
+    "status": 404,
+    "intent": "write",
+    "message": "We can’t make that change right now.",
+    "recovery": "none",
+    "outcome": "rejected"
+  },
+  {
+    "id": "wrong-book",
+    "status": 400,
+    "intent": "write",
+    "raw": "evidence belongs to another Book",
+    "message": "These records belong to a different Book.",
+    "recovery": "review",
+    "outcome": "rejected"
+  },
+  {
+    "id": "source-verification",
+    "local": "The cash source bytes could not be verified.",
+    "message": "We couldn’t verify these records. Review the source files."
+  }
+]

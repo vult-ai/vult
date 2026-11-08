@@ -1,0 +1,26 @@
+.severity-preview {
+  display: grid;
+  gap: 16px;
+}
+.severity-preview h2,
+.severity-preview p {
+  margin: 0;
+}
+.severity-sample {
+  min-width: 0;
+}
+.severity-preview .severity-label {
+  color: var(--color-text-tertiary);
+  margin-bottom: 8px;
+}
+.severity-review {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--color-bg-secondary);
+}
+.severity-review .vult-type-metadata {
+  color: var(--color-text-tertiary);
+}

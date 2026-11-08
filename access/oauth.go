@@ -22,8 +22,16 @@ func validRedirect(raw string) bool {
 	if u.Scheme == "https" {
 		return true
 	}
+	if u.Scheme != "http" || u.Port() == "" {
+		return false
+	}
+	// Native agents receive the code on this device. Most MCP clients name the
+	// loopback interface "localhost" rather than an IP literal; accept both.
+	if u.Host == "localhost:"+u.Port() {
+		return true
+	}
 	ip, e := netip.ParseAddr(u.Hostname())
-	return u.Scheme == "http" && e == nil && ip.IsLoopback() && ip.Zone() == "" && u.Port() != ""
+	return e == nil && ip.IsLoopback() && ip.Zone() == ""
 }
 func validProof(raw string) bool {
 	if len(raw) < 43 || len(raw) > 128 {
@@ -59,7 +67,30 @@ type Client struct {
 	AuthMethod string   `json:"token_endpoint_auth_method"`
 }
 
-func (s *Service) Resource() string { return s.origin + "/mcp" }
+// Issuer is the OAuth issuer agents see: the agent origin when configured.
+func (s *Service) Issuer() string {
+	if s.agentOrigin != "" {
+		return s.agentOrigin
+	}
+	return s.origin
+}
+
+// Resource is the public MCP resource that agents request tokens for.
+func (s *Service) Resource() string {
+	if s.agentOrigin != "" {
+		return s.agentOrigin
+	}
+	return s.origin + "/mcp"
+}
+
+// AuthorizationEndpoint is the browser page where the owner signs in and
+// consents. It always stays on the browser origin.
+func (s *Service) AuthorizationEndpoint() string { return s.origin + "/oauth/authorize" }
+
+// realmResource is the stored grant binding the access schema checks. It is
+// independent of the public resource, so moving MCP to its own origin needs no
+// schema change and keeps existing grants valid.
+func (s *Service) realmResource() string { return s.origin + "/mcp" }
 func (s *Service) RegisterClient(ctx context.Context, name string, redirects []string) (Client, error) {
 	if !safeLabel(name) || len(redirects) < 1 || len(redirects) > 8 {
 		return Client{}, ErrDenied
@@ -86,7 +117,7 @@ func (s *Service) StartAuthorization(ctx context.Context, q Authorization) (stri
 		return "", ErrDenied
 	}
 	raw := Random()
-	if _, e := s.auth.Exec(ctx, "SELECT access.start_oauth($1,$2,$3,$4,$5,$6,$7,$8)", Hash(raw), q.ClientID, q.RedirectURI, q.Resource, q.Challenge, q.State, q.Access, s.origin); e != nil {
+	if _, e := s.auth.Exec(ctx, "SELECT access.start_oauth($1,$2,$3,$4,$5,$6,$7,$8)", Hash(raw), q.ClientID, q.RedirectURI, s.realmResource(), q.Challenge, q.State, q.Access, s.origin); e != nil {
 		return "", ErrDenied
 	}
 	return raw, nil
@@ -104,6 +135,15 @@ func (s *Service) PendingAuthorization(ctx context.Context, request string) (Con
 		return Consent{}, ErrDenied
 	}
 	return c, nil
+}
+
+// ResumeAuthorization returns the consent page for an agent authorization that
+// is still pending, so a deployment can return a newly signed-in owner to it.
+func (s *Service) ResumeAuthorization(ctx context.Context, request string) (string, bool) {
+	if _, e := s.PendingAuthorization(ctx, request); e != nil {
+		return "", false
+	}
+	return "/oauth/authorize?request=" + request, true
 }
 func (s *Service) ConsentAuthorization(ctx context.Context, session, request, tenant, book, permission, connection string, deny bool) (string, error) {
 	if !validToken(session) || !validToken(request) || !ledger.ValidID(tenant) || !deny && (!ledger.ValidID(book) || (permission != "read" && permission != "write")) || connection != "" && !ledger.ValidID(connection) {
@@ -125,7 +165,7 @@ func (s *Service) ConsentAuthorization(ctx context.Context, session, request, te
 	}
 	q := u.Query()
 	q.Set("state", state)
-	q.Set("iss", s.origin)
+	q.Set("iss", s.Issuer())
 	if deny {
 		q.Set("error", "access_denied")
 	} else {
@@ -175,7 +215,7 @@ func (s *Service) Exchange(ctx context.Context, v url.Values) (Tokens, error) {
 	}
 	out := Tokens{Access: Random(), Refresh: Random(), Type: "Bearer", Expires: 900}
 	var permission *string
-	e := s.auth.QueryRow(ctx, "SELECT access.exchange_oauth($1,$2,$3,$4,$5,$6,$7,$8,$9)", kind, Hash(secret), v.Get("client_id"), v.Get("resource"), v.Get("redirect_uri"), proof, Hash(out.Access), Hash(out.Refresh), s.origin).Scan(&permission)
+	e := s.auth.QueryRow(ctx, "SELECT access.exchange_oauth($1,$2,$3,$4,$5,$6,$7,$8,$9)", kind, Hash(secret), v.Get("client_id"), s.realmResource(), v.Get("redirect_uri"), proof, Hash(out.Access), Hash(out.Refresh), s.origin).Scan(&permission)
 	if e != nil || permission == nil || (*permission != "read" && *permission != "write") {
 		return Tokens{}, ErrDenied
 	}
@@ -187,7 +227,7 @@ func (s *Service) ResolveAgent(ctx context.Context, token string) (ledger.Scope,
 		return ledger.Scope{}, ErrDenied
 	}
 	var scope ledger.Scope
-	e := s.auth.QueryRow(ctx, "SELECT tenant_id::text,book_id::text,connection_id::text,actor_id::text,permission FROM access.resolve_agent($1,$2)", Hash(token), s.Resource()).Scan(&scope.TenantID, &scope.BookID, &scope.ConnectionID, &scope.ActorID, &scope.Access)
+	e := s.auth.QueryRow(ctx, "SELECT tenant_id::text,book_id::text,connection_id::text,actor_id::text,permission FROM access.resolve_agent($1,$2)", Hash(token), s.realmResource()).Scan(&scope.TenantID, &scope.BookID, &scope.ConnectionID, &scope.ActorID, &scope.Access)
 	if e != nil {
 		return ledger.Scope{}, ErrDenied
 	}
@@ -201,7 +241,7 @@ func (s *Service) AgentAuthorizer(token string) func(context.Context, pgx.Tx, le
 		if !validToken(token) {
 			return ErrDenied
 		}
-		if _, e := tx.Exec(ctx, "SELECT access.require_agent($1,$2,$3,$4,$5,$6,$7)", Hash(token), s.Resource(), scope.TenantID, scope.BookID, scope.ConnectionID, scope.ActorID, scope.Access); e != nil {
+		if _, e := tx.Exec(ctx, "SELECT access.require_agent($1,$2,$3,$4,$5,$6,$7)", Hash(token), s.realmResource(), scope.TenantID, scope.BookID, scope.ConnectionID, scope.ActorID, scope.Access); e != nil {
 			return ErrDenied
 		}
 		return nil

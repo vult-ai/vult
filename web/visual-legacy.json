@@ -1,0 +1,58 @@
+{
+  "components/statements/statement-tools.css": {
+    "radius": 2,
+    "colour": 1
+  },
+  "components/statements/statements.css": {
+    "radius": 0,
+    "colour": 9
+  },
+  "components/ui/controls.css": {
+    "radius": 1,
+    "colour": 4
+  },
+  "components/ui/info-popover.css": {
+    "radius": 0,
+    "colour": 1
+  },
+  "components/ui/state.css": {
+    "radius": 1,
+    "colour": 4
+  },
+  "components/v0/chart-tooltip.css": {
+    "radius": 0,
+    "colour": 4
+  },
+  "components/v0/dashboard-card.css": {
+    "radius": 3,
+    "colour": 0
+  },
+  "components/v0/overview-metrics.css": {
+    "radius": 3,
+    "colour": 0
+  },
+  "components/v0/performance-trends.css": {
+    "radius": 1,
+    "colour": 0
+  },
+  "components/v0/results-panel.css": {
+    "radius": 2,
+    "colour": 0
+  },
+  "components/v0/statement-basis.css": {
+    "radius": 0,
+    "colour": 1
+  },
+  "components/v0/v0.css": {
+    "radius": 2,
+    "colour": 0
+  },
+  "components/workspaces/account-activity-list.css": {
+    "radius": 0,
+    "colour": 1
+  },
+  "components/workspaces/account-tree.css": {
+    "radius": 4,
+    "colour": 3
+  }
+}

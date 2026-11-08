@@ -1,0 +1,336 @@
+@import "../components/ui/name-link.css";
+
+/* Defaults must not override the source components' responsive utilities. */
+@layer base {
+  h1 {
+    font-size: var(--text-vult-page-title);
+    font-weight: 600;
+    line-height: var(--text-vult-page-title--line-height);
+    letter-spacing: -0.025em;
+  }
+  h2 {
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 600;
+  }
+  h3 {
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 600;
+    margin: 24px 0 12px;
+  }
+  small {
+    font-size: 12px;
+    line-height: 16px;
+  }
+}
+.muted {
+  color: var(--color-text-tertiary);
+}
+.small {
+  font-size: 12px;
+  line-height: 20px;
+}
+.mono {
+  font-family: var(--font-log);
+}
+.number {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.transactions-section {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.book-balances dd {
+  font-variant-numeric: tabular-nums;
+}
+.table-scroll {
+  position: relative;
+  width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.journal {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  text-align: left;
+  font-size: 14px;
+  line-height: 20px;
+}
+.journal th {
+  height: 40px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--color-border-secondary);
+  background: var(--color-bg-primary);
+  color: var(--color-text-tertiary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.journal td {
+  height: 48px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-border-secondary);
+  vertical-align: middle;
+}
+.journal th + th,
+.journal td + td {
+  border-left: 1px solid var(--color-border-secondary);
+}
+.journal tr:last-child td {
+  border-bottom: 0;
+}
+.journal td small {
+  display: block;
+  color: var(--color-text-tertiary);
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 16px;
+}
+.date-cell {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.amount-cell {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+}
+.field > label {
+  font-weight: 500;
+}
+.field small {
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 20px;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.dialog-form {
+  padding: 24px;
+}
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+}
+.identity-history-entry,
+.warning,
+.error {
+  padding: 12px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+  margin-bottom: 20px;
+}
+.warning {
+  border-color: var(--color-border-warning);
+  background: var(--color-bg-warning-primary);
+}
+.error {
+  border-color: var(--color-border-error_subtle);
+  background: var(--color-bg-error-primary);
+  color: var(--color-text-error-primary);
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-md);
+  padding: 1px 6px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--color-text-tertiary);
+  font-weight: 400;
+}
+.reversed {
+  margin-left: 8px;
+}
+.detail-amount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+  font-variant-numeric: tabular-nums;
+  font-size: 20px;
+  line-height: 28px;
+}
+.details {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 12px;
+  font-size: 14px;
+  line-height: 20px;
+  margin: 0;
+}
+dt {
+  color: var(--color-text-tertiary);
+}
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.preserve-space {
+  white-space: pre-wrap;
+}
+.attachment {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin-top: 24px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+}
+.attachment small {
+  display: block;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.attachment > svg:last-child {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.history {
+  margin: 20px 0 0;
+  padding: 8px;
+}
+.journal th,
+.journal td {
+  padding: 8px;
+  font-size: 12px;
+  line-height: 16px;
+}
+.journal th:not(:first-child) {
+  text-align: right;
+}
+.allocation-list > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  line-height: 20px;
+}
+hr {
+  border: 0;
+  border-top: 1px solid var(--color-border-secondary);
+  margin: 24px 0;
+}
+.opening-row {
+  width: 100%;
+  justify-content: space-between;
+  margin: 8px 0;
+}
+.negative {
+  color: var(--color-text-error-primary) !important;
+}
+
+@media (width < 768px) {
+  .dialog-form {
+    padding: 16px;
+  }
+  .details {
+    grid-template-columns: 104px minmax(0, 1fr);
+  }
+}
+/* Data cells compose the canonical RecordsTable; its rows, header and footer own geometry. */
+.book-records {
+  --records-top-inset: 0px;
+}
+.book-cell {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.book-cell small {
+  display: inline;
+  margin-left: 8px;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.book-type-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.book-type-cell > small {
+  margin-left: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.book-cell.number {
+  margin-left: auto;
+}
+.book-row-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: inherit;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+.book-row-action > svg {
+  width: 16px;
+  height: 16px;
+}
+.book-row-action[aria-current="true"] {
+  color: var(--color-text-primary);
+}
+.dialog-heading h2 {
+  outline: none;
+}
+.dialog-close:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+@media (hover: hover) and (pointer: fine) {
+  .book-row-action:hover {
+    color: var(--color-text-primary);
+    background: var(--vult-interaction-hover);
+  }
+}
+
+.book-balances > div {
+  display: contents;
+}

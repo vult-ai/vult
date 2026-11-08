@@ -1,0 +1,59 @@
+{
+  "name": "vult-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "26.7.0",
+    "npm": "11.19.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "test": "playwright test",
+    "design:check": "node scripts/check-design-system.mjs && node scripts/check-name-links.mjs && node scripts/check-product-terms.mjs && node scripts/check-feedback.mjs && node scripts/check-menu-standard.mjs && node scripts/check-shell-standard.mjs && node scripts/check-dialog-standard.mjs && node scripts/check-button-standard.mjs && node scripts/check-form-standard.mjs && node scripts/check-tab-standard.mjs && node scripts/check-side-panel-standard.mjs && node scripts/check-visual-tokens.mjs && node scripts/check-table-standard.mjs && node scripts/check-toolbar-standard.mjs && node scripts/check-search-standard.mjs && npm run typography:check",
+    "typography:check": "node scripts/check-typography.mjs",
+    "assets:check": "node scripts/check-shared-assets.mjs && node scripts/check-account-avatar-standard.mjs",
+    "prebuild": "npm run design:check && npm run assets:check && npm run notices:check",
+    "notices:check": "node scripts/notices.mjs --check",
+    "test:ui": "node --test unit/*.test.mjs",
+    "postbuild": "node scripts/check-shared-assets.mjs --production"
+  },
+  "dependencies": {
+    "@internationalized/date": "3.12.4",
+    "@phosphor-icons/react": "2.1.10",
+    "@radix-ui/react-dialog": "1.3.1",
+    "@react-aria/utils": "3.34.1",
+    "@react-stately/utils": "3.12.1",
+    "@react-types/shared": "3.37.0",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "motion": "12.43.0",
+    "pdfjs-dist": "6.4.299",
+    "react": "19.3.1",
+    "react-aria": "3.53.1",
+    "react-aria-components": "1.22.1",
+    "react-dom": "19.3.1",
+    "tailwind-merge": "3.6.0",
+    "tailwindcss-animate": "1.0.7",
+    "tailwindcss-react-aria-components": "2.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@resvg/resvg-js": "2.6.2",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "26.0.0",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@vitejs/plugin-react": "6.1.2",
+    "esbuild": "0.28.2",
+    "jsdom": "27.4.0",
+    "postcss": "8.5.31",
+    "prettier": "3.9.10",
+    "sharp": "0.35.5",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vite": "8.3.5"
+  }
+}

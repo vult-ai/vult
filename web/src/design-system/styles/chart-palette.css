@@ -1,0 +1,37 @@
+/* Vult bright pastel data palette. Category identity owns color; rank does not. */
+:root {
+  --color-chart-violet: #855cff;
+  --color-chart-blue: #3b82ff;
+  --color-chart-sky: #80beff;
+  --color-chart-yellow: #ffd46b;
+  --color-chart-mint: #74ffb9;
+  --color-chart-pink: #ff64bf;
+  --color-chart-aqua: #5be5e1;
+  --color-chart-green: #83e377;
+  --color-chart-lime: #a8ed68;
+  --color-chart-orange: #ff8c38;
+  --color-chart-coral: #ff7c91;
+  --color-chart-orchid: #cf6bff;
+  --color-chart-rose: #ec607d;
+  --color-on-pastel: #0a0a0a;
+  --color-chart-tooltip-bg: rgb(32 32 32 / 94%);
+  --color-chart-tooltip-fg: #f5f5f5;
+  --color-chart-tooltip-muted: #a0a0a0;
+  --color-chart-tooltip-border: rgb(255 255 255 / 10%);
+}
+
+/* Direction: whether a change is good or bad news. Good news is ink, black in
+   light mode and white in dark ("in the black"); bad news is red. A change
+   picks its direction by meaning, so a fall in costs is good news.
+   Money in and money out are categories, not news: income is ink and expenses
+   a quieter gray, never red, because an ordinary cost is not a warning.
+   They resolve on each element, because the ink they point to changes with
+   the theme below the root. */
+*, ::before, ::after {
+  --color-direction-up: var(--color-text-primary);
+  --color-direction-down: var(--color-chart-rose);
+  --color-direction-up-text: var(--color-text-primary);
+  --color-direction-down-text: var(--color-text-error-primary);
+  --color-money-in: var(--color-text-primary);
+  --color-money-out: var(--color-fg-quaternary);
+}

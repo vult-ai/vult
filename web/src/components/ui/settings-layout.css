@@ -1,0 +1,246 @@
+/* Settings-only spacing: open headings with one rounded shell per group. */
+.workspace-page.book-settings-page.settings-canvas {
+  max-width: none;
+  margin-inline: 0;
+  min-height: calc(100dvh - 104px);
+  /* The page bar names the page; tabs open the page. */
+  padding: 24px 24px 64px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* One reading column, centred in the canvas: tabs and sections share it. */
+.book-settings-page.settings-canvas .book-settings-tabs {
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+
+.book-settings-page.settings-canvas .book-settings-access {
+  gap: 32px;
+}
+
+.book-settings-page.settings-canvas .settings-identity-summary {
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-2xl);
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-xs);
+}
+.settings-identity-editor .identity-edit-fields[hidden],
+.settings-identity-editor .identity-review-fields[hidden] {
+  display: none;
+}
+.settings-identity-details > summary,
+.settings-identity-history > summary {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  min-height: 36px;
+  align-content: center;
+}
+.settings-identity-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+}
+.settings-identity-details > summary::-webkit-details-marker {
+  display: none;
+}
+.settings-identity-details[open] > summary svg {
+  transform: rotate(180deg);
+}
+.settings-identity-details[open] > summary,
+.settings-identity-history[open] > summary {
+  margin-bottom: 16px;
+}
+.settings-identity-history {
+  margin-top: 24px;
+}
+.settings-identity-review {
+  margin-bottom: 24px;
+}
+.settings-identity-review h3 {
+  margin: 0 0 16px;
+}
+.settings-identity-review dl {
+  margin: 0;
+  padding: 4px 16px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+}
+.settings-identity-review dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 16px;
+  padding-block: 12px;
+}
+.settings-identity-review dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.settings-identity-review dl > div + div {
+  border-top: 1px solid var(--color-border-secondary);
+}
+.book-settings-identity .identity-fields .onboarding-choice > div {
+  display: contents;
+}
+.settings-tax-residences ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.settings-tax-residences li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--color-border-secondary);
+}
+
+.book-settings-page.settings-canvas .vult-settings-section {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.book-settings-page.settings-canvas
+  .vult-settings-section
+  + .vult-settings-section {
+  position: relative;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.book-settings-page.settings-canvas .vult-settings-section-header {
+  padding: 0 0 16px;
+  border: 0;
+}
+
+.book-settings-page.settings-canvas .vult-settings-rows,
+.book-settings-page.settings-canvas .book-settings-identity-group-fields,
+.book-settings-page.settings-canvas .book-settings-identity .identity-history {
+  min-width: 0;
+  padding: 0;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-2xl);
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+/* Legal identity has its own named groups, each with a separate shell. */
+.book-settings-page.settings-canvas
+  .vult-settings-rows:has(> .book-settings-identity) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.book-settings-page.settings-canvas .vult-settings-rows,
+.book-settings-page.settings-canvas .book-settings-details-form,
+.book-settings-page.settings-canvas .book-url-form,
+.book-settings-page.settings-canvas .book-settings-identity .identity-fields,
+.book-settings-page.settings-canvas .book-settings-identity-group-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.book-settings-page.settings-canvas .vult-settings-rows > .book-url-form:first-child {
+  border: 0;
+}
+
+.book-settings-page.settings-canvas .vult-settings-row,
+.book-settings-page.settings-canvas
+  .book-settings-identity
+  .identity-fields
+  .field {
+  padding: 20px 24px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.book-settings-page.settings-canvas .vult-settings-row + .vult-settings-row,
+.book-settings-page.settings-canvas .book-url-form + .vult-settings-row,
+.book-settings-page.settings-canvas
+  .vult-settings-rows
+  > .book-url-form:not(:first-child),
+.book-settings-page.settings-canvas
+  .book-settings-identity
+  .book-settings-identity-group-fields
+  .field {
+  border-top: 1px solid var(--color-border-secondary);
+}
+
+.book-settings-page.settings-canvas
+  .book-settings-identity
+  .book-settings-identity-group-fields
+  > .field:first-child,
+.book-settings-page.settings-canvas
+  .book-settings-identity
+  .book-settings-identity-group-fields
+  > .form-grid:first-child
+  > .field:first-child {
+  border-top: 0;
+}
+
+.book-settings-page.settings-canvas .book-settings-identity .identity-history {
+  padding: 20px 24px;
+}
+
+@media (width < 768px) {
+  .workspace-page.book-settings-page.settings-canvas {
+    min-height: calc(100dvh - 88px);
+    /* The shell's 16px + this 16px = 32px total on mobile. */
+    padding: 16px;
+  }
+
+  .book-settings-page.settings-canvas .vult-settings-row,
+  .book-settings-page.settings-canvas
+    .book-settings-identity
+    .identity-fields
+    .field,
+  .book-settings-page.settings-canvas
+    .book-settings-identity
+    .identity-history {
+    padding: 16px;
+  }
+}
+
+/* Group headings stay outside their shells; all identity fields share one form. */
+.book-settings-page.settings-canvas
+  .book-settings-identity
+  .identity-fields[data-grouped] {
+  gap: 12px;
+}
+
+.book-settings-page.settings-canvas .book-settings-identity-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.book-settings-page.settings-canvas .book-settings-identity-group > h3 {
+  margin: 0;
+}
+
+.book-settings-page.settings-canvas
+  .book-settings-identity-group.settings-identity-details {
+  display: block;
+}
+
+.book-settings-page.settings-canvas
+  .book-settings-identity-group-fields
+  > .form-grid {
+  display: contents;
+}

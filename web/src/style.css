@@ -1,0 +1,12 @@
+@import "./design-system/styles/index.css";
+@import "./components/shell/app-shell.css";
+@import "./components/ui/controls.css";
+@import "./styles/book.css";
+@import "./styles/multicurrency.css";
+@import "./design-system/collection-layout.css";
+@import "./components/workspaces/workspaces.css";
+@import "./components/workspaces/dashboard.css";
+@import "./design-system/money.css";
+@import "./design-system/neutral-surfaces.css";
+@import "./design-system/text-selection.css";
+@import "./design-system/styles/product-typography.css";

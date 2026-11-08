@@ -1,0 +1,43 @@
+.rolling-number { position: relative; display: inline-flex; font-variant-numeric: tabular-nums; }
+.rolling-number-visual { position: relative; z-index: 1; display: inline-flex; user-select: none; pointer-events: none; }
+/* Same glyphs, same widths, under the wheels: invisible, but selectable and copyable.
+   Its selection highlight paints behind the digits, like ordinary selected text. */
+.rolling-number-text {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  color: transparent;
+  white-space: pre;
+  user-select: text;
+}
+.rolling-number-text::selection { color: transparent; }
+.rolling-char { white-space: pre; }
+.rolling-digit {
+  position: relative;
+  display: inline-block;
+  height: 1lh;
+  overflow: hidden;
+  mask-image: linear-gradient(transparent, black 22%, black 78%, transparent);
+}
+.rolling-digit-size { visibility: hidden; }
+.rolling-digit-strip {
+  position: absolute;
+  inset: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+.rolling-digit-strip > span { height: 1lh; }
+
+/* An amount's fraction: smaller and quieter, on the whole part's baseline.
+   `clip` keeps each wheel's baseline on its digit, where `hidden` would move
+   it to the wheel's bottom edge. */
+.rolling-number[data-fraction] .rolling-number-visual { align-items: baseline; }
+.rolling-number[data-fraction] .rolling-digit { overflow: clip; }
+/* Display amounts are 24px; their fraction takes the 14px role. */
+.rolling-fraction {
+  font-size: var(--text-vult-ui);
+  color: var(--color-text-secondary);
+}

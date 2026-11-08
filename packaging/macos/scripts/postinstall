@@ -43,6 +43,53 @@ gid=$(/usr/bin/dscl . -read /Users/_vultledger PrimaryGroupID | /usr/bin/awk '{p
 /usr/sbin/chown root:wheel "$base"
 /bin/chmod -N "$base"
 /bin/chmod 0755 "$base"
+if ! /usr/bin/dscl . -read /Users/_vultbrowser >/dev/null 2>&1; then
+    selected=
+    number=400
+    while [ "$number" -lt 500 ]; do
+        if ! /usr/bin/dscl . -list /Users UniqueID | /usr/bin/awk '{print $2}' | /usr/bin/grep -qx "$number" &&
+           ! /usr/bin/dscl . -list /Groups PrimaryGroupID | /usr/bin/awk '{print $2}' | /usr/bin/grep -qx "$number"; then
+            selected=$number
+            break
+        fi
+        number=$((number + 1))
+    done
+    [ -n "$selected" ] || fail "No unused browser identity is available."
+    /usr/bin/dscl . -create /Groups/_vultbrowser
+    /usr/bin/dscl . -create /Groups/_vultbrowser PrimaryGroupID "$selected"
+    /usr/bin/dscl . -create /Groups/_vultbrowser Password '*'
+    /usr/bin/dscl . -create /Users/_vultbrowser
+    /usr/bin/dscl . -create /Users/_vultbrowser UniqueID "$selected"
+    /usr/bin/dscl . -create /Users/_vultbrowser PrimaryGroupID "$selected"
+    /usr/bin/dscl . -create /Users/_vultbrowser RealName 'Vult Browser'
+    /usr/bin/dscl . -create /Users/_vultbrowser NFSHomeDirectory /var/empty
+    /usr/bin/dscl . -create /Users/_vultbrowser UserShell /usr/bin/false
+    /usr/bin/dscl . -create /Users/_vultbrowser Password '*'
+    /usr/bin/dscl . -create /Users/_vultbrowser IsHidden 1
+fi
+browser_uid=$(/usr/bin/dscl . -read /Users/_vultbrowser UniqueID | /usr/bin/awk '{print $2}')
+browser_gid=$(/usr/bin/dscl . -read /Users/_vultbrowser PrimaryGroupID | /usr/bin/awk '{print $2}')
+[ "$browser_uid" -gt 0 ] && [ "$browser_gid" -gt 0 ] && [ "$browser_uid" != "$uid" ] || fail "The browser identity must be separate from the ledger."
+/usr/sbin/dseditgroup -o edit -a _vultbrowser -t user _vultbrowser
+/usr/sbin/dseditgroup -o edit -a _vultledger -t user _vultbrowser
+if [ ! -e "$base/browser-installation" ]; then
+    /usr/bin/printf 'vult-browser-v1 %s %s\n' "$browser_uid" "$browser_gid" > "$base/browser-installation"
+    /usr/sbin/chown root:wheel "$base/browser-installation"
+    /bin/chmod 0644 "$base/browser-installation"
+fi
+for path in "$base/browser" "$base/postgres"; do
+    owner=0
+    [ "$path" != "$base/postgres" ] || owner=$uid
+    [ ! -L "$path" ] || fail "A browser service directory is a symbolic link."
+    if [ -e "$path" ]; then
+        [ -d "$path" ] && [ "$(/usr/bin/stat -f %u "$path")" = "$owner" ] && [ "$(/usr/bin/stat -f %g "$path")" = "$browser_gid" ] || fail "A browser service directory has an unexpected owner."
+    else
+        /bin/mkdir "$path"
+        /usr/sbin/chown "$owner:$browser_gid" "$path"
+    fi
+    /bin/chmod -N "$path"
+    /bin/chmod 0750 "$path"
+done
 if [ ! -e "$base/installation" ]; then
     /usr/bin/printf 'vult-service-v1 %s %s\n' "$uid" "$gid" > "$base/installation"
     /usr/sbin/chown root:wheel "$base/installation"
@@ -81,7 +128,10 @@ fi
 attempt=0
 while [ "$attempt" -lt 30 ]; do
     if "$binary" status >/dev/null 2>&1; then
-        echo "Vult installed. Run $binary init from your own terminal."
+        "$binary" _browser_install || fail "Local browser setup failed; stored Books were preserved."
+        /bin/launchctl bootstrap system /Library/LaunchDaemons/ai.vult.browser.plist
+        /bin/launchctl kickstart system/ai.vult.browser
+        echo "Vult installed. Next: $binary mcp install, then $binary setup."
         exit 0
     fi
     attempt=$((attempt + 1))

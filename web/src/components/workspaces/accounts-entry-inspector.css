@@ -1,0 +1,22 @@
+.accounts-inspector-layout[data-desktop-inspector]
+  > .accounts-inspector-frame[data-entry-inspector] {
+  grid-template-columns: var(--accounts-tree-column-width) minmax(0, 1fr) var(--vult-inspector-width);
+}
+
+.account-entry-inspector {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-2xl);
+  background: var(--color-bg-primary);
+}
+
+.account-entry-inspector[data-open="false"] {
+  display: none;
+}
+.account-entry-inspector > .collection-inspector-panel {
+  flex: 1;
+  min-width: 0;
+}

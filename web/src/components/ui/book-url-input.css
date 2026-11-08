@@ -1,0 +1,29 @@
+.book-url-input,
+.book-url-input > .vult-input-group {
+  width: 100%;
+  min-width: 0;
+}
+.book-url-input > .vult-input-group {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+.book-url-input .vult-input-group > [data-leading] {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  min-width: 0;
+  max-width: 60%;
+  background: var(--color-bg-secondary);
+}
+.book-url-input .vult-input-prefix {
+  display: block;
+  overflow: hidden;
+  color: var(--color-text-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.book-url-input .vult-input-group > .vult-input-control {
+  flex: 1 1 0;
+  min-width: 0;
+}

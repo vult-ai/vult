@@ -1,0 +1,70 @@
+.account-avatar {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: var(--account-avatar-size);
+  height: var(--account-avatar-size);
+  --account-avatar-color: var(--color-chart-violet);
+}
+.account-avatar .account-avatar-content {
+  border-radius: 50%;
+  background: var(--account-avatar-color);
+  outline: none;
+}
+.account-avatar .account-avatar-content > :is(span, svg) {
+  color: var(--color-on-pastel);
+}
+.account-avatar[data-avatar-unknown] .account-avatar-content > :is(span, svg) {
+  color: var(--color-text-tertiary);
+}
+.account-avatar[data-avatar-pending] .account-avatar-disk,
+.account-avatar[data-avatar-pending] .institution-logo,
+.account-avatar[data-counterparty-avatar]:has(.institution-logo:not([data-loaded])) .account-avatar-disk {
+  visibility: hidden;
+}
+.institution-logo {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  box-sizing: border-box;
+  padding: var(--account-mark-padding);
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--institution-background-light);
+  opacity: 0;
+}
+.institution-logo[data-loaded] {
+  opacity: 1;
+}
+.institution-logo-viewport {
+  position: absolute;
+  inset: var(--account-mark-padding);
+  overflow: hidden;
+  border-radius: 50%;
+}
+.institution-logo-viewport > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform: scale(var(--institution-circle-fit)) translate(var(--institution-center-x), var(--institution-center-y));
+  transform-origin: center;
+}
+.institution-logo[data-render="monochrome"] img {
+  opacity: 0;
+}
+.institution-logo-mark {
+  position: absolute;
+  inset: 0;
+  transform: scale(var(--institution-circle-fit)) translate(var(--institution-center-x), var(--institution-center-y));
+  transform-origin: center;
+  background: var(--institution-foreground-light);
+  mask: var(--institution-source) center / contain no-repeat;
+  -webkit-mask: var(--institution-source) center / contain no-repeat;
+}
+.dark-mode .institution-logo {
+  background: var(--institution-background-dark);
+}
+.dark-mode .institution-logo-mark {
+  background: var(--institution-foreground-dark);
+}

@@ -1,0 +1,258 @@
+/* App shell standard v1 (docs/design/shell.md). Every page sits in the same
+   rail, page bar and canvas; these tokens are the only place their sizes live. */
+:root {
+  --vult-shell-rail-width: 256px;
+  --vult-shell-rail-collapsed-width: 64px;
+  --vult-shell-row-height: var(--vult-control-height-sm);
+  --vult-shell-row-gap: 4px;
+  --vult-shell-header-height: 56px;
+  --vult-shell-header-gutter: 16px;
+  --vult-shell-header-gutter-wide: 24px;
+  --vult-shell-header-content-gap: 8px;
+  --vult-shell-switcher-max-width: 180px;
+  --vult-shell-switcher-phone-max-width: 148px;
+  --vult-workspace-max-width: 1440px;
+  --vult-workspace-gutter: 16px;
+}
+
+/* One interpolated value keeps panel, controls and group spacing in phase. */
+@property --vult-sidebar-collapse {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+.vult-shell-rail,
+.vult-shell-rail-space {
+  display: none;
+}
+
+/* The rail is one floating panel that reflows into an icon rail when collapsed. */
+@media (min-width: 48rem) {
+  .vult-shell-rail,
+  .vult-shell-rail-space {
+    --vult-sidebar-collapse: 0;
+    --vult-shell-rail-current: calc(
+      var(--vult-shell-rail-width) -
+        (var(--vult-shell-rail-width) - var(--vult-shell-rail-collapsed-width)) *
+        var(--vult-sidebar-collapse)
+    );
+    transition: --vult-sidebar-collapse 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .vult-shell-rail[data-expanded="false"],
+  .vult-shell-rail-space[data-expanded="false"] {
+    --vult-sidebar-collapse: 1;
+  }
+  .vult-shell-rail-space {
+    display: block;
+    width: var(--vult-shell-rail-current);
+    flex: none;
+  }
+
+  .vult-shell-rail {
+    position: absolute;
+    z-index: 40;
+    inset: 0 auto 0 0;
+    display: flex;
+    width: var(--vult-shell-rail-current);
+    padding: var(--vult-shell-panel-inset);
+  }
+
+  .vult-shell-panel {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: var(--vult-shell-panel-radius);
+    background: var(--vult-navigation-surface);
+    box-shadow: var(--vult-shell-panel-shadow);
+  }
+
+  .vult-shell-rail-header {
+    display: flex;
+    height: var(--vult-shell-header-height);
+    flex: none;
+    align-items: center;
+    padding: 0.5rem;
+  }
+
+  /* Rows fill the panel less its inset and group padding (8px on each side). */
+  .vult-shell-rail-brand,
+  .vult-shell-rail .vult-navigation-item {
+    width: calc(var(--vult-shell-rail-current) - 2rem);
+    height: var(--vult-shell-row-height);
+    overflow: hidden;
+  }
+  .vult-shell-rail-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    white-space: nowrap;
+  }
+  .vult-shell-rail-brand > div {
+    flex: none;
+  }
+
+  .vult-shell-rail-body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.5rem;
+    overflow: hidden auto;
+  }
+
+  .vult-shell-group {
+    min-width: 0;
+    padding: 0.5rem;
+  }
+  .vult-shell-rail-footer {
+    padding: 0.5rem;
+  }
+  .vult-shell-rail nav > ul {
+    gap: var(--vult-shell-row-gap);
+  }
+
+  .vult-shell-rail .vult-navigation-item > :is(a, button) {
+    overflow: hidden;
+    padding: 0.5rem;
+  }
+  .vult-shell-rail .vult-navigation-item > :is(a, button) > span {
+    flex: none;
+    gap: 0.5rem;
+  }
+  .vult-shell-rail .vult-navigation-item > button > span {
+    flex: 1;
+  }
+  .vult-shell-rail .vult-rail-label {
+    flex: none;
+    overflow: clip;
+    white-space: nowrap;
+    text-overflow: clip;
+  }
+  .vult-shell-rail .vult-navigation-item .vult-rail-label {
+    font-size: 0.875rem;
+  }
+
+  .vult-sidebar-toggle {
+    display: flex;
+    width: 2rem;
+    height: 2rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    background: transparent;
+    transition:
+      background-color 150ms ease,
+      transform 150ms ease;
+  }
+  @media (hover: hover) {
+    .vult-sidebar-toggle:hover {
+      background: var(--vult-interaction-hover);
+    }
+  }
+  .vult-sidebar-toggle:active {
+    transform: scale(0.97);
+  }
+  .vult-sidebar-toggle-divider {
+    transform: translateX(0);
+    transition: transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .vult-sidebar-toggle[data-icon-expanded="false"]
+    .vult-sidebar-toggle-divider {
+    transform: translateX(-4px);
+  }
+  .light-mode .vult-shell-rail {
+    --vult-interaction-hover: oklch(0.97 0 0);
+    --vult-interaction-selected: oklch(0.97 0 0);
+    --vult-interaction-selected-hover: oklch(0.97 0 0);
+  }
+}
+
+.vult-shell-rail[data-animate="false"],
+.vult-shell-rail[data-animate="false"] *,
+.vult-shell-rail-space[data-animate="false"],
+.vult-sidebar-toggle[data-animate="false"] .vult-sidebar-toggle-divider {
+  transition-duration: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vult-shell-rail,
+  .vult-shell-rail *,
+  .vult-shell-rail-space,
+  .vult-sidebar-toggle,
+  .vult-sidebar-toggle-divider {
+    transition-duration: 0s;
+  }
+}
+
+/* Retain the tooltip between icons; move its surface instead of replaying a pop animation. */
+.vult-tooltip-scan {
+  pointer-events: none;
+  transition:
+    top 120ms ease-out,
+    left 120ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vult-tooltip-scan {
+    transition: none;
+  }
+}
+
+/* One page bar geometry on every page, at every width. */
+.vult-shell-header {
+  height: var(--vult-shell-header-height);
+  min-height: var(--vult-shell-header-height);
+  margin: 0;
+  padding: 0 var(--vult-shell-header-gutter);
+  border: 0;
+}
+
+.vult-shell-search {
+  position: relative;
+  width: var(--vult-control-height-sm);
+  padding-inline: 0;
+}
+
+.vult-shell-search > [data-text] {
+  min-width: 0;
+  display: none;
+}
+
+@media (min-width: 48rem) {
+  .vult-shell-header {
+    padding-inline: var(--vult-shell-header-gutter-wide);
+  }
+
+  .vult-shell-search {
+    width: 8.5rem;
+    justify-content: space-between;
+    padding-inline: 8px;
+  }
+
+  .vult-shell-search > [data-text] {
+    display: flex;
+  }
+}
+
+.vult-sidebar-header-divider {
+  width: 1px;
+  height: 1rem;
+  margin-inline: 0.25rem;
+  background: var(--vult-workbench-border);
+}
+
+.vult-shell-breadcrumb-divider {
+  transform: rotate(20deg);
+}
+
+@media (max-width: 47.999rem) {
+  .vult-sidebar-header-divider {
+    margin-inline: 0.125rem;
+  }
+}
+

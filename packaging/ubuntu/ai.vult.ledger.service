@@ -1,0 +1,36 @@
+[Unit]
+Description=Vult ledger
+After=dbus.service polkit.service
+Requires=dbus.service
+
+[Service]
+Type=simple
+Slice=system.slice
+User=_vultledger
+Group=_vultledger
+SupplementaryGroups=_vultbrowser
+WorkingDirectory=/var/lib/vult/data
+ExecStart=/opt/vult/vult _serve
+Environment=PATH=/usr/bin:/bin LANG=C LC_ALL=C
+UMask=0077
+Restart=on-failure
+RestartSec=10
+KillMode=mixed
+TimeoutStopSec=75
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectControlGroups=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/vult/data /var/lib/vult/socket /var/lib/vult/postgres
+RestrictAddressFamilies=AF_UNIX
+LimitCORE=0
+LimitNOFILE=512
+StandardOutput=null
+StandardError=journal
+SyslogIdentifier=vult-ledger
+
+[Install]
+WantedBy=multi-user.target

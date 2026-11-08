@@ -1,0 +1,59 @@
+/* Toolbar standard v1 (docs/design/toolbars.md). */
+.vult-collection-toolbar {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 16px;
+  min-width: 0;
+}
+/* The identity keeps its full width; the actions are what move. */
+.vult-collection-toolbar-lead {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--records-band-height, 40px);
+  white-space: nowrap;
+}
+.vult-collection-toolbar-actions {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: var(--records-band-height, 40px);
+  margin-inline-start: auto;
+}
+.vult-collection-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+@media (max-width: 640px) {
+  .vult-collection-toolbar-lead {
+    flex-basis: 100%;
+  }
+  /* On phones the view tabs drop their counts so all of them fit. */
+  .vult-collection-toolbar-lead [data-collection-count] {
+    display: none;
+  }
+  .vult-collection-toolbar-actions {
+    justify-content: flex-start;
+    margin-inline-start: 0;
+  }
+}
+/* Controls keep their natural size; a select never stretches across the band. */
+.vult-collection-toolbar-actions > * {
+  flex: 0 0 auto;
+  width: auto;
+}
+/* Narrow: the actions take their own row. */
+@media (width < 768px) {
+  .vult-collection-toolbar-actions {
+    flex: 1 1 100%;
+  }
+}

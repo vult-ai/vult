@@ -55,6 +55,11 @@ func validToken(raw string) bool {
 type Service struct {
 	auth, owners *pgxpool.Pool
 	origin       string
+	// agentOrigin, when set, is the only public origin for agent OAuth and MCP.
+	// Browser sign-in and consent stay on origin.
+	agentOrigin string
+	// signInPath is where a signed-out owner is sent during agent consent.
+	signInPath string
 }
 
 func New(auth, owners *pgxpool.Pool, origin string) (*Service, error) {
@@ -63,6 +68,38 @@ func New(auth, owners *pgxpool.Pool, origin string) (*Service, error) {
 		return nil, ErrDenied
 	}
 	return &Service{auth: auth, owners: owners, origin: origin}, nil
+}
+
+// SetSignInPath sends owners who are signed out during agent consent to the
+// deployment's own sign-in page, a same-origin absolute path. The deployment
+// must return them to ResumeAuthorization's path after sign-in.
+func (s *Service) SetSignInPath(path string) error {
+	if s.signInPath != "" || !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || strings.ContainsAny(path, "?#\\ \t\r\n") || len(path) > 128 {
+		return ErrDenied
+	}
+	s.signInPath = path
+	return nil
+}
+
+// SignInPath is where agent consent sends a signed-out owner.
+func (s *Service) SignInPath() string {
+	if s.signInPath != "" {
+		return s.signInPath
+	}
+	return "/auth/login"
+}
+
+// SetAgentOrigin serves agent registration, token exchange and MCP from their
+// own HTTPS origin, which then becomes the OAuth issuer and protected resource.
+// It must be a different host from the browser origin and is set once.
+func (s *Service) SetAgentOrigin(origin string) error {
+	u, e := url.Parse(origin)
+	browser, _ := url.Parse(s.origin)
+	if s.agentOrigin != "" || e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.String() != origin || u.Host == browser.Host {
+		return ErrDenied
+	}
+	s.agentOrigin = origin
+	return nil
 }
 
 // IssueSession accepts only an identity already verified by the configured
@@ -92,10 +129,28 @@ func (s *Service) Identity(ctx context.Context, raw string) (Identity, error) {
 }
 
 func (s *Service) Tenants(ctx context.Context, raw string) ([]string, error) {
+	return s.tenants(ctx, raw, 0)
+}
+
+// TenantsBounded returns an explicit limit error instead of a partial owner list.
+func (s *Service) TenantsBounded(ctx context.Context, raw string, limit int) ([]string, error) {
+	if limit < 1 || limit > 1000 {
+		return nil, ledger.ErrInvalid
+	}
+	return s.tenants(ctx, raw, limit)
+}
+
+func (s *Service) tenants(ctx context.Context, raw string, limit int) ([]string, error) {
 	if !validToken(raw) {
 		return nil, ErrDenied
 	}
-	rows, e := s.auth.Query(ctx, "SELECT access.session_tenants($1,$2)::text", Hash(raw), s.origin)
+	query := "SELECT access.session_tenants($1,$2)::text"
+	args := []any{Hash(raw), s.origin}
+	if limit > 0 {
+		query += " LIMIT $3"
+		args = append(args, limit+1)
+	}
+	rows, e := s.auth.Query(ctx, query, args...)
 	if e != nil {
 		return nil, ErrDenied
 	}
@@ -111,6 +166,9 @@ func (s *Service) Tenants(ctx context.Context, raw string) ([]string, error) {
 	if rows.Err() != nil || len(out) == 0 {
 		return nil, ErrDenied
 	}
+	if limit > 0 && len(out) > limit {
+		return nil, ledger.ErrLimit
+	}
 	return out, nil
 }
 
@@ -124,8 +182,8 @@ func (s *Service) EndSession(ctx context.Context, raw string) error {
 	return nil
 }
 
-// WithOwner holds live session, identity and ownership rows through completion.
-// The transaction's credentials have no global installation authority.
+// WithOwner keeps session, identity and ownership rows and rechecks clock-based
+// authorization before commit. Its credentials have no installation authority.
 func (s *Service) WithOwner(ctx context.Context, raw, tenant string, writing bool, call func(ledger.TenantAdmin) error) error {
 	if call == nil {
 		return ErrDenied
@@ -134,6 +192,10 @@ func (s *Service) WithOwner(ctx context.Context, raw, tenant string, writing boo
 }
 
 func (s *Service) withOwner(ctx context.Context, raw, tenant string, writing, fresh bool, requestLock string, call func(pgx.Tx, ledger.TenantAdmin, string) error) error {
+	return withOwnerPool(ctx, s.owners, s.origin, raw, tenant, writing, fresh, requestLock, call)
+}
+
+func withOwnerPool(ctx context.Context, owners *pgxpool.Pool, origin, raw, tenant string, writing, fresh bool, requestLock string, call func(pgx.Tx, ledger.TenantAdmin, string) error) error {
 	if !validToken(raw) || !ledger.ValidID(tenant) || call == nil {
 		return ErrDenied
 	}
@@ -141,7 +203,7 @@ func (s *Service) withOwner(ctx context.Context, raw, tenant string, writing, fr
 	if writing {
 		level = pgx.ReadCommitted
 	}
-	tx, e := s.owners.BeginTx(ctx, pgx.TxOptions{IsoLevel: level})
+	tx, e := owners.BeginTx(ctx, pgx.TxOptions{IsoLevel: level})
 	if e != nil {
 		return ErrDenied
 	}
@@ -151,7 +213,7 @@ func (s *Service) withOwner(ctx context.Context, raw, tenant string, writing, fr
 			return ErrDenied
 		}
 	}
-	if _, e = tx.Exec(ctx, "SELECT set_config('vult.owner_session',$1,true),set_config('vult.owner_origin',$2,true),set_config('vult.tenant_id',$3,true)", Hash(raw), s.origin, tenant); e != nil {
+	if _, e = tx.Exec(ctx, "SELECT set_config('vult.owner_session',$1,true),set_config('vult.owner_origin',$2,true),set_config('vult.tenant_id',$3,true)", Hash(raw), origin, tenant); e != nil {
 		return ErrDenied
 	}
 	var who string
@@ -165,9 +227,18 @@ func (s *Service) withOwner(ctx context.Context, raw, tenant string, writing, fr
 	if e = call(tx, owner, who); e != nil {
 		return e
 	}
+	// The held rows cannot be revoked concurrently, but time can still expire
+	// the session or its required fresh proof while the callback is running.
+	var confirmed string
+	if e = tx.QueryRow(ctx, "SELECT access.require_owner($1,$2)::text", tenant, fresh).Scan(&confirmed); e != nil || confirmed != who {
+		return ErrDenied
+	}
 	if e = tx.Commit(ctx); e != nil {
 		var p *pgconn.PgError
 		if errors.As(e, &p) {
+			if p.Code == "VP001" {
+				return ledger.ErrProposalStale
+			}
 			if p.Code == "42501" {
 				return ErrDenied
 			}

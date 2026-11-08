@@ -1,0 +1,120 @@
+/* Side panel standard v1 (docs/design/side-panels.md): every panel beside a
+   collection is the same width, set here once. */
+:root {
+  --vult-inspector-width: 304px;
+}
+
+/* The shared collection and inspector surface. */
+.collection-inspector {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--vult-inspector-width);
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius-3xl);
+  background: var(--vult-navigation-surface);
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  margin-block-start: -8px;
+  margin-block-end: 8px;
+}
+
+.collection-inspector-collection {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--radius-2xl);
+  background: var(--vult-workbench-surface-base);
+  box-shadow:
+    0 2px 8px rgb(0 0 0 / 0.055),
+    0 0 2px rgb(0 0 0 / 0.035);
+}
+
+.collection-inspector-collection .vult-collection-layout {
+  --vult-collection-bottom-inset: 12px;
+  padding-block-start: 12px;
+}
+
+.collection-inspector-collection .vult-collection-with-toolbar {
+  /* The toolbar supplies the remaining 4px: controls have equal 12px gutters
+     above, beside, and between their bottom edge and the table. */
+  padding-block-start: 8px;
+}
+
+.collection-inspector-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  /* The body's scrollbar sits 4px from the panel's edge; text keeps its 16px inset. */
+  padding: 8px 4px 16px 8px;
+}
+
+.collection-inspector-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 12px 12px 8px;
+}
+
+.collection-inspector-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* The app's scrollbar; its space is reserved so content never shifts when it
+     appears, and 8px stay clear between it and the content. */
+  scrollbar-gutter: stable;
+  padding: 0 8px 8px;
+}
+
+.collection-inspector-body[data-empty] {
+  display: flex;
+}
+.collection-inspector-empty {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+}
+.collection-inspector-footer {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  border-top: 1px solid var(--color-border-secondary);
+  padding: 12px 12px 0 8px;
+}
+.collection-inspector tr[data-details-open] > td,
+.collection-inspector tr[data-details-open] {
+  background-color: var(--vult-workbench-surface-control);
+}
+
+/* Width belongs to the workspace, including the persistent navigation rail. */
+.collection-inspector[data-compact] {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 6px;
+  border-radius: 20px;
+}
+.collection-inspector[data-compact] .collection-inspector-collection {
+  border-radius: 14px;
+}
+.collection-inspector[data-compact] .collection-inspector-panel {
+  padding: 8px;
+}
+.collection-inspector[data-compact] .collection-inspector-header {
+  justify-content: flex-start;
+  min-height: 36px;
+  padding-bottom: 12px;
+}
+.collection-inspector-collection[hidden],
+.collection-inspector-panel[hidden] {
+  display: none;
+}

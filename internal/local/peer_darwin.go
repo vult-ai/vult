@@ -27,3 +27,8 @@ func PeerUID(c *net.UnixConn) (uint32, error) {
 	}
 	return uid, result
 }
+
+func PeerIdentity(c *net.UnixConn) (Peer, error) {
+	uid, err := PeerUID(c)
+	return Peer{UID: uid}, err
+}

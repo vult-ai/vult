@@ -1,13 +1,15 @@
 # Vult
 
-A double-entry ledger for agents. Agents supply debits and credits;
-Vult records a balanced, immutable journal.
+A double-entry ledger for agents. Your agent keeps your Book; you see it, check
+it and trust it. Agents supply debits and credits; Vult records a balanced,
+immutable journal, and you review it in your browser.
 
-Vult 0.3.0 supports local use on **macOS 26 on Apple Silicon** and a separate
-**Linux server** behind HTTPS. The macOS installer includes PostgreSQL and uses
-only a local socket, with no Docker dependency. Server mode adds human sign-in,
-scoped owner administration and OAuth for remote agents. There is no bookkeeping
-web application.
+Vult 0.4.0 targets local use on **macOS 26 on Apple Silicon** and
+**Ubuntu 24.04 LTS on x86-64 with GNOME and Chrome**, plus a separate
+**Linux server** behind HTTPS. The native installers include PostgreSQL; agents
+use its protected local socket and the browser uses local HTTPS, with no Docker
+dependency. Server mode adds human sign-in,
+scoped owner administration and OAuth for remote agents.
 
 Original documents are encrypted at rest and kept with their Book. Journal
 entries can cite document locations and have explicit supporting evidence.
@@ -16,7 +18,7 @@ posted accounting. See [documents](docs/documents.md).
 
 ## Start a Book
 
-Install from your own terminal:
+On a supported Mac, install from your own terminal:
 
 ```sh
 curl -fsSL https://vult.sh | sh
@@ -25,6 +27,9 @@ curl -fsSL https://vult.sh | sh
 The installer downloads a fixed release, checks its SHA-256, and asks for native
 administrator approval to install the protected service. It includes PostgreSQL;
 you do not need Docker, Go or a compiler. See [installation](docs/install.md).
+For Ubuntu, use the separate [native Ubuntu installer](packaging/ubuntu/README.md)
+with its matching release archive. The commands below are the same there, run as
+`/opt/vult/vult`, with approval through your desktop's system prompt.
 
 The macOS package is **unsigned and not notarized by Apple**. Its executable
 signatures are ad-hoc. The terminal installer checks the pinned package checksum
@@ -77,18 +82,44 @@ The installer places the protected executable at
 only when `/usr/local/bin` is protected and no command already occupies that
 name. Otherwise, use the full executable path above.
 
+## Review your Book in the browser
+
+Run `vult open` from your own terminal. The first time, it sets up a passkey for
+this installation; see [open in your browser](docs/install.md#open-in-your-browser).
+The browser shows what your agents recorded:
+
+- **Dashboard:** income and expenses by period, where the money went, what you
+  own and owe, and cash by account. Refunds and credits stay visible as
+  reductions.
+- **Transactions and accounts:** every entry with its lines, dates and original
+  documents, and every account's balance and history.
+- **Statements:** balance sheet, income statement, trial balance, general ledger
+  and journal for any period, with the facts each rests on (basis, coverage and
+  when the figures were recorded), exportable as CSV.
+- **Sources and search:** the original documents kept with the Book, and search
+  across entries, accounts and documents.
+- **Settings:** your name, photo, appearance and number and date formats, the
+  Book's logo, details and address, connected agents, and downloads of the whole Book.
+
+The Dashboard speaks plainly; Statements give professionals the basis, coverage
+and checks behind each figure. See [dashboard](docs/dashboard.md),
+[reports](docs/reports.md) and [search](docs/search.md).
+
 ## What agents can do
 
 Create and revise accounts, post general journal entries, reverse entries,
-read journals, read balances and a trial balance, and check earlier request
-outcomes. With document storage enabled there are 20 MCP tools; read connections
-expose 12. Existing no-source journal requests retain their behavior. The
-[bookkeeping skill](skills/vult-bookkeeping/SKILL.md) explains source reuse,
-evidence links and safe retry recovery.
+read journals, read balances and a trial balance, search the Book, and check
+earlier request outcomes. Agents can queue exact journal entries and reversals
+for owner review. An approval posts the reviewed entry, and the agent can read
+the outcome. Read connections expose inspection tools; write connections also
+expose recording and proposal tools. The
+[bookkeeping skill](skills/vult-bookkeeping/SKILL.md) covers accounts, dates,
+common postings, statement comparisons, source reuse and safe retry recovery.
 
 Amounts are **integer strings in the Book's minor unit**: `"1250"` means 12.50
-when the scale is 2. Vult never calculates exchange rates. Each Book has one
-fixed currency and scale.
+when the scale is 2. Each Book has one fixed currency and scale. Native movements,
+contextual amounts and explicit valuation inputs are described in
+[currency measurements](docs/currency-measurements.md).
 
 Every posting has an economic date, an accounting date and a service-recorded
 timestamp. A reversal mirrors every original line and uses an open accounting
@@ -114,21 +145,24 @@ vult --version
 vult help
 ```
 
-Closed periods cannot be reopened in this version. Export is **plaintext**;
+Closing a period is permanent. Export is **plaintext**;
 backup is encrypted with the recovery key. Output files are created with private
 permissions and never overwrite existing files. Restore requires an empty
 installation, preserves recorded financial rows, and does not restore connection
 grants. Create new connections after a restore. Backups include originals and
 their relationship history, with up to 64 MiB of metadata and an 8 GiB archive.
 Document-inclusive export is a plaintext portable archive. Existing encrypted
-finance-only backups remain recoverable; journal JSON exports support up to
-100,000 entries.
+finance-only backups remain recoverable. Journal JSON exports support up to
+100,000 entries. The bundled interface also provides
+[owner settings and Book downloads](docs/owner-settings.md).
 
 `vult uninstall` requests administrator approval and removes only the program,
 service and startup entry. It keeps your Books, credentials and recovery key at
 `/Library/Application Support/ai.vult.ledger/`, retains the `_vultledger` account,
-and leaves backups wherever you saved them. Reinstalling reuses that account and
-stored data. There is no command to delete financial data. See
+and leaves backups wherever you saved them. It also removes the copies of
+statements that agents read, kept in `~/Library/Application Support/Vult/Documents`
+for a day after each was made. Reinstalling reuses that account and
+stored data. See
 [removal and reinstall](docs/install.md#remove-or-reinstall).
 
 Agents cannot create Books, grant access, close periods or invoke owner backup
@@ -145,12 +179,10 @@ not a sandbox for other applications or for a compromised operating system.
 
 See [SECURITY.md](SECURITY.md) and the [ledger model](docs/ledger.md).
 
-This version contains the general ledger and opaque original-document storage.
-It does not parse documents, reconcile statements, connect to banks, execute
-payments or provide transaction templates or a bookkeeping web interface. Agents
-interpret documents outside Vult and submit journal entries. Later releases can
-add capabilities with forward migrations; published
-releases and migration files remain fixed.
+Agents interpret original documents and submit journal entries; Vult retains the
+recorded financial effects and their document relationships. Published releases
+and migration files remain fixed; later releases add capabilities with forward
+migrations.
 
 ## Build and contribute
 
@@ -159,8 +191,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for build and test requirements and
 
 For self-hosting, see [running a Linux server](docs/server.md). Built-in sign-in
 uses a passphrase and authenticator; OIDC is optional. Server identity and billing
-integrations use extension interfaces. Open alone checks tenant and Book access.
+integrations use extension interfaces; Vult itself checks tenant and Book access.
 The macOS command continues to use native approval over its local socket.
 
 Apache-2.0. See [LICENSE](LICENSE), [NOTICE](NOTICE) and
-[third-party notices](THIRD_PARTY_NOTICES.md).
+[third-party notices](THIRD_PARTY_NOTICES.md). Some interface components are
+adapted from [TUFFUI](https://tuffui.com) (MIT).

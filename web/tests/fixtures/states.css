@@ -1,0 +1,270 @@
+/* Review gallery only. Product styles live with the components. */
+html,
+body {
+  margin: 0;
+  background: var(--vult-studio-canvas, var(--color-bg-primary));
+  color: var(--color-text-primary);
+}
+.gallery {
+  display: grid;
+  gap: 16px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+.gallery h1,
+.gallery h2,
+.gallery h3,
+.gallery p {
+  margin: 0;
+}
+.gallery-muted {
+  color: var(--color-text-tertiary);
+}
+.gallery-header {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 8px;
+}
+.gallery-header > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+.gallery-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+.gallery-segmented {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+.gallery-segmented-label {
+  color: var(--color-text-tertiary);
+}
+.gallery-segmented > div {
+  display: inline-flex;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--color-bg-secondary);
+  box-shadow: inset 0 0 0 1px var(--color-border-secondary);
+}
+.gallery-segmented button {
+  flex: none;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.gallery-segmented button[aria-checked="true"] {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  box-shadow: 0 0 0 1px var(--color-border-secondary);
+}
+.gallery-segmented button:focus-visible {
+  outline: 2px solid var(--color-fg-quaternary);
+  outline-offset: 1px;
+}
+.gallery-case {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--color-bg-secondary);
+}
+.gallery-case-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.gallery-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.gallery-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-bg-primary);
+  box-shadow: inset 0 0 0 1px var(--color-border-secondary);
+  color: var(--color-text-secondary);
+}
+.gallery-chip[data-tone="critical"] {
+  background: var(--color-bg-error-primary);
+  box-shadow: inset 0 0 0 1px var(--color-border-error_subtle);
+  color: var(--color-text-error-primary);
+}
+.gallery-chip[data-tone="attention"] {
+  color: var(--color-text-primary);
+}
+.gallery-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.gallery-column {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.gallery-cell {
+  min-width: 0;
+  border-radius: 12px;
+  background: var(--color-bg-primary);
+  box-shadow: inset 0 0 0 1px var(--color-border-secondary);
+}
+/* A page specimen is a miniature screen, so its height is capped here. */
+.gallery-page .vult-state[data-scope="page"] {
+  min-height: 320px;
+  padding: 32px 16px;
+}
+.gallery-region {
+  padding: 12px;
+}
+.gallery-region-heading {
+  padding: 0 4px 8px;
+  border-bottom: 1px solid var(--color-border-secondary);
+  color: var(--color-text-secondary);
+}
+.gallery-inline,
+.gallery-field {
+  padding: 16px;
+}
+.gallery-field {
+  max-width: 360px;
+}
+.gallery-cell-unused {
+  display: grid;
+  place-items: center;
+  min-height: 72px;
+  padding: 12px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--color-border-secondary);
+  text-align: center;
+}
+.gallery-cell-unused p {
+  color: var(--color-text-quaternary, var(--color-text-tertiary));
+}
+.gallery-recovered {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 72px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--color-bg-primary);
+  box-shadow: inset 0 0 0 1px var(--color-border-secondary);
+  color: var(--color-text-secondary);
+}
+.gallery-body {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+/* Phone width: specimens stack at 390 px. Notices that change layout by
+   viewport (below 480 px) show that only in a narrow window. */
+.gallery-body[data-width="narrow"] {
+  width: min(100%, 390px);
+}
+.gallery-body[data-width="narrow"] .gallery-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.gallery-body[data-width="narrow"] .gallery-case {
+  padding: 12px;
+}
+@media (max-width: 960px) {
+  .gallery-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.gallery-section {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+}
+.gallery-section + .gallery-section {
+  margin-top: 16px;
+  border-top: 1px solid var(--color-border-secondary);
+}
+.gallery-section-header {
+  display: grid;
+  gap: 12px;
+}
+.gallery-section h3 {
+  margin: 0;
+}
+.gallery-rules {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--color-bg-secondary);
+}
+.gallery-rules dt,
+.gallery-rules dd {
+  margin: 0;
+}
+.gallery-grid-two {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+}
+.gallery-lifecycle {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.gallery-lifecycle > .gallery-cell {
+  width: 100%;
+  min-height: 200px;
+}
+.gallery-body[data-width="narrow"] .gallery-rules,
+.gallery-body[data-width="narrow"] .gallery-grid-two {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 960px) {
+  .gallery-rules,
+  .gallery-grid-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.gallery-stack {
+  display: grid;
+  gap: 12px;
+  max-width: 560px;
+}
+.gallery-confirm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr));
+  align-items: start;
+  gap: 24px;
+}
+/* A static confirmation specimen: the dialog surface without the overlay. */
+.gallery-dialog {
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-primary);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.04);
+}
+.gallery-evidence {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  list-style: none;
+}

@@ -6,21 +6,58 @@
 `GET`/`HEAD /healthz` checks liveness and `/readyz` checks the database schema
 receipt. Configured sign-in is served under `/auth/`, OAuth under `/oauth/`, and
 the ledger tools through `/mcp`, with document tools when storage is configured.
+With `mcp_origin` set, MCP and agent OAuth move to that origin instead (see
+[Remote agents](#remote-agents)).
 Probe readiness alone does not verify
 identity-provider or deployment policy configuration.
 
 ## Build
 
-Use Go 1.27.3 and select the server's architecture (`amd64` or `arm64`):
+Use Go 1.27.3, Node 26.7.0 and npm 11.19.0. Build the interface from the same
+committed source:
 
 ```sh
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false -o build/vult-server ./cmd/vult-server
-docker build --platform linux/amd64 -f packaging/linux/Dockerfile -t vult-server .
+(
+set -eu
+cd web
+npm ci --ignore-scripts
+npm run build
+cd ..
+python3 scripts/package_macos.py --print-web-sha256 web/dist
+)
 ```
 
-The image contains only the static executable and runs as UID/GID 65532. It has
+Keep the printed interface manifest checksum with the source revision. Replace
+`INTERFACE_MANIFEST_SHA256` below with that checksum. Stage a new source tree
+with the same source selection and verified interface as the macOS builder,
+then select the server's architecture (`amd64` or `arm64`):
+
+```sh
+(
+set -eu
+python3 - INTERFACE_MANIFEST_SHA256 <<'PY'
+from pathlib import Path
+import sys
+
+source = Path.cwd()
+sys.path.insert(0, str(source / "scripts"))
+from package_macos import materialize, selected_files, stage_interface
+
+staged = source / "build/server-source"
+staged.mkdir(parents=True, exist_ok=False)
+materialize(source, staged, selected_files(source))
+stage_interface(source / "web/dist", staged / "web/dist", sys.argv[1])
+PY
+(cd build/server-source && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags=webui -trimpath -buildvcs=false -o ../vult-server ./cmd/vult-server)
+docker build --platform linux/amd64 -f packaging/linux/Dockerfile -t vult-server .
+)
+```
+
+The image contains the static executable and its license notices, and runs as
+UID/GID 65532. The notices are in `/usr/share/licenses/vult/`. It has
 no shell, database, migration runner or embedded credentials. The build context
-selects only the executable. No image is downloaded by the scratch recipe.
+selects only the executable and those three notice files. No image is downloaded
+by the scratch recipe.
 
 ## Run behind HTTPS
 
@@ -39,12 +76,21 @@ explicit host, database and runtime user. Remote databases require
 `sslmode=verify-full`; plaintext is allowed only over a loopback address or local
 Unix socket. Mount the host's trusted CA bundle for TLS verification.
 
+Give the bundled browser a dedicated writable staging directory owned by
+UID/GID 65532 with mode 0700. Set TMPDIR to its mounted path. The browser
+limits its encrypted download spools to 8 GiB plus 128 MiB in total per
+listener. Allow that much free space to accommodate the largest export and
+concurrent transfers.
+
 On a Linux host, with its HTTPS proxy and PostgreSQL independently managed:
 
 ```sh
+sudo install -d -m 0700 -o 65532 -g 65532 /var/lib/vult-export-tmp
 docker run --name vult-server --network host --read-only \
   --cap-drop ALL --security-opt no-new-privileges:true \
   --memory 256m --cpus 1 --pids-limit 128 \
+  --env TMPDIR=/run/vult/exports \
+  --mount type=bind,src=/var/lib/vult-export-tmp,dst=/run/vult/exports \
   --mount type=bind,src=/etc/vult/server.json,dst=/run/vult/server.json,readonly \
   --mount type=bind,src=/etc/vult/runtime.dsn,dst=/run/vult/runtime.dsn,readonly \
   --mount type=bind,src=/etc/ssl/certs/ca-certificates.crt,dst=/etc/ssl/certs/ca-certificates.crt,readonly \
@@ -67,6 +113,16 @@ Errors, dependency failures and recovered panics produce fixed diagnostics, neve
 request bodies, credentials, financial descriptions or raw SQL/provider errors.
 Configure the HTTPS proxy and deployment logging to the same rule: no financial
 payloads, cookies, authorization headers or sensitive URL parameters.
+
+### Institution and brand artwork
+
+The interface shows bank and brand logos from a public artwork origin,
+`https://assets.vult.ai` by default. The browser reads its catalogs and images
+directly, without credentials, cookies or a referrer, and sends no Book data.
+`shared_asset_origin` sets another canonical HTTPS origin, such as
+`"https://artwork.example.com"`, or `"off"` to show initials only. The page's
+content security policy allows that one origin for images and catalogs. When it
+can't be reached, avatars show initials.
 
 ## Extension contracts
 
@@ -189,6 +245,16 @@ public-client registration. It accepts exact registered HTTPS or IP-loopback
 callbacks, authorization code flow with S256 PKCE, and the exact `/mcp` resource.
 It does not accept bearer tokens in URLs or browser cookies as agent credentials.
 
+To give agents their own address, set `mcp_origin` to a second canonical HTTPS
+origin on a different host, such as `https://mcp.ledger.example.com`, and route
+that host through the same trusted proxy. Agents then use that origin itself as
+the MCP URL and resource, and it is the OAuth issuer with registration and token
+exchange. Owners still sign in and consent at `origin`, which stops serving
+`/mcp`, `/oauth/register`, `/oauth/token` and OAuth discovery. The MCP origin
+serves only those routes. Existing grants stay valid, but connected clients must
+reconnect with the new URL. `mcp_origin` cannot be combined with
+`local_browser`.
+
 Registration is limited to 128 new clients per hour and 4,096 retained clients.
 Unused registrations may expire after 24 hours. New registrations reclaim a
 bounded batch of old clients that have neither grants nor retained authorization
@@ -228,6 +294,12 @@ grant a tenant or Book permission.
 `OwnerAdmission` can restrict a new scoped owner effect in its transaction.
 It runs after ownership/fresh-MFA verification and retained-outcome lookup, so
 owner retries also avoid duplicate charges. It cannot create owner authority.
+For approval, it sees `decide_operation`. The approved posting runs
+`Admission.Check` and, when configured, `TransactionAdmission` with the
+preparer's recorded scope in the live owner transaction. If only
+`OwnerAdmission` is configured for transactional policy, it also checks the
+underlying posting. The deployment must allow its posting policy to run on the
+restricted owner connection. A refusal rolls back both decision and posting.
 
 ## Scoped owner API
 
@@ -271,6 +343,10 @@ offline `vult-server-admin document-key` command: its private input is
 `{"tenant_id":"TENANT_ID"}` and `--output` selects a new key file. Existing output
 is never replaced. Retain old key versions and an offline recovery copy.
 Opening the server never provisions or replaces a missing key.
+
+Linux disk storage requires a filesystem that can verify the absence of POSIX
+access and default ACLs. Extended ACLs and unverifiable access controls are
+refused, even when the ordinary mode bits appear private.
 
 Alternatively, configure `key_directory` instead of `key_file`. The directory
 must already exist, owned by the service account with mode 0700. To provision a

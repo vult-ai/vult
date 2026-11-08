@@ -1,55 +1,46 @@
 package daemon
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"syscall"
-	"time"
 
-	"github.com/vult-ai/vult/internal/local"
 	"github.com/vult-ai/vult/internal/strictjson"
 )
 
-const programRoot = "/Library/PrivilegedHelperTools/ai.vult.ledger"
-const launchDaemon = "/Library/LaunchDaemons/ai.vult.ledger.plist"
 const programManifest = "program-files.json"
 
 type removalManifest struct {
-	Format             string            `json:"format"`
-	Version            string            `json:"version"`
-	Files              map[string]string `json:"files"`
-	LaunchDaemonSHA256 string            `json:"launch_daemon_sha256"`
+	Format              string            `json:"format"`
+	Version             string            `json:"version"`
+	Files               map[string]string `json:"files"`
+	LaunchDaemonSHA256  string            `json:"launch_daemon_sha256"`
+	BrowserDaemonSHA256 string            `json:"browser_daemon_sha256,omitempty"`
+	ExternalFiles       map[string]string `json:"external_files,omitempty"`
 }
-type removalPaths struct{ Code, Plist, Shortcut, Retained string }
+type removalPaths struct{ Code, Startup, Policy, Shortcut, Retained string }
 type removalResult struct {
 	Removed int
 	Kept    []string
 }
 
-func nativeRemovalPaths() removalPaths {
-	return removalPaths{programRoot, launchDaemon, "/usr/local/bin/vult", filepath.Dir(local.DataPath)}
-}
 func inside(base, path string) bool {
 	rel, e := filepath.Rel(base, path)
 	return e == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
 }
 func (p removalPaths) validate() error {
-	for _, path := range []string{p.Code, p.Plist, p.Retained} {
+	for _, path := range []string{p.Code, p.Startup, p.Retained} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path || path == "/" {
 			return errors.New("invalid program removal path")
 		}
 	}
-	for _, path := range []string{p.Code, p.Plist, p.Shortcut} {
+	for _, path := range []string{p.Code, p.Startup, p.Policy, p.Shortcut} {
 		if path != "" && (!filepath.IsAbs(path) || inside(p.Retained, path) || inside(path, p.Retained)) {
 			return errors.New("program removal overlaps retained storage")
 		}
@@ -60,8 +51,15 @@ func programPath(root, name string) (string, error) {
 	if name == "" || filepath.IsAbs(name) || filepath.Clean(name) != name || strings.Contains(name, "\\") {
 		return "", errors.New("invalid managed program path")
 	}
-	if name != "vult" && name != "LICENSE" && name != "NOTICE" && name != "THIRD_PARTY_NOTICES.md" && !strings.HasPrefix(name, "postgres/") {
-		return "", errors.New("unknown managed program path")
+	switch name {
+	case "vult", "LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md",
+		"Vult Browser Setup.app/Contents/Info.plist",
+		"Vult Browser Setup.app/Contents/MacOS/browser-setup",
+		"Vult Browser Setup.app/Contents/_CodeSignature/CodeResources":
+	default:
+		if !strings.HasPrefix(name, "postgres/") {
+			return "", errors.New("unknown managed program path")
+		}
 	}
 	path := filepath.Join(root, name)
 	if !inside(root, path) {
@@ -128,7 +126,7 @@ func readRemovalManifest(p removalPaths) (removalManifest, error) {
 		return m, errors.New("invalid program inventory")
 	}
 	b, e := io.ReadAll(io.LimitReader(f, (1<<20)+1))
-	if e != nil || strictjson.Decode(b, &m) != nil || m.Format != "vult-program-files-v1" || m.Version != Version || len(m.Files) == 0 || len(m.Files) > 4096 {
+	if e != nil || strictjson.Decode(b, &m) != nil || (m.Format != "vult-program-files-v1" && m.Format != "vult-program-files-linux-v1") || m.Version != Version || len(m.Files) == 0 || len(m.Files) > 4096 {
 		return m, errors.New("unsupported program inventory")
 	}
 	if _, ok := m.Files["vult"]; !ok {
@@ -145,13 +143,54 @@ func readRemovalManifest(p removalPaths) (removalManifest, error) {
 			return m, errors.New("invalid managed checksum")
 		}
 	}
-	if len(m.LaunchDaemonSHA256) != 64 {
-		return m, errors.New("missing launch daemon checksum")
-	}
-	if _, e = hex.DecodeString(m.LaunchDaemonSHA256); e != nil {
+	if _, e = managedExternalFiles(p, m); e != nil {
 		return m, e
 	}
 	return m, nil
+}
+
+func managedExternalFiles(p removalPaths, m removalManifest) (map[string]string, error) {
+	files := map[string]string{}
+	if m.Format == "vult-program-files-linux-v1" {
+		if p.Policy == "" || m.LaunchDaemonSHA256 != "" || m.BrowserDaemonSHA256 != "" || len(m.ExternalFiles) != 3 {
+			return nil, errors.New("invalid Linux program inventory")
+		}
+		for source, destination := range map[string]string{
+			"/etc/systemd/system/ai.vult.ledger.service":       p.Startup,
+			"/etc/systemd/system/ai.vult.browser.service":      filepath.Join(filepath.Dir(p.Startup), "ai.vult.browser.service"),
+			"/usr/share/polkit-1/actions/ai.vult.owner.policy": p.Policy,
+		} {
+			files[destination] = m.ExternalFiles[source]
+		}
+	} else {
+		if len(m.ExternalFiles) != 0 || p.Policy != "" {
+			return nil, errors.New("unexpected external program files")
+		}
+		files[p.Startup] = m.LaunchDaemonSHA256
+		if m.BrowserDaemonSHA256 != "" {
+			files[filepath.Join(filepath.Dir(p.Startup), "ai.vult.browser.plist")] = m.BrowserDaemonSHA256
+		}
+	}
+	for _, sum := range files {
+		if len(sum) != 64 || strings.ToLower(sum) != sum {
+			return nil, errors.New("invalid startup checksum")
+		}
+		if _, err := hex.DecodeString(sum); err != nil {
+			return nil, errors.New("invalid startup checksum")
+		}
+	}
+	return files, nil
+}
+
+func verifyBrowserStartup(p removalPaths, m removalManifest, uid uint32) error {
+	if m.BrowserDaemonSHA256 == "" {
+		return errors.New("unrecognized browser startup entry; no service was stopped")
+	}
+	match, err := matchesProgramFile(filepath.Join(filepath.Dir(p.Startup), "ai.vult.browser.plist"), m.BrowserDaemonSHA256, uid)
+	if err != nil || !match {
+		return errors.New("browser startup entry changed; no service was stopped")
+	}
+	return nil
 }
 
 // Removal is a whitelist of unchanged program files. No recursive deletion is
@@ -191,8 +230,19 @@ func removeProgram(p removalPaths, uid uint32, stop func() error) (removalResult
 		r.Removed++
 		return nil
 	}
-	if e = remove(p.Plist, m.LaunchDaemonSHA256); e != nil {
+	external, e := managedExternalFiles(p, m)
+	if e != nil {
 		return r, e
+	}
+	paths := make([]string, 0, len(external))
+	for path := range external {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		if e = remove(path, external[path]); e != nil {
+			return r, e
+		}
 	}
 	for _, name := range names {
 		path, e := programPath(p.Code, name)
@@ -235,167 +285,4 @@ func removeProgram(p removalPaths, uid uint32, stop func() error) (removalResult
 		}
 	}
 	return r, nil
-}
-
-func Uninstall(ctx context.Context, out, errout io.Writer) error {
-	if runtime.GOOS != "darwin" {
-		return errors.New("native uninstall requires macOS")
-	}
-	for _, path := range []string{"/Library", "/Library/PrivilegedHelperTools", programRoot} {
-		if e := protected(path, 0, true); e != nil {
-			return e
-		}
-	}
-	if e := protected(local.BinaryPath, 0, false); e != nil {
-		return e
-	}
-	fmt.Fprintf(out, "Uninstall removes Vult's software and startup entry.\nBooks, credentials and recovery key stay at %s\nThe _vultledger account is retained for reinstall. Backups stay wherever you saved them.\n", filepath.Dir(local.DataPath))
-	command := local.BinaryPath + " _uninstall"
-	script := fmt.Sprintf("do shell script %q with administrator privileges with prompt %q", command, "Remove Vult software and keep all Books and backups.")
-	cmd := exec.CommandContext(ctx, "/usr/bin/osascript", "-e", script)
-	cmd.Env = []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin", "LANG=C"}
-	cmd.Stdout = out
-	cmd.Stderr = errout
-	if e := cmd.Run(); e != nil {
-		return errors.New("software removal did not complete; retained storage was not deleted")
-	}
-	return nil
-}
-
-func NativeStop(ctx context.Context) error {
-	if runtime.GOOS != "darwin" || os.Geteuid() != 0 {
-		return errors.New("native administrator control required")
-	}
-	for _, path := range []string{"/Library", "/Library/PrivilegedHelperTools", programRoot} {
-		if e := protected(path, 0, true); e != nil {
-			return e
-		}
-	}
-	uid, gid, e := serviceIdentity()
-	if e != nil {
-		return e
-	}
-	if e = installationData(uid); e != nil {
-		return e
-	}
-	run := func(name string, args ...string) error {
-		cmd := exec.CommandContext(ctx, name, args...)
-		cmd.Env = []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin", "LANG=C", "LC_ALL=C"}
-		return cmd.Run()
-	}
-	if run("/bin/launchctl", "print", "system/ai.vult.ledger") == nil {
-		if e = run("/bin/launchctl", "bootout", "system/ai.vult.ledger"); e != nil {
-			return errors.New("could not stop the ledger service")
-		}
-	}
-	lock, e := os.OpenFile(filepath.Join(local.DataPath, "service.lock"), os.O_RDWR|syscall.O_NOFOLLOW, 0)
-	if e == nil {
-		defer lock.Close()
-		deadline := time.Now().Add(40 * time.Second)
-		for {
-			if e = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); e == nil {
-				break
-			}
-			if time.Now().After(deadline) {
-				return errors.New("ledger service has not stopped")
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(100 * time.Millisecond):
-			}
-		}
-		defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
-	} else if !os.IsNotExist(e) {
-		return e
-	}
-	pid := filepath.Join(local.DataPath, "database", "postmaster.pid")
-	if _, e = os.Lstat(pid); os.IsNotExist(e) {
-		return nil
-	} else if e != nil {
-		return e
-	}
-	ctl := filepath.Join(PostgresPath, "bin/pg_ctl")
-	if e = protected(ctl, 0, false); e != nil {
-		return e
-	}
-	m, e := readRemovalManifest(nativeRemovalPaths())
-	if e != nil {
-		return e
-	}
-	match, e := matchesProgramFile(ctl, m.Files["postgres/bin/pg_ctl"], 0)
-	if e != nil || !match {
-		return errors.New("database control program does not match the installed inventory")
-	}
-	cmd := exec.CommandContext(ctx, ctl, "-D", filepath.Join(local.DataPath, "database"), "-m", "fast", "-w", "-t", "30", "stop")
-	cmd.Env = []string{"PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C", "TMPDIR=" + local.DataPath}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uid, Gid: gid, Groups: []uint32{gid}}}
-	if e = cmd.Run(); e != nil {
-		return errors.New("database did not stop; no program files were removed")
-	}
-	return nil
-}
-
-func UninstallNative(ctx context.Context, out io.Writer) error {
-	if runtime.GOOS != "darwin" || os.Geteuid() != 0 {
-		return errors.New("native administrator removal required")
-	}
-	p := nativeRemovalPaths()
-	for _, path := range []string{"/Library", "/Library/PrivilegedHelperTools", p.Code} {
-		if e := protected(path, 0, true); e != nil {
-			return e
-		}
-	}
-	if e := protected(filepath.Join(p.Code, programManifest), 0, false); e != nil {
-		return e
-	}
-	m, e := readRemovalManifest(p)
-	if e != nil {
-		return e
-	}
-	parents := map[string]bool{filepath.Dir(p.Plist): true, p.Code: true}
-	for name := range m.Files {
-		path, e := programPath(p.Code, name)
-		if e != nil {
-			return e
-		}
-		for parent := filepath.Dir(path); inside(p.Code, parent); parent = filepath.Dir(parent) {
-			parents[parent] = true
-			if parent == p.Code {
-				break
-			}
-		}
-	}
-	for parent := range parents {
-		if _, e := os.Lstat(parent); os.IsNotExist(e) {
-			continue
-		}
-		if e := protected(parent, 0, true); e != nil {
-			return e
-		}
-	}
-	// A shell shortcut is optional, and is touched only under protected parents.
-	for _, path := range []string{"/usr", "/usr/local", "/usr/local/bin"} {
-		if protected(path, 0, true) != nil {
-			p.Shortcut = ""
-			break
-		}
-	}
-	stopCtx, cancel := context.WithTimeout(ctx, 75*time.Second)
-	defer cancel()
-	r, e := removeProgram(p, 0, func() error { return NativeStop(stopCtx) })
-	if e != nil {
-		return e
-	}
-	cmd := exec.CommandContext(ctx, "/usr/sbin/pkgutil", "--forget", "ai.vult.ledger")
-	cmd.Env = []string{"PATH=/usr/bin:/bin", "LANG=C"}
-	_ = cmd.Run() // Forgetting an absent receipt is harmless; it never removes files.
-	fmt.Fprintf(out, "Vult software removed. Books and credentials remain at %s\nBackups and the _vultledger account were not removed.\n", p.Retained)
-	if len(r.Kept) > 0 {
-		fmt.Fprintln(out, "Modified or additional program files were kept:")
-		for _, path := range r.Kept {
-			fmt.Fprintln(out, path)
-		}
-	}
-	return nil
 }

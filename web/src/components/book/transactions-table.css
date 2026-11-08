@@ -1,0 +1,151 @@
+/* Financial cell content composes the source grid; its surface, rows, borders,
+   selection, resizing and interaction styles remain owned by RecordsTable. */
+.transaction-counterparty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.transaction-counterparty > .entry-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+.transaction-counterparty-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-counterparty > .badge {
+  flex: none;
+}
+/* Amounts end-align (docs/design/tables.md); money in carries a plus. */
+.transaction-money {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.transaction-money > .transaction-native {
+  order: -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-text-tertiary);
+}
+.transaction-ledger {
+  flex: none;
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+.transaction-category {
+  color: var(--color-text-secondary);
+}
+
+.transaction-attachments {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+}
+
+.transaction-amount-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+/* The source grid still owns selection, focus, scrolling and pagination.
+   A single phone cell composes the complete row instead of overlapping tracks. */
+.transactions-ledger-compact tbody > tr[data-record-id] > td {
+  height: auto;
+  min-height: 68px;
+  padding-block: 12px;
+  white-space: normal;
+}
+.transactions-ledger-compact tbody > tr[data-record-id] > td > div {
+  height: auto;
+  min-height: 44px;
+  width: 100%;
+}
+/* Phone row: the avatar spans both lines, centred with the checkbox; the name
+   and amount share the first line, date and account the second. */
+.transaction-mobile-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 4px 12px;
+  white-space: normal;
+}
+.transaction-mobile-avatar {
+  display: flex;
+  grid-row: 1 / span 2;
+}
+.transaction-mobile-top,
+.transaction-mobile-context {
+  grid-column: 2;
+}
+.transaction-mobile-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.transaction-mobile-top > .transaction-counterparty {
+  flex: 1 1 100px;
+  min-width: 0;
+}
+.transaction-mobile-top .entry-link {
+  min-height: 24px;
+  width: 100%;
+  text-align: left;
+}
+.transaction-mobile-top .transaction-counterparty-name {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+.transaction-mobile-top .transaction-money-compact {
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin-inline-start: auto;
+  padding-block-start: 2px;
+  white-space: nowrap;
+}
+.transaction-money-compact > .transaction-native {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+}
+.transaction-mobile-context {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+}
+.transaction-mobile-context .transaction-date {
+  flex: none;
+}
+.transaction-mobile-category {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A single summary track follows the viewport; it has no manual sizing action. */
+.transactions-ledger-compact thead [role="slider"] {
+  display: none;
+}

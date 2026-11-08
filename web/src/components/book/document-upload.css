@@ -1,0 +1,32 @@
+/* Adding originals from the browser: a drop target, the chooser and a short log. */
+.document-drop-area { position: relative; min-width: 0; }
+.document-drop-overlay {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  border: 1px dashed var(--color-border-brand);
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--color-bg-primary) 88%, transparent);
+  color: var(--color-text-primary);
+  pointer-events: none;
+}
+.document-upload-panel { display: flex; flex: 1; flex-direction: column; gap: 16px; min-height: 0; }
+.document-drop-zone { display: flex; flex: 1; min-height: 200px; border: 1px dashed var(--color-border-primary); border-radius: var(--radius-xl); }
+.document-drop-zone-body { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px 16px; text-align: center; }
+.document-drop-zone-body p { margin: 0; }
+.document-drop-zone-body .vult-button { margin-top: 8px; }
+.document-upload-list header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.document-upload-list h3 { margin: 0; color: var(--color-text-tertiary); font-weight: inherit; }
+.document-upload-clear { padding: 0; border: 0; background: transparent; color: var(--color-text-tertiary); cursor: pointer; }
+.document-upload-clear:hover { color: var(--color-text-primary); }
+.document-upload-list ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.document-upload-list li { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 0; }
+.document-upload-list li > svg { color: var(--color-fg-success-primary); }
+.document-upload-list li[data-state="failed"] > svg { color: var(--color-fg-error-primary); }
+.document-upload-list li[data-state="failed"] .document-upload-state { color: var(--color-text-error-primary); }
+.document-upload-name { overflow: hidden; color: var(--color-text-primary); text-overflow: ellipsis; white-space: nowrap; }
+.document-upload-state { color: var(--color-text-tertiary); white-space: nowrap; }
+.document-upload-spinner { width: 14px; height: 14px; border: 2px solid var(--color-border-secondary); border-top-color: var(--color-text-tertiary); border-radius: var(--radius-full); animation: document-upload-spin 0.8s linear infinite; }
+@keyframes document-upload-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .document-upload-spinner { animation: none; } }
+/* With nothing selected, the drop zone fills the side panel. */
+.source-sidebar-body:has(> .document-upload-panel) { display: flex; flex-direction: column; }

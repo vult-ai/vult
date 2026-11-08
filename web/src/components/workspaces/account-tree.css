@@ -1,0 +1,756 @@
+.accounts-inspector-layout {
+  --accounts-tree-column-width: 344px;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.accounts-inspector-layout[data-desktop-inspector] > .accounts-inspector-frame {
+  flex: 1;
+  column-gap: 16px;
+  grid-template-columns: var(--accounts-tree-column-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
+  min-height: 0;
+  max-height: none;
+  align-self: stretch;
+  align-items: stretch;
+  margin-inline: 0;
+}
+.accounts-inspector-layout .collection-inspector-collection {
+  align-self: start;
+  justify-self: center;
+  width: 100%;
+  max-width: 584px;
+  max-height: 100%;
+  padding: 12px;
+}
+.accounts-inspector-layout[data-desktop-inspector]
+  .accounts-inspector-frame
+  > .collection-inspector-collection {
+  align-self: stretch;
+  height: 100%;
+}
+.accounts-inspector-frame[data-compact] {
+  width: 100%;
+  max-width: 596px;
+  margin-inline: auto;
+}
+.account-main-workspace {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+/* Match the collection workbench's 12px gutters and section rhythm. */
+.account-main-workspace .account-detail-header {
+  padding: 16px 12px 0;
+}
+.account-main-workspace .account-detail-header-minimal {
+  margin-bottom: 16px;
+}
+.account-main-workspace .account-detail-identity {
+  padding-inline: 12px;
+}
+.account-main-workspace
+  .account-detail-header:not(.account-detail-header-minimal) {
+  margin-bottom: 12px;
+}
+.account-main-workspace .account-workspace-activity-toolbar {
+  margin-bottom: 12px;
+}
+.account-main-workspace [data-testid="account-group-activity-frame"] {
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--vult-shell-panel-radius);
+  box-shadow: none;
+}
+.account-main-workspace .account-detail-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.account-main-workspace .account-group-activity-table {
+  flex: 1;
+  height: auto;
+  min-height: 260px;
+}
+.account-main-workspace
+  .account-group-activity-table
+  > .vult-collection-layout {
+  padding: 0;
+}
+.account-workspace-activity-heading {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-vult-ui);
+  font-weight: 500;
+}
+.accounts-inspector-layout[data-desktop-inspector] .account-tree-pane-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 4px;
+}
+.accounts-inspector-layout[data-desktop-inspector] .account-tree-pane-title {
+  grid-column: 1;
+  grid-row: 1;
+}
+.accounts-inspector-layout[data-desktop-inspector] .account-tree-pane-actions {
+  grid-column: 2;
+  grid-row: 1;
+}
+.light-mode .accounts-inspector-layout .collection-inspector-collection {
+  --vult-workbench-surface-base: #f9f9f9;
+  background: #f9f9f9;
+}
+
+.accounts-inspector-layout
+  .collection-inspector-collection
+  > .accounts-activity-page {
+  padding: 0;
+}
+.accounts-activity-page[data-tree-view] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.accounts-activity-page[data-tree-view]
+  :is(
+    .account-activity-surface,
+    .account-tree-workspace,
+    .account-tree-layout,
+    .account-tree-pane
+  ) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.accounts-activity-page[data-reordering-active] .account-tree {
+  overflow-anchor: none;
+  scroll-behavior: auto;
+}
+.account-tree-pane-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 8px;
+  min-height: 40px;
+  flex: none;
+  padding: 0 0 12px;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-ui);
+}
+.accounts-activity-page[data-tree-view] .account-activity-surface {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+}
+.account-tree-pane-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+.account-tree-pane-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.account-tree-options-trigger svg {
+  width: 16px;
+  height: 16px;
+}
+.account-tree-options {
+  width: 248px;
+  max-width: calc(100vw - 24px);
+  padding: 12px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+.account-tree-options h3 {
+  margin: 0 0 12px;
+  color: var(--color-text-primary);
+  font-size: var(--text-vult-ui);
+  font-weight: 500;
+}
+.account-tree-option-fields {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.account-tree-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.account-tree-scope > .vult-button {
+  padding-inline: 0;
+}
+.account-tree-workspace > .account-activity-context {
+  background: transparent;
+  border: 0;
+  padding-inline: 8px;
+}
+.account-tree-workspace {
+  width: 100%;
+  max-width: 560px;
+  margin-inline: auto;
+}
+.account-tree-layout {
+  display: block;
+  min-height: 0;
+}
+
+.account-tree-pane {
+  min-width: 0;
+}
+.account-tree-pane-title {
+  flex: 1;
+  min-width: 0;
+}
+.account-tree-frame {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+}
+.account-tree-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: inherit;
+  pointer-events: none;
+  /* Keep the scroll-edge curves without joining the separate group shells. */
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0 12px,
+    transparent 12px calc(100% - 12px),
+    #000 calc(100% - 12px) 100%
+  );
+}
+
+.account-tree-detail-slot {
+  min-width: 0;
+  padding: 8px 20px 20px;
+  border-inline-start: 1px solid var(--color-border-secondary);
+}
+.account-detail-empty {
+  padding: 48px 12px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-vult-ui);
+}
+.account-detail-empty p {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-metadata);
+  margin-top: 4px;
+}
+.account-detail-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin-bottom: 16px;
+}
+.account-detail-header h2 {
+  color: var(--color-text-primary);
+  font-size: var(--text-vult-section-title);
+  font-weight: 500;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.account-detail-header .account-group-activity-total {
+  margin: 0;
+  text-align: end;
+}
+.account-detail-header p {
+  grid-column: 1 / -1;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-metadata);
+  margin: 0;
+}
+.account-detail-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.account-tree-detail-slot .account-group-activity-table {
+  height: min(42vh, 400px);
+}
+.account-tree-columns > :first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-tree-columns .account-activity-count {
+  margin: 0;
+}
+.account-tree {
+  outline: none;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.account-tree-row {
+  --account-tree-indent: min(96px, calc(var(--account-depth, 0) * 16px));
+  --account-tree-identity-gap: 8px;
+  outline: none;
+  cursor: pointer;
+  position: relative;
+}
+.account-tree-row[data-group-shell] {
+  background: var(--color-bg-primary);
+}
+.account-tree-row[data-group-shell]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 1px solid var(--color-border-secondary);
+  border-block-width: 0;
+  border-radius: inherit;
+}
+.account-tree-row[data-group-first] {
+  border-start-start-radius: 12px;
+  border-start-end-radius: 12px;
+}
+.account-detail-identity {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-metadata);
+  overflow-wrap: anywhere;
+  margin: -4px 0 12px;
+}
+.account-tree-row[data-group-first]::before {
+  border-block-start-width: 1px;
+}
+.account-tree-row[data-group-last] {
+  border-end-start-radius: 12px;
+  border-end-end-radius: 12px;
+  margin-block-end: 8px;
+}
+.account-tree-row[data-group-last]:last-child {
+  margin-block-end: 0;
+}
+.account-tree-row[data-group-last]::before {
+  border-block-end-width: 1px;
+}
+.account-tree-guide {
+  position: absolute;
+  top: 0;
+  height: 40px;
+  left: min(90px, calc(10px + var(--guide-level) * 16px));
+  width: 20px;
+  overflow: visible;
+  color: var(--color-border-primary);
+  pointer-events: none;
+}
+.account-tree-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 20px 0 8px;
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+  color: var(--color-text-primary);
+}
+.account-tree-parent {
+  font-weight: 500;
+}
+.account-tree-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--account-tree-identity-gap);
+  min-width: 0;
+  position: relative;
+  min-height: 40px;
+  padding-inline-start: var(--account-tree-indent);
+}
+.account-tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.account-tree-suffix {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-metadata);
+  white-space: nowrap;
+}
+.account-tree-category {
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+.account-tree-chevron,
+.account-tree-chevron-space {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.account-tree-chevron {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 0;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+.account-tree-chevron[data-pressed],
+.account-tree-chevron:active {
+  background: var(--vult-control-ghost-hover);
+  transform: scale(0.98);
+}
+.account-tree-chevron svg {
+  width: 16px;
+  height: 16px;
+}
+.account-tree-row[data-expanded] > [role="gridcell"] .account-tree-chevron svg {
+  transform: rotate(90deg);
+}
+.account-tree-amount {
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: inherit;
+  text-align: right;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.account-tree-amount:disabled {
+  cursor: default;
+}
+.account-tree-customize {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  flex-shrink: 0;
+  opacity: 0;
+}
+.account-tree-row[data-focus-visible] {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+.account-tree-row:focus-within .account-tree-customize {
+  opacity: 1;
+}
+.account-tree button:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+.account-tree .account-row-grip {
+  position: static;
+  transform: none;
+  width: 20px;
+  height: 28px;
+  flex-shrink: 0;
+}
+.account-tree-frame[data-flat] .account-row-grip {
+  opacity: 1;
+}
+.account-tree-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-inline-start: 0;
+}
+@media (width < 1100px) {
+  .account-tree-layout {
+    display: block;
+    min-height: 0;
+  }
+  .account-tree-detail-slot {
+    display: none;
+  }
+}
+.account-tree-controls .vult-button {
+  font-size: var(--text-vult-metadata);
+}
+.account-detail-activity {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+  color: var(--color-brand-500);
+}
+.account-detail-activity .account-activity-sparkline {
+  width: min(360px, 100%);
+  height: 72px;
+}
+.account-detail-activity-label {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-metadata);
+  margin-bottom: 8px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .account-tree-chevron:hover {
+    background: var(--vult-control-ghost-hover);
+    color: var(--color-text-secondary);
+  }
+  .account-tree-row:hover:not(:has(.account-tree-chevron:hover))
+    .account-tree-customize {
+    opacity: 1;
+  }
+  .account-tree-amount:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+/* Compact navigation keeps the amount column and independent chevrons. */
+@container (width < 520px) {
+  .account-tree-row {
+    --account-tree-indent: min(48px, calc(var(--account-depth, 0) * 12px));
+    --account-tree-identity-gap: 6px;
+  }
+  .account-tree-guide {
+    left: min(42px, calc(10px + var(--guide-level) * 12px));
+  }
+  .account-tree-content,
+  .account-tree-columns {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding-inline: 8px 20px;
+  }
+  .account-tree-customize,
+  .account-tree-columns > :last-child {
+    display: none;
+  }
+  .account-tree-suffix {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .account-activity-basis {
+    flex-basis: 100%;
+  }
+  .account-tree-pane-heading {
+    flex-wrap: wrap;
+  }
+}
+
+.account-tree-row::after {
+  content: "";
+  position: absolute;
+  inset-block: 4px;
+  left: calc(
+    28px + var(--account-tree-identity-gap) + var(--account-tree-indent)
+  );
+  right: 4px;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  pointer-events: none;
+}
+.account-tree-row[data-account-selected]::after {
+  background: var(--color-bg-secondary);
+}
+@media (hover: hover) and (pointer: fine) {
+  .account-tree-row:hover:not(:has(.account-tree-chevron:hover))::after {
+    background: var(--color-bg-secondary_hover);
+  }
+}
+.account-tree-frame[data-flat] .account-tree-row::after {
+  left: 8px;
+}
+
+.account-tree-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.account-tree-gl-code {
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.account-tree-label {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-tree-label > .account-tree-suffix {
+  margin-inline-start: 4px;
+}
+
+/* The sidebar keeps the same 40px row geometry used by the hierarchy guides. */
+.accounts-inspector-layout[data-desktop-inspector] .account-tree-row {
+  --account-tree-indent: min(72px, calc(var(--account-depth, 0) * 12px));
+}
+.accounts-inspector-layout[data-desktop-inspector] .account-tree-guide {
+  left: min(66px, calc(10px + var(--guide-level) * 12px));
+}
+.accounts-inspector-layout[data-desktop-inspector] .account-tree-content {
+  gap: 8px;
+  padding-inline-end: 12px;
+}
+
+/* Small account metadata forms fit their content; history scrolls within the viewport. */
+
+.account-workspace-activity-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.account-activity-help {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+.account-activity-help[data-hovered],
+.account-activity-help[data-pressed] {
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary_hover);
+}
+.account-activity-help:focus-visible,
+.account-activity-help[data-focus-visible] {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .account-detail-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .account-detail-header .account-group-activity-total {
+    text-align: start;
+  }
+}
+
+.account-detail-header-group {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  column-gap: 8px;
+}
+.account-detail-header-group h2,
+.account-detail-header-group .account-group-activity-total {
+  font-size: var(--text-vult-compact-title);
+  line-height: var(--text-vult-compact-title--line-height);
+}
+.account-group-scope {
+  grid-column: 1 / -1;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-metadata);
+  line-height: var(--text-vult-metadata--line-height);
+}
+.account-group-scope > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-detail-header-minimal {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+  min-height: 28px;
+}
+.account-detail-title {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.account-detail-header-minimal .account-detail-title {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+}
+.account-detail-header-minimal h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-vult-compact-title);
+  line-height: var(--text-vult-compact-title--line-height);
+}
+.account-detail-header-minimal .account-detail-reference {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.account-detail-reference,
+.account-detail-scope {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-metadata);
+  line-height: var(--text-vult-metadata--line-height);
+}
+.account-detail-scope {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  margin-inline-start: auto;
+  white-space: nowrap;
+}
+.account-detail-tools {
+  flex: 0 0 auto;
+}
+.account-detail-header-minimal .account-group-activity-total {
+  font-size: var(--text-vult-ui);
+}
+
+.account-period-total {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+/* The Book search the tree is filtered by, on its own row under the title. */
+.account-tree-search-filter {
+  display: flex;
+  min-width: 0;
+}

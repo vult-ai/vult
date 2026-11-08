@@ -1,0 +1,7 @@
+/* Money uses readable product numerals. Keep code and IDs in the log font. */
+.vult-money {
+  font-family: var(--font-body);
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: normal;
+  white-space: nowrap;
+}

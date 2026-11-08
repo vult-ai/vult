@@ -1,0 +1,346 @@
+.onboarding {
+  --vult-control-input-background: var(--color-bg-primary);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  background: var(--vult-studio-canvas, var(--color-bg-primary));
+}
+.onboarding-particles {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+}
+.onboarding-header {
+  position: absolute;
+  inset: 28px 32px auto;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  max-width: 1120px;
+  margin-inline: auto;
+}
+.onboarding-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 112px 24px;
+  outline: none;
+}
+.onboarding-content {
+  width: 100%;
+  max-width: 380px;
+  min-width: 0;
+}
+.onboarding-brand {
+  margin-bottom: 28px;
+}
+.onboarding-main:has(.book-creation-wizard) {
+  padding-block: 80px;
+}
+.onboarding .book-creation-wizard {
+  display: flex;
+  flex-direction: column;
+  height: min(404px, calc(100svh - 224px));
+  min-height: 280px;
+}
+.onboarding .book-creation-body {
+  flex: 1;
+  min-height: 0;
+  margin: -2px;
+  padding: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.onboarding .book-creation-wizard .onboarding-actions {
+  flex: none;
+  margin-top: 16px;
+}
+.onboarding h1 {
+  margin: 0;
+  font-size: var(--text-vult-page-title);
+  line-height: 1.2;
+  outline: none;
+}
+.onboarding .onboarding-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+}
+.onboarding .onboarding-actions button {
+  width: auto;
+}
+.onboarding .onboarding-actions button:only-child {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+.create-book-form > .muted {
+  margin: 8px 0 24px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.create-book-form > .small {
+  margin: 16px 0;
+}
+@media (width < 768px) {
+  .onboarding-header {
+    right: 16px;
+    left: 16px;
+  }
+  .onboarding-main {
+    padding: 96px 24px 48px;
+  }
+  .onboarding-main:has(.book-creation-wizard) {
+    padding-block: 96px 48px;
+  }
+  .onboarding .book-creation-wizard {
+    height: min(404px, calc(100svh - 208px));
+  }
+}
+@media (width < 480px) {
+  .create-book-form .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+.onboarding-fields {
+  border: 0;
+  padding: 0;
+  margin: 24px 0;
+  min-width: 0;
+}
+.onboarding-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+.onboarding-review {
+  margin: 0;
+}
+.onboarding-review > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border-secondary);
+}
+.onboarding-review dt {
+  color: var(--color-text-tertiary);
+}
+.onboarding-review dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.onboarding-start-options {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+.onboarding-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-block: 16px;
+}
+.onboarding-confirm input {
+  flex: none;
+  width: auto;
+  margin-top: 4px;
+}
+
+.onboarding-purpose-choices {
+  display: grid;
+  gap: 12px;
+}
+.onboarding-purpose-choice {
+  padding: 16px;
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-primary);
+  cursor: pointer;
+}
+.onboarding-purpose-choice[data-selected] {
+  border-color: var(--color-text-primary);
+}
+.onboarding-purpose-choice[data-focus-visible] {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+.onboarding-purpose-hint {
+  margin: 16px 0 0;
+  font-size: var(--text-vult-ui);
+}
+
+.onboarding-more-options {
+  margin-top: 24px;
+  color: var(--color-text-secondary);
+}
+.onboarding-more-options > summary {
+  width: fit-content;
+  cursor: pointer;
+  font-size: var(--text-vult-ui);
+}
+.onboarding-more-options[open] > summary {
+  margin-bottom: 20px;
+}
+
+.book-creation-dialog .dialog-heading {
+  padding: 16px 24px 14px;
+}
+.book-creation-dialog .dialog-heading p {
+  max-width: 360px;
+}
+.book-creation-dialog .create-book-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 16px 24px 0;
+}
+.book-creation-step {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 8px;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-metadata);
+  line-height: var(--text-vult-metadata--line-height);
+}
+.book-creation-steps {
+  display: flex;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+}
+.book-creation-steps li {
+  flex: 1;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-quaternary);
+}
+.book-creation-steps li:is([aria-current="step"], [data-complete]) {
+  background: var(--color-text-primary);
+}
+.book-creation-dialog .book-creation-title {
+  margin: 0;
+  outline: none;
+  font-size: var(--text-vult-compact-title);
+  line-height: var(--text-vult-compact-title--line-height);
+  font-weight: var(--text-vult-compact-title--font-weight);
+}
+.create-book-form .onboarding-fields {
+  margin: 12px 0 16px;
+}
+.create-book-form .onboarding-purpose-choices {
+  gap: 10px;
+}
+.create-book-form .onboarding-purpose-choice {
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  border-radius: var(--radius-lg);
+}
+.create-book-form .onboarding-purpose-choice > div:last-child {
+  flex: 1;
+  min-width: 0;
+}
+.create-book-form .onboarding-purpose-choice[data-selected] {
+  border-color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  box-shadow: 0 0 0 1px var(--color-text-primary);
+}
+.book-purpose-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--color-text-primary);
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+  font-weight: 500;
+}
+.book-purpose-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+}
+.book-purpose-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.book-purpose-description {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-text-tertiary);
+  font-weight: 400;
+}
+.book-creation-dialog .onboarding-purpose-hint {
+  margin-top: 12px;
+  font-size: var(--text-vult-metadata);
+  line-height: var(--text-vult-metadata--line-height);
+}
+.book-creation-dialog .onboarding-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin: auto -24px 0;
+  padding: 12px 24px;
+  border-top: 1px solid var(--color-border-secondary);
+  background: var(--color-bg-primary);
+}
+.book-creation-dialog .onboarding-actions > :first-child:not(:only-child) {
+  margin-right: auto;
+}
+.create-book-form .onboarding-review {
+  padding: 4px 16px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+}
+.create-book-form .onboarding-review > div:last-child {
+  border-bottom: 0;
+}
+.create-book-form .onboarding-review > div {
+  padding-block: 8px;
+}
+.create-book-form .onboarding-fields > .small {
+  margin: 12px 0 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  .create-book-form .onboarding-purpose-choice:not([data-selected]):hover {
+    background: var(--color-bg-secondary);
+  }
+}
+@media (width < 480px) {
+  .book-creation-dialog .dialog-heading {
+    padding-inline: 20px;
+  }
+  .book-creation-dialog .create-book-form {
+    padding-inline: 20px;
+  }
+  .book-creation-dialog .onboarding-actions {
+    margin-inline: -20px;
+    padding-inline: 20px;
+  }
+}

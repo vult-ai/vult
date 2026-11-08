@@ -1,0 +1,275 @@
+/* Application neutrals: keep the shared design system's geometry, remove cool casts from chrome. */
+:root,
+.vult-studio {
+  --color-bg-primary_hover: #f6f6f6;
+  --color-bg-secondary: #fafafa;
+  --color-bg-secondary_hover: #f6f6f6;
+  --color-bg-tertiary: #f5f5f5;
+  --color-bg-quaternary: #e5e5e5;
+  --color-bg-secondary_alt: #fafafa;
+  --color-bg-active: #f0f0f0;
+  --color-bg-brand-primary: #fafafa;
+  --color-bg-brand-primary_alt: #fafafa;
+  --color-bg-brand-secondary: #f5f5f5;
+  --color-border-secondary_alt: rgb(0 0 0 / 0.08);
+  --color-border-tertiary: #f5f5f5;
+  --vult-surface-rim: rgb(0 0 0 / 0.08);
+  --vult-workbench-surface-control: #fafafa;
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.025);
+  --shadow-sm: 0 2px 5px rgb(0 0 0 / 0.04);
+  --shadow-md: 0 8px 18px -8px rgb(0 0 0 / 0.12);
+  --shadow-lg: 0 16px 32px -16px rgb(0 0 0 / 0.16);
+  --shadow-xs-skeuomorphic: inset 0 0 0 1px rgb(0 0 0 / 0.08), var(--shadow-xs);
+}
+
+.dark-mode,
+.dark-mode .vult-studio {
+  --color-alpha-white: rgb(14 14 14);
+  --color-bg-primary_hover: #262626;
+  --color-bg-secondary: var(--vult-surface-paper);
+  --color-bg-secondary_hover: #262626;
+  --color-bg-tertiary: #262626;
+  --color-bg-quaternary: #404040;
+  --color-bg-secondary_alt: var(--color-bg-secondary);
+  --color-bg-active: #262626;
+  --color-bg-brand-primary: #262626;
+  --color-bg-brand-primary_alt: #262626;
+  --color-bg-brand-secondary: #404040;
+  --color-border-secondary_alt: rgb(255 255 255 / 0.1);
+  --color-border-tertiary: rgb(255 255 255 / 0.06);
+  --vult-surface-rim: var(--color-border-secondary);
+  --vult-workbench-surface-control: var(--vult-surface-paper);
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.16);
+  --shadow-sm: 0 2px 5px rgb(0 0 0 / 0.2);
+  --shadow-md: 0 8px 18px -8px rgb(0 0 0 / 0.44);
+  --shadow-lg: 0 16px 32px -16px rgb(0 0 0 / 0.56);
+  --shadow-xs-skeuomorphic:
+    inset 0 0 0 1px rgb(255 255 255 / 0.12), var(--shadow-xs);
+}
+
+/* Neutral state glows keep the source geometry, opacity and timing. */
+:root,
+[data-vult-physics="quiet-precision"] {
+  --vult-instrument-glow: 0 0 0 4px
+    color-mix(in srgb, var(--vult-control-focus-border) 13%, transparent);
+  --vult-toggle-selected-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.2),
+    0 0 0 1px
+      color-mix(in srgb, var(--vult-control-focus-border) 20%, transparent),
+    0 4px 12px
+      color-mix(in srgb, var(--vult-control-focus-border) 20%, transparent);
+  --vult-slider-fill-shadow: 0 0 12px
+    color-mix(in srgb, var(--vult-control-focus-border) 24%, transparent);
+  --vult-time-signal-shadow: 0 0 0 4px
+    color-mix(in srgb, var(--vult-control-focus-border) 10%, transparent);
+  --vult-time-window-shadow:
+    inset 0 0 18px
+      color-mix(in srgb, var(--vult-control-focus-border) 7%, transparent),
+    0 0 18px
+      color-mix(in srgb, var(--vult-control-focus-border) 7%, transparent);
+  --vult-time-activity-shadow: 0 0 8px
+    color-mix(in srgb, var(--vult-control-focus-border) 18%, transparent);
+  --vult-time-cursor-shadow: 0 0 9px
+    color-mix(in srgb, var(--vult-control-focus-border) 48%, transparent);
+  --vult-status-brand-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--vult-control-focus-border) 12%, transparent);
+}
+[data-vult-appearance="light"][data-vult-physics="quiet-precision"],
+.light-mode .vult-product:not([data-vult-appearance]) {
+  --vult-instrument-glow: 0 0 0 2px
+    color-mix(in srgb, var(--vult-control-focus-border) 6%, transparent);
+}
+[data-vult-appearance="light"],
+.light-mode .vult-product:not([data-vult-appearance]) {
+  --vult-toggle-selected-shadow:
+    inset 0 1px 1px
+      color-mix(in srgb, var(--vult-control-focus-border) 12%, transparent),
+    0 0 0 1px
+      color-mix(in srgb, var(--vult-control-focus-border) 12%, transparent),
+    0 1px 2px rgba(15, 15, 15, 0.06);
+  --vult-slider-fill-shadow: 0 1px 2px
+    color-mix(in srgb, var(--vult-control-focus-border) 12%, transparent);
+  --vult-time-signal-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--vult-control-focus-border) 5%, transparent);
+  --vult-time-window-shadow: inset 0 0 12px
+    color-mix(in srgb, var(--vult-control-focus-border) 5%, transparent);
+  --vult-time-activity-shadow: 0 1px 2px
+    color-mix(in srgb, var(--vult-control-focus-border) 12%, transparent);
+  --vult-time-cursor-shadow: 0 0 4px
+    color-mix(in srgb, var(--vult-control-focus-border) 16%, transparent);
+  --vult-status-brand-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--vult-control-focus-border) 6%, transparent);
+}
+
+/* Light mode has its own surface hierarchy; do not invert dark card fills. */
+.light-mode,
+.light-mode .vult-studio {
+  --vult-light-canvas: #f6f6f6;
+  --vult-light-card: #ffffff;
+  --vult-light-frame: #fcfcfc;
+  --vult-light-inset: var(--vult-light-frame);
+  --vult-light-border: #e5e5e5;
+  --vult-light-selected: #f0f0f0;
+  --vult-control-hover: #f6f6f6;
+  --vult-light-card-shadow:
+    inset 0 0 0 1px var(--vult-light-border), 0 1px 2px rgb(0 0 0 / 3%);
+  --vult-light-trend-current: var(--color-chart-blue);
+  --vult-light-trend-previous: #8a8a8a;
+  --vult-workbench-surface-base: var(--vult-light-canvas);
+  --vult-navigation-surface: var(--vult-light-canvas);
+  --vult-workbench-surface-control: var(--vult-light-card);
+  --color-text-secondary: #525252;
+  --color-text-tertiary: #737373;
+  --color-text-quaternary: #737373;
+}
+.light-mode .vult-shell-panel {
+  --vult-interaction-hover: #f6f6f6;
+  --vult-navigation-selected: #f0f0f0;
+  --vult-navigation-surface: var(--vult-light-frame);
+  --vult-shell-panel-shadow:
+    0 0 0 1px color-mix(in srgb, var(--vult-light-canvas), var(--vult-light-border)),
+    var(--shadow-xs);
+}
+.light-mode .overview-metrics.v0-position-stats {
+  background: transparent;
+}
+.light-mode .overview-metrics .overview-metric.workspace-stat {
+  background: var(--vult-light-card);
+  box-shadow: var(--vult-light-card-shadow);
+}
+.light-mode .workspace-surface.dashboard-card {
+  --vult-dashboard-inset-bg: var(--vult-light-card);
+  background: var(--vult-light-inset);
+  box-shadow: var(--vult-light-card-shadow);
+}
+.light-mode .dashboard-list-viewport {
+  background: var(--vult-light-card);
+}
+.light-mode .dashboard-account-table thead th {
+  background: var(--vult-light-card);
+}
+.light-mode .performance-trend-scale {
+  color: var(--color-text-tertiary);
+}
+.light-mode .performance-trend-legend button {
+  color: var(--color-text-secondary);
+}
+.light-mode .performance-trend-legend button[aria-pressed="true"] {
+  color: var(--color-text-primary);
+}
+.light-mode .performance-trend-level {
+  stroke-opacity: 1;
+}
+.light-mode .balance-trend-current {
+  stroke: var(--vult-light-trend-current);
+}
+.light-mode .balance-trend-current-point {
+  fill: var(--vult-light-trend-current);
+}
+.light-mode .balance-trend stop {
+  stop-color: var(--vult-light-trend-current);
+}
+.light-mode .balance-trend-previous {
+  stroke: var(--vult-light-trend-previous);
+}
+.light-mode .balance-trend-previous-point {
+  stroke: var(--vult-light-trend-previous);
+}
+.light-mode .chart-tooltip {
+  --color-chart-tooltip-fg: var(--color-text-primary);
+  --color-chart-tooltip-muted: var(--color-text-secondary);
+  background: rgb(255 255 255 / 98%);
+  border-color: rgb(0 0 0 / 10%);
+  box-shadow:
+    0 8px 28px rgb(0 0 0 / 10%),
+    inset 0 1px 0 rgb(255 255 255 / 70%);
+}
+
+.light-mode .shell-navigation-link[aria-current="page"] {
+  background: var(--vult-navigation-selected, var(--vult-light-selected));
+}
+
+/* Full-page collections and reports use the same frame/content roles. */
+.light-mode .account-activity-surface {
+  padding: 8px;
+  border-radius: var(--radius-2xl);
+  background: var(--vult-light-inset);
+  box-shadow: var(--vult-light-card-shadow);
+}
+.light-mode .account-activity-controls {
+  background: var(--vult-light-inset);
+}
+.light-mode .account-activity-body {
+  --vult-workbench-surface-base: var(--vult-light-card);
+  background: var(--vult-light-card);
+  border: 1px solid var(--vult-light-border);
+  border-radius: var(--radius-xl);
+}
+.light-mode .account-activity-row:first-child {
+  border-start-start-radius: 11px;
+  border-start-end-radius: 11px;
+}
+.light-mode .account-activity-row:last-child {
+  border-end-start-radius: 11px;
+  border-end-end-radius: 11px;
+  border-bottom: 0;
+}
+.light-mode .collection-inspector,
+.light-mode .collection-inspector-collection {
+  --vult-workbench-surface-base: var(--vult-light-inset);
+  background: var(--vult-light-inset);
+}
+/* Scope tokens to the native table frame, retaining its built-in row states,
+   sticky cells, resizers and pagination. The toolbar remains on the gray frame. */
+.light-mode .vult-collection-layout > div:has(table) {
+  --vult-workbench-surface-base: var(--vult-light-card);
+  --vult-workbench-surface-control: color-mix(
+    in srgb, var(--color-text-primary) 5%, var(--vult-light-card)
+  );
+  background: var(--vult-light-card);
+}
+.light-mode .collection-inspector-panel {
+  border-radius: var(--radius-2xl);
+  background: var(--vult-light-card);
+  box-shadow: var(--vult-light-card-shadow);
+}
+.light-mode .v0-statement-sheet {
+  padding: 8px;
+  background: var(--vult-light-inset);
+}
+.light-mode .v0-statement-sheet > header {
+  padding: 18px 24px 0;
+}
+.light-mode .v0-statement-content {
+  padding: 0 24px 18px;
+  border-radius: var(--radius-xl);
+  background: var(--vult-light-card);
+}
+@media (max-width: 640px) {
+  .light-mode .v0-statement-sheet > header {
+    padding: 10px 8px 0;
+  }
+  .light-mode .v0-statement-content {
+    padding: 0 8px 10px;
+  }
+}
+
+/* Settings sections share the collection and dashboard frame/content roles. */
+.light-mode .vult-settings-section {
+  padding: 8px;
+  border-radius: var(--radius-2xl);
+  background: var(--vult-light-inset);
+  box-shadow: var(--vult-light-card-shadow);
+}
+.light-mode .vult-settings-section-header {
+  padding: 16px 16px 20px;
+  border-bottom: 0;
+}
+.light-mode .vult-settings-rows {
+  --vult-workbench-surface-base: var(--vult-light-card);
+  padding-inline: 16px;
+  border: 1px solid var(--vult-light-border);
+  border-radius: var(--radius-xl);
+  background: var(--vult-light-card);
+}
+

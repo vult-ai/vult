@@ -1,0 +1,802 @@
+{
+  "q1_months": {
+    "from": "2026-01-01",
+    "to": "2026-03-31",
+    "unit": "month",
+    "income": {
+      "total": "700000",
+      "positive": "700000",
+      "negative": "0",
+      "accounts": [
+        {
+          "key": "consulting",
+          "name": "Consulting",
+          "amount": "120000",
+          "positive": "120000",
+          "negative": "0",
+          "postings": 1
+        },
+        {
+          "key": "sales",
+          "name": "Sales",
+          "amount": "580000",
+          "positive": "580000",
+          "negative": "0",
+          "postings": 2
+        }
+      ]
+    },
+    "expenses": {
+      "total": "502000",
+      "positive": "535000",
+      "negative": "-33000",
+      "accounts": [
+        {
+          "key": "rent",
+          "name": "Rent",
+          "amount": "450000",
+          "positive": "450000",
+          "negative": "0",
+          "postings": 3
+        },
+        {
+          "key": "software",
+          "name": "Software",
+          "amount": "-13000",
+          "positive": "15000",
+          "negative": "-28000",
+          "postings": 4
+        },
+        {
+          "key": "travel",
+          "name": "Travel",
+          "amount": "65000",
+          "positive": "70000",
+          "negative": "-5000",
+          "postings": 3
+        }
+      ]
+    },
+    "buckets": [
+      {
+        "from": "2026-01-01",
+        "to": "2026-02-01",
+        "covered_from": "2026-01-01",
+        "covered_to": "2026-02-01",
+        "income": {
+          "total": "400000",
+          "positive": "400000",
+          "negative": "0",
+          "accounts": [
+            {
+              "key": "sales",
+              "name": "Sales",
+              "amount": "400000",
+              "positive": "400000",
+              "negative": "0",
+              "postings": 1
+            }
+          ]
+        },
+        "expenses": {
+          "total": "157000",
+          "positive": "160000",
+          "negative": "-3000",
+          "accounts": [
+            {
+              "key": "rent",
+              "name": "Rent",
+              "amount": "150000",
+              "positive": "150000",
+              "negative": "0",
+              "postings": 1
+            },
+            {
+              "key": "software",
+              "name": "Software",
+              "amount": "7000",
+              "positive": "10000",
+              "negative": "-3000",
+              "postings": 2
+            }
+          ]
+        }
+      },
+      {
+        "from": "2026-02-01",
+        "to": "2026-03-01",
+        "covered_from": "2026-02-01",
+        "covered_to": "2026-03-01",
+        "income": {
+          "total": "120000",
+          "positive": "120000",
+          "negative": "0",
+          "accounts": [
+            {
+              "key": "consulting",
+              "name": "Consulting",
+              "amount": "120000",
+              "positive": "120000",
+              "negative": "0",
+              "postings": 1
+            }
+          ]
+        },
+        "expenses": {
+          "total": "165000",
+          "positive": "190000",
+          "negative": "-25000",
+          "accounts": [
+            {
+              "key": "rent",
+              "name": "Rent",
+              "amount": "150000",
+              "positive": "150000",
+              "negative": "0",
+              "postings": 1
+            },
+            {
+              "key": "software",
+              "name": "Software",
+              "amount": "-25000",
+              "positive": "0",
+              "negative": "-25000",
+              "postings": 1
+            },
+            {
+              "key": "travel",
+              "name": "Travel",
+              "amount": "40000",
+              "positive": "40000",
+              "negative": "0",
+              "postings": 1
+            }
+          ]
+        }
+      },
+      {
+        "from": "2026-03-01",
+        "to": "2026-04-01",
+        "covered_from": "2026-03-01",
+        "covered_to": "2026-04-01",
+        "income": {
+          "total": "180000",
+          "positive": "180000",
+          "negative": "0",
+          "accounts": [
+            {
+              "key": "sales",
+              "name": "Sales",
+              "amount": "180000",
+              "positive": "180000",
+              "negative": "0",
+              "postings": 1
+            }
+          ]
+        },
+        "expenses": {
+          "total": "180000",
+          "positive": "185000",
+          "negative": "-5000",
+          "accounts": [
+            {
+              "key": "rent",
+              "name": "Rent",
+              "amount": "150000",
+              "positive": "150000",
+              "negative": "0",
+              "postings": 1
+            },
+            {
+              "key": "software",
+              "name": "Software",
+              "amount": "5000",
+              "positive": "5000",
+              "negative": "0",
+              "postings": 1
+            },
+            {
+              "key": "travel",
+              "name": "Travel",
+              "amount": "25000",
+              "positive": "30000",
+              "negative": "-5000",
+              "postings": 2
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "q1_weeks": {
+    "from": "2026-01-01",
+    "to": "2026-03-31",
+    "unit": "week",
+    "income": {
+      "total": "700000",
+      "positive": "700000",
+      "negative": "0",
+      "accounts": [
+        {
+          "key": "consulting",
+          "name": "Consulting",
+          "amount": "120000",
+          "positive": "120000",
+          "negative": "0",
+          "postings": 1
+        },
+        {
+          "key": "sales",
+          "name": "Sales",
+          "amount": "580000",
+          "positive": "580000",
+          "negative": "0",
+          "postings": 2
+        }
+      ]
+    },
+    "expenses": {
+      "total": "502000",
+      "positive": "535000",
+      "negative": "-33000",
+      "accounts": [
+        {
+          "key": "rent",
+          "name": "Rent",
+          "amount": "450000",
+          "positive": "450000",
+          "negative": "0",
+          "postings": 3
+        },
+        {
+          "key": "software",
+          "name": "Software",
+          "amount": "-13000",
+          "positive": "15000",
+          "negative": "-28000",
+          "postings": 4
+        },
+        {
+          "key": "travel",
+          "name": "Travel",
+          "amount": "65000",
+          "positive": "70000",
+          "negative": "-5000",
+          "postings": 3
+        }
+      ]
+    },
+    "buckets": [
+      {
+        "from": "2025-12-29",
+        "to": "2026-01-05",
+        "covered_from": "2026-01-01",
+        "covered_to": "2026-01-05",
+        "income": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        },
+        "expenses": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        }
+      },
+      {
+        "from": "2026-01-05",
+        "to": "2026-01-12",
+        "covered_from": "2026-01-05",
+        "covered_to": "2026-01-12",
+        "income": {
+          "total": "400000",
+          "positive": "400000",
+          "negative": "0",
+          "accounts": [
+            {
+              "key": "sales",
+              "name": "Sales",
+              "amount": "400000",
+              "positive": "400000",
+              "negative": "0",
+              "postings": 1
+            }
+          ]
+        },
+        "expenses": {
+          "total": "150000",
+          "positive": "150000",
+          "negative": "0",
+          "accounts": [
+            {
+              "key": "rent",
+              "name": "Rent",
+              "amount": "150000",
+              "positive": "150000",
+              "negative": "0",
+              "postings": 1
+            }
+          ]
+        }
+      },
+      {
+        "from": "2026-01-12",
+        "to": "2026-01-19",
+        "covered_from": "2026-01-12",
+        "covered_to": "2026-01-19",
+        "income": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        },
+        "expenses": {
+          "total": "10000",
+          "positive": "10000",
+          "negative": "0",
+          "accounts": [
+            {
+              "key": "software",
+              "name": "Software",
+              "amount": "10000",
+              "positive": "10000",
+              "negative": "0",
+              "postings": 1
+            }
+          ]
+        }
+      },
+      {
+        "from": "2026-01-19",
+        "to": "2026-01-26",
+        "covered_from": "2026-01-19",
+        "covered_to": "2026-01-26",
+        "income": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        },
+        "expenses": {
+          "total": "-3000",
+          "positive": "0",
+          "negative": "-3000",
+          "accounts": [
+            {
+              "key": "software",
+              "name": "Software",
+              "amount": "-3000",
+              "positive": "0",
+              "negative": "-3000",
+              "postings": 1
+            }
+          ]
+        }
+      },
+      {
+        "from": "2026-01-26",
+        "to": "2026-02-02",
+        "covered_from": "2026-01-26",
+        "covered_to": "2026-02-02",
+        "income": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        },
+        "expenses": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        }
+      },
+      {
+        "from": "2026-02-02",
+        "to": "2026-02-09",
+        "covered_from": "2026-02-02",
+        "covered_to": "2026-02-09",
+        "income": {
+          "total": "120000",
+          "positive": "120000",
+          "negative": "0",
+          "accounts": [
+            {
+              "key": "consulting",
+              "name": "Consulting",
+              "amount": "120000",
+              "positive": "120000",
+              "negative": "0",
+              "postings": 1
+            }
+          ]
+        },
+        "expenses": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        }
+      },
+      {
+        "from": "2026-02-09",
+        "to": "2026-02-16",
+        "covered_from": "2026-02-09",
+        "covered_to": "2026-02-16",
+        "income": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        },
+        "expenses": {
+          "total": "190000",
+          "positive": "190000",
+          "negative": "0",
+          "accounts": [
+            {
+              "key": "rent",
+              "name": "Rent",
+              "amount": "150000",
+              "positive": "150000",
+              "negative": "0",
+              "postings": 1
+            },
+            {
+              "key": "travel",
+              "name": "Travel",
+              "amount": "40000",
+              "positive": "40000",
+              "negative": "0",
+              "postings": 1
+            }
+          ]
+        }
+      },
+      {
+        "from": "2026-02-16",
+        "to": "2026-02-23",
+        "covered_from": "2026-02-16",
+        "covered_to": "2026-02-23",
+        "income": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        },
+        "expenses": {
+          "total": "-25000",
+          "positive": "0",
+          "negative": "-25000",
+          "accounts": [
+            {
+              "key": "software",
+              "name": "Software",
+              "amount": "-25000",
+              "positive": "0",
+              "negative": "-25000",
+              "postings": 1
+            }
+          ]
+        }
+      },
+      {
+        "from": "2026-02-23",
+        "to": "2026-03-02",
+        "covered_from": "2026-02-23",
+        "covered_to": "2026-03-02",
+        "income": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        },
+        "expenses": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        }
+      },
+      {
+        "from": "2026-03-02",
+        "to": "2026-03-09",
+        "covered_from": "2026-03-02",
+        "covered_to": "2026-03-09",
+        "income": {
+          "total": "180000",
+          "positive": "180000",
+          "negative": "0",
+          "accounts": [
+            {
+              "key": "sales",
+              "name": "Sales",
+              "amount": "180000",
+              "positive": "180000",
+              "negative": "0",
+              "postings": 1
+            }
+          ]
+        },
+        "expenses": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        }
+      },
+      {
+        "from": "2026-03-09",
+        "to": "2026-03-16",
+        "covered_from": "2026-03-09",
+        "covered_to": "2026-03-16",
+        "income": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        },
+        "expenses": {
+          "total": "150000",
+          "positive": "150000",
+          "negative": "0",
+          "accounts": [
+            {
+              "key": "rent",
+              "name": "Rent",
+              "amount": "150000",
+              "positive": "150000",
+              "negative": "0",
+              "postings": 1
+            }
+          ]
+        }
+      },
+      {
+        "from": "2026-03-16",
+        "to": "2026-03-23",
+        "covered_from": "2026-03-16",
+        "covered_to": "2026-03-23",
+        "income": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        },
+        "expenses": {
+          "total": "30000",
+          "positive": "30000",
+          "negative": "0",
+          "accounts": [
+            {
+              "key": "travel",
+              "name": "Travel",
+              "amount": "30000",
+              "positive": "30000",
+              "negative": "0",
+              "postings": 1
+            }
+          ]
+        }
+      },
+      {
+        "from": "2026-03-23",
+        "to": "2026-03-30",
+        "covered_from": "2026-03-23",
+        "covered_to": "2026-03-30",
+        "income": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        },
+        "expenses": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        }
+      },
+      {
+        "from": "2026-03-30",
+        "to": "2026-04-06",
+        "covered_from": "2026-03-30",
+        "covered_to": "2026-04-01",
+        "income": {
+          "total": "0",
+          "positive": "0",
+          "negative": "0",
+          "accounts": []
+        },
+        "expenses": {
+          "total": "0",
+          "positive": "5000",
+          "negative": "-5000",
+          "accounts": [
+            {
+              "key": "software",
+              "name": "Software",
+              "amount": "5000",
+              "positive": "5000",
+              "negative": "0",
+              "postings": 1
+            },
+            {
+              "key": "travel",
+              "name": "Travel",
+              "amount": "-5000",
+              "positive": "0",
+              "negative": "-5000",
+              "postings": 1
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "q1_quarter": {
+    "from": "2026-01-01",
+    "to": "2026-03-31",
+    "unit": "quarter",
+    "income": {
+      "total": "700000",
+      "positive": "700000",
+      "negative": "0",
+      "accounts": [
+        {
+          "key": "consulting",
+          "name": "Consulting",
+          "amount": "120000",
+          "positive": "120000",
+          "negative": "0",
+          "postings": 1
+        },
+        {
+          "key": "sales",
+          "name": "Sales",
+          "amount": "580000",
+          "positive": "580000",
+          "negative": "0",
+          "postings": 2
+        }
+      ]
+    },
+    "expenses": {
+      "total": "502000",
+      "positive": "535000",
+      "negative": "-33000",
+      "accounts": [
+        {
+          "key": "rent",
+          "name": "Rent",
+          "amount": "450000",
+          "positive": "450000",
+          "negative": "0",
+          "postings": 3
+        },
+        {
+          "key": "software",
+          "name": "Software",
+          "amount": "-13000",
+          "positive": "15000",
+          "negative": "-28000",
+          "postings": 4
+        },
+        {
+          "key": "travel",
+          "name": "Travel",
+          "amount": "65000",
+          "positive": "70000",
+          "negative": "-5000",
+          "postings": 3
+        }
+      ]
+    },
+    "buckets": [
+      {
+        "from": "2026-01-01",
+        "to": "2026-04-01",
+        "covered_from": "2026-01-01",
+        "covered_to": "2026-04-01",
+        "income": {
+          "total": "700000",
+          "positive": "700000",
+          "negative": "0",
+          "accounts": [
+            {
+              "key": "consulting",
+              "name": "Consulting",
+              "amount": "120000",
+              "positive": "120000",
+              "negative": "0",
+              "postings": 1
+            },
+            {
+              "key": "sales",
+              "name": "Sales",
+              "amount": "580000",
+              "positive": "580000",
+              "negative": "0",
+              "postings": 2
+            }
+          ]
+        },
+        "expenses": {
+          "total": "502000",
+          "positive": "535000",
+          "negative": "-33000",
+          "accounts": [
+            {
+              "key": "rent",
+              "name": "Rent",
+              "amount": "450000",
+              "positive": "450000",
+              "negative": "0",
+              "postings": 3
+            },
+            {
+              "key": "software",
+              "name": "Software",
+              "amount": "-13000",
+              "positive": "15000",
+              "negative": "-28000",
+              "postings": 4
+            },
+            {
+              "key": "travel",
+              "name": "Travel",
+              "amount": "65000",
+              "positive": "70000",
+              "negative": "-5000",
+              "postings": 3
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "position_2026_03_31": {
+    "date": "2026-03-31",
+    "balances": {
+      "checking": "978000",
+      "savings": "200000",
+      "equipment": "300000",
+      "card": "30000",
+      "loan": "250000",
+      "capital": "1000000",
+      "sales": "580000",
+      "consulting": "120000",
+      "rent": "450000",
+      "software": "-13000",
+      "travel": "65000"
+    },
+    "cash": "1178000",
+    "assets": "1478000",
+    "liabilities": "280000",
+    "equity": "1198000",
+    "result": "198000"
+  },
+  "position_2026_04_30": {
+    "date": "2026-04-30",
+    "balances": {
+      "checking": "1068000",
+      "savings": "200000",
+      "equipment": "300000",
+      "card": "50000",
+      "loan": "250000",
+      "capital": "1000000",
+      "sales": "670000",
+      "consulting": "120000",
+      "rent": "450000",
+      "software": "-13000",
+      "travel": "85000"
+    },
+    "cash": "1268000",
+    "assets": "1568000",
+    "liabilities": "300000",
+    "equity": "1268000",
+    "result": "268000"
+  }
+}

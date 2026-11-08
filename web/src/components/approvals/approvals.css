@@ -1,0 +1,53 @@
+/* Approvals: one column the owner clears from the top. */
+.approvals { display: grid; align-content: start; gap: 10px; width: 100%; max-width: 880px; margin: 0 auto; padding: 0 16px 32px; }
+.approvals-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; }
+.approvals-title { display: flex; align-items: center; gap: 8px; }
+.approvals-title h2 { margin: 0; }
+.approvals-batch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.approvals-batch-reason { width: 200px; }
+.approvals-group { margin: 8px 0 0; font-weight: 400; }
+.approvals-list, .approvals-log { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.approval-card { border-radius: var(--radius-xl); background: var(--color-bg-primary); box-shadow: inset 0 0 0 1px var(--color-border-secondary); }
+.approval-card[data-open] { box-shadow: inset 0 0 0 1px var(--color-border-primary); }
+.approval-row { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 12px; border-radius: var(--radius-xl); cursor: pointer; outline: none; }
+.approval-row:focus-visible { box-shadow: var(--vult-focus-ring, 0 0 0 2px var(--color-border-brand)); }
+.approval-row-text { display: grid; flex: 1; min-width: 0; }
+.approval-row-text > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.approval-duplicate { color: var(--color-text-warning-primary); }
+.approval-time { display: inline-flex; flex: none; align-items: center; gap: 4px; color: var(--color-text-tertiary); }
+.approval-time[data-urgent] { color: var(--color-text-warning-primary); }
+.approval-quick { display: inline-flex; flex: none; gap: 4px; }
+.approval-detail { display: grid; gap: 12px; padding: 4px 16px 16px 58px; }
+.approval-detail p { margin: 0; }
+.approval-lines { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.approval-lines th, .approval-lines td { padding: 6px 0 6px 12px; text-align: right; vertical-align: top; white-space: nowrap; }
+.approval-lines thead th { color: var(--color-text-tertiary); font-weight: 400; }
+.approval-lines th[scope="row"], .approval-lines thead th:first-child { padding-left: 0; text-align: left; font-weight: 400; white-space: normal; overflow-wrap: anywhere; }
+.approval-lines tbody tr { border-top: 1px solid var(--color-border-secondary); }
+.approval-lines small { display: block; }
+.approval-question, .approval-assumed { display: flex; align-items: flex-start; gap: 8px; }
+.approval-question { padding: 8px 10px; border-radius: var(--radius-lg); background: color-mix(in srgb, var(--color-text-warning-primary) 12%, transparent); color: var(--color-text-primary); }
+.approval-question svg { flex: none; margin-top: 2px; color: var(--color-text-warning-primary); }
+.approval-assumed svg { flex: none; margin-top: 1px; }
+.approval-decide { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.approval-reason { flex: 1 1 220px; min-width: 0; }
+.approval-need { color: var(--color-text-warning-primary); }
+.approvals-log li { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 4px 12px; border-top: 1px solid var(--color-border-secondary); }
+.approvals-log li > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.approval-ok { color: var(--color-text-success-primary); }
+@media (width < 640px) {
+  .approval-detail { padding-left: 16px; }
+  .approval-lines th:nth-child(4), .approval-lines td:nth-child(4) { display: none; }
+}
+/* Phones: the entry's name gets the full width; time left and the quick actions
+   move to a second line under it. */
+@media (width < 640px) {
+  .approvals { padding: 0 0 24px; }
+  .approval-row { flex-wrap: wrap; row-gap: 6px; }
+  .approval-row-text { flex: 1 1 calc(100% - 64px); }
+  .approval-row-text > span { white-space: normal; }
+  .approval-time { margin-left: 52px; }
+  .approval-quick { margin-left: auto; }
+  .approvals-batch { width: 100%; }
+  .approvals-batch-reason { flex: 1 1 140px; width: auto; }
+}

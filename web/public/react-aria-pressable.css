@@ -1,0 +1,7 @@
+/* Shipped as a file so the interface needs no inline style under its content
+   policy. The id on its link tells react-aria the rule is already present. */
+@layer {
+  [data-react-aria-pressable] {
+    touch-action: pan-x pan-y pinch-zoom;
+  }
+}

@@ -110,8 +110,17 @@ func TestMultipleSourcesAndCorrectionLeaveAccountingUnchanged(t *testing.T) {
 	if after := db.Call(t, s, "get_journal", ledger.EntryQuery{EntryID: entry.ID}); !bytes.Equal(before, after) {
 		t.Fatal("citation correction changed accounting")
 	}
-	if after := db.Call(t, s, "get_trial_balance", ledger.TrialQuery{}); !bytes.Equal(trial, after) {
-		t.Fatal("citation correction changed balances")
+	afterTrial := db.Call(t, s, "get_trial_balance", ledger.TrialQuery{})
+	var beforeAmounts, afterAmounts map[string]json.RawMessage
+	if json.Unmarshal(trial, &beforeAmounts) != nil || json.Unmarshal(afterTrial, &afterAmounts) != nil || len(beforeAmounts["state_revision"]) == 0 || bytes.Equal(beforeAmounts["state_revision"], afterAmounts["state_revision"]) {
+		t.Fatal("changed accepted records did not change the observed state")
+	}
+	for _, key := range []string{"state_revision", "state_captured_at", "state_knowledge_cutoff"} {
+		delete(beforeAmounts, key)
+		delete(afterAmounts, key)
+	}
+	if !bytes.Equal(value(beforeAmounts), value(afterAmounts)) {
+		t.Fatal("citation correction changed financial content")
 	}
 	if retry := db.Call(t, s, "post_journal", q); !bytes.Equal(retry, original) {
 		t.Fatal("posting retry changed after a citation correction")

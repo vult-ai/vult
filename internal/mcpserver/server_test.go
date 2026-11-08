@@ -34,7 +34,7 @@ func TestClientFileExportIsDeclaredWithoutGrantingLedgerWrites(t *testing.T) {
 		return json.RawMessage(`{}`), nil
 	}, "read", Options{Documents: true, LocalFiles: true})
 	catalog, err := client.ListTools(ctx, nil)
-	if err != nil || len(catalog.Tools) != 12 {
+	if err != nil || len(catalog.Tools) != 14 {
 		t.Fatal("wrong document read catalog", err)
 	}
 	found := false
@@ -82,7 +82,7 @@ func TestMCPBookJourneysAndLostReplyRecovery(t *testing.T) {
 				return out, e
 			}, "write")
 			catalog, e := c.ListTools(db.Context, nil)
-			if e != nil || len(catalog.Tools) != 11 {
+			if e != nil || len(catalog.Tools) != 16 {
 				t.Fatal("unexpected tool catalog", e)
 			}
 			var got ledger.Book
@@ -112,6 +112,10 @@ func TestMCPBookJourneysAndLostReplyRecovery(t *testing.T) {
 			if len(trial.Balances) != 2 || trial.Balances[0].DebitPositiveMinor != "9007199254740993" || trial.Balances[1].DebitPositiveMinor != "-9007199254740993" {
 				t.Fatal("MCP lost exact integer balances")
 			}
+			var found ledger.SearchResult
+			if json.Unmarshal(invoke(t, db.Context, c, "search_book", ledger.SearchQuery{Query: "opening"}), &found) != nil || found.Transactions.Total != 1 || found.Transactions.Items[0].AmountMinor != "9007199254740993" || found.BookID != book.ID || found.Currency != "USD" || found.Scale != 2 || found.SchemaVersion != 1 || found.StateRevision == "" {
+				t.Fatal("MCP search lost its exact Book context or amount")
+			}
 			bad := map[string]any{"request_key": "scope", "tenant_id": ledger.ID()}
 			if r, e := c.CallTool(db.Context, &mcp.CallToolParams{Name: "post_journal", Arguments: bad}); e == nil && !r.IsError {
 				t.Fatal("MCP accepted scope injection")
@@ -134,7 +138,7 @@ func TestReadOnlyMCPHasNoWriteOrOwnerTools(t *testing.T) {
 		return json.RawMessage(`{}`), nil
 	}, "read")
 	catalog, e := c.ListTools(context.Background(), nil)
-	if e != nil || len(catalog.Tools) != 7 {
+	if e != nil || len(catalog.Tools) != 9 {
 		t.Fatal("unexpected read catalog", e)
 	}
 	for _, tool := range catalog.Tools {

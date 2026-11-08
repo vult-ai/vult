@@ -49,7 +49,7 @@ func TestCanceledAdmittedArchiveDoesNotWaitForWithheldPayload(t *testing.T) {
 	defer cancel()
 	reader := &observedPayloadReader{Reader: server, started: make(chan struct{})}
 	done := make(chan struct{})
-	go func() { defer close(done); s.servePayload(ctx, uid, header, reader, server) }()
+	go func() { defer close(done); s.servePayload(ctx, local.Peer{UID: uid}, header, reader, server) }()
 	select {
 	case <-reader.started:
 	case <-time.After(time.Second):

@@ -11,19 +11,19 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/vult-ai/vult/access"
 	"github.com/vult-ai/vult/internal/local"
 	"github.com/vult-ai/vult/internal/strictjson"
 	"github.com/vult-ai/vult/ledger"
 )
 
-const PostgresPath = "/Library/PrivilegedHelperTools/ai.vult.ledger/postgres"
+const PostgresPath = local.PostgresPath
 
 type configuration struct {
 	Format          string `json:"format"`
@@ -60,21 +60,11 @@ func protected(path string, uid uint32, directory bool) error {
 	if !directory && (!info.Mode().IsRegular() || stat.Nlink != 1) {
 		return errors.New("regular protected file required")
 	}
-	acl := exec.Command("/bin/ls", "-lde", path)
-	acl.Env = []string{"PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C"}
-	text, e := acl.Output()
-	if e != nil {
-		return errors.New("installation access controls could not be verified")
-	}
-	for _, line := range strings.Split(string(text), "\n")[1:] {
-		if strings.Contains(line, " allow ") {
-			return errors.New("unsupported installation access control list")
-		}
-	}
-	return nil
+	return protectedACL(path, info)
 }
 func installationCode() error {
-	for _, p := range []string{"/Library", "/Library/PrivilegedHelperTools", "/Library/PrivilegedHelperTools/ai.vult.ledger", PostgresPath, filepath.Join(PostgresPath, "bin"), filepath.Join(PostgresPath, "lib"), filepath.Join(PostgresPath, "share")} {
+	paths := append(codeParents(), PostgresPath, filepath.Join(PostgresPath, "bin"), filepath.Join(PostgresPath, "lib"), filepath.Join(PostgresPath, "share"))
+	for _, p := range paths {
 		if e := protected(p, 0, true); e != nil {
 			return e
 		}
@@ -98,7 +88,7 @@ func installationCode() error {
 }
 
 func installationData(uid uint32) error {
-	for _, path := range []string{"/Library", "/Library/Application Support", "/Library/Application Support/ai.vult.ledger"} {
+	for _, path := range dataParents() {
 		if e := protected(path, 0, true); e != nil {
 			return e
 		}
@@ -115,8 +105,14 @@ func installationData(uid uint32) error {
 
 // InstallConfiguration runs only from the native installer, as root.
 func InstallConfiguration() error {
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" || os.Geteuid() != 0 {
+	if !nativeSupported() || os.Geteuid() != 0 {
 		return errors.New("native administrator installation required")
+	}
+	if err := nativeStartupReady(); err != nil {
+		return err
+	}
+	if e := checkNativeBrowserInterface(); e != nil {
+		return e
 	}
 	if e := installationCode(); e != nil {
 		return e
@@ -128,8 +124,16 @@ func InstallConfiguration() error {
 	if e = installationData(uid); e != nil {
 		return e
 	}
-	_, e = ensureConfiguration(local.DataPath, uid, gid)
-	return e
+	if _, e = ensureConfiguration(local.DataPath, uid, gid); e != nil {
+		return e
+	}
+	if _, _, e = browserIdentity(); e != nil {
+		return e
+	}
+	if _, e = ensureBrowserConfiguration(local.DataPath, uid, gid); e != nil {
+		fmt.Fprintln(os.Stderr, "Local browser identity needs recovery. Existing ledger storage was preserved.")
+	}
+	return nil
 }
 
 func ensureConfiguration(data string, uid, gid uint32) (configuration, error) {
@@ -205,9 +209,25 @@ func runPostgres(ctx context.Context, args ...string) error {
 }
 func prepareDatabase(ctx context.Context, c configuration) error {
 	database := filepath.Join(local.DataPath, "database")
-	socket := filepath.Join(local.DataPath, "postgres")
-	if e := os.MkdirAll(socket, 0700); e != nil {
+	socket := local.PostgresSocketPath
+	uid, _, e := serviceIdentity()
+	if e != nil {
 		return e
+	}
+	_, browserGID, e := browserIdentity()
+	if e != nil {
+		return e
+	}
+	if e = protected(socket, uid, true); e != nil {
+		return e
+	}
+	info, e := os.Stat(socket)
+	if e != nil {
+		return e
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || stat.Gid != browserGID || info.Mode().Perm() != 0750 {
+		return errors.New("restricted database socket directory required")
 	}
 	fresh, e := needsDatabaseInitialization(database, c.State)
 	if e != nil {
@@ -246,7 +266,7 @@ func prepareDatabase(ctx context.Context, c configuration) error {
 	}
 	// Enforce the private transport even if initial configuration writing was
 	// interrupted. PostgreSQL defaults must never open a TCP listener.
-	options := fmt.Sprintf("-c listen_addresses='' -c unix_socket_directories='%s' -c unix_socket_permissions=0700", socket)
+	options := fmt.Sprintf("-c listen_addresses='' -c unix_socket_directories='%s' -c unix_socket_permissions=0770 -c unix_socket_group=%s -c max_connections=24", socket, local.BrowserUser)
 	return runPostgres(ctx, "pg_ctl", "-D", database, "-o", options, "-l", filepath.Join(local.DataPath, "postgres.log"), "-w", "-t", "30", "start")
 }
 
@@ -352,7 +372,7 @@ func markConfigurationReady(path string, c configuration) error {
 }
 func nativePoolConfig(user, password, database string) (*pgxpool.Config, error) {
 	u := url.URL{Scheme: "postgresql", User: url.UserPassword(user, password), Path: "/" + database}
-	q := url.Values{"host": {filepath.Join(local.DataPath, "postgres")}, "sslmode": {"disable"}, "port": {"5432"}}
+	q := url.Values{"host": {local.PostgresSocketPath}, "sslmode": {"disable"}, "port": {"5432"}}
 	// PostgreSQL connection URIs use percent-escaped spaces, not form encoding.
 	u.RawQuery = strings.ReplaceAll(q.Encode(), "+", "%20")
 	config, e := pgxpool.ParseConfig(u.String())
@@ -385,8 +405,11 @@ func pool(ctx context.Context, user, password, database string) (*pgxpool.Pool, 
 	return p, nil
 }
 func ServeNative(ctx context.Context) error {
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
-		return errors.New("native service requires Apple Silicon macOS")
+	if !nativeSupported() {
+		return errors.New("native service requires a supported installation")
+	}
+	if err := nativeStartupReady(); err != nil {
+		return err
 	}
 	uid, _, e := serviceIdentity()
 	if e != nil || uint32(os.Geteuid()) != uid {
@@ -529,7 +552,16 @@ func ServeNative(ctx context.Context) error {
 		maintainDocuments(maintenance, ledger.Admin{DB: admin}, documents.disk)
 	}()
 	defer func() { cancelMaintenance(); <-maintained }()
-	server := &Server{Admin: ledger.Admin{DB: admin}, Ledger: ledger.Store{Runtime: runtimePool, Documents: documents.vault}, RecoveryKey: conf.RecoveryKey, ProvisionKeys: documents.keys.Provision}
+	browser := loadBrowserOwner(local.DataPath, uid)
+	if browser == nil {
+		fmt.Fprintln(os.Stderr, "Local browser unavailable; native socket access remains enabled.")
+	} else {
+		browser.documents, e = access.NewOwnerDocumentReader(startup, admin, browser.configuration.origin())
+		if e != nil {
+			return errors.New("local browser document access unavailable")
+		}
+	}
+	server := &Server{Admin: ledger.Admin{DB: admin}, Ledger: ledger.Store{Runtime: runtimePool, Documents: documents.vault}, RecoveryKey: conf.RecoveryKey, ProvisionKeys: documents.keys.Provision, Browser: browser, AuthorizeOwner: local.NativeOwnerAuthorizer()}
 	e = server.Serve(ctx, listener)
 	if e != nil && !strings.Contains(e.Error(), "closed") {
 		return errors.New("local service stopped unexpectedly")

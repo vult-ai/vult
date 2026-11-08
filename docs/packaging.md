@@ -1,11 +1,28 @@
-# Native macOS packaging
+# Native packaging
+
+The [Ubuntu package](../packaging/ubuntu/README.md#build-offline) has a separate
+offline builder and installer. It bundles native PostgreSQL and keeps retained
+data separate from program files, as the macOS package does.
+
+## macOS
 
 Build on Apple Silicon macOS 26 with Xcode command-line tools, Python 3.12 or
 later, and Go 1.27.3:
 
 ```sh
-python3 scripts/package_macos.py --output dist
+cd web
+npm ci --ignore-scripts
+npm run build
+cd ..
+python3 scripts/package_macos.py --print-web-sha256 web/dist
+python3 scripts/package_macos.py --output dist --web-dist web/dist \
+  --web-sha256 INTERFACE_MANIFEST_SHA256
 ```
+
+Use the interface manifest checksum from the same reviewed source build. The
+builder refuses a missing or changed interface, stages those exact files and
+embeds them with the `webui` build tag. The release manifest retains its checksum.
+The source archive contains the interface source, not generated build assets.
 
 The builder copies only `packaging/source-paths.txt` into a temporary source tree,
 downloads PostgreSQL 18.6 from the PostgreSQL project, verifies its pinned SHA-256,
@@ -57,7 +74,8 @@ are ad-hoc. That does not identify an Apple-registered developer or provide an
 Apple notarization ticket. For signed browser downloads, pass Developer ID identities:
 
 ```sh
-python3 scripts/package_macos.py --output dist \
+python3 scripts/package_macos.py --output dist --web-dist web/dist \
+  --web-sha256 INTERFACE_MANIFEST_SHA256 \
   --sign-application "Developer ID Application: SIGNING_IDENTITY" \
   --sign-installer "Developer ID Installer: SIGNING_IDENTITY"
 ```

@@ -1,0 +1,36 @@
+[Unit]
+Description=Vult local browser
+After=ai.vult.ledger.service
+Requires=ai.vult.ledger.service
+
+[Service]
+Type=simple
+Slice=system.slice
+User=_vultbrowser
+Group=_vultbrowser
+WorkingDirectory=/var/lib/vult/browser
+ExecStart=/opt/vult/vult _serve_browser
+Environment=PATH=/usr/bin:/bin LANG=C LC_ALL=C
+UMask=0077
+Restart=on-failure
+RestartSec=10
+KillMode=control-group
+TimeoutStopSec=20
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectControlGroups=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+LimitCORE=0
+LimitNOFILE=512
+StandardOutput=null
+StandardError=journal
+SyslogIdentifier=vult-browser
+
+[Install]
+WantedBy=multi-user.target

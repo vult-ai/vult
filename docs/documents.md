@@ -9,9 +9,11 @@ An original has a permanent ID, SHA-256 and byte count. Uploads declare those
 values before streaming. A completed document becomes available only after its
 whole length and hash have been verified and encrypted storage has committed.
 Pending upload records support retries; they are not usable documents.
-Retained outcomes describe the original attempt; inspect the document to learn
-its current availability. An unused original expires after 30 days. Reuploading
-the same content keeps its document identity and obtains a new storage lease.
+Retained outcomes describe the original attempt. Inspect the document for its
+current availability. An unused original added only by an agent expires after
+30 days. A verified owner upload retains the original indefinitely, including
+when it reuses a file an agent added. Reuploading expired content keeps its
+document identity and obtains a new storage lease.
 
 The document limit is 32 MiB. Supported media types are PDF, PNG, JPEG, WebP and
 CSV. Downloads always use a fixed attachment name, `application/octet-stream`,
@@ -42,6 +44,23 @@ original hash. Callers discard partial downloads on any error. Diagnostic errors
 never include original filenames, document contents, storage paths or keys.
 
 ## File transfer
+
+In Sources, an owner can add one original at a time to an owned Book through
+`POST /api/v1/documents?book_id=…`. The browser sends raw bytes with an exact
+`Content-Length`, a supported `Content-Type`, a URL-encoded plain filename in
+`X-Vult-Document-Name`, a lowercase SHA-256 in `X-Vult-Document-SHA256` and an
+`Idempotency-Key`. The route requires the owner's session and CSRF proof.
+
+The service checks length and hash for every attempt, including retries and
+duplicates. It checks file signatures for PDF and images, and accepts UTF-8 text
+for CSV. A successful response carries schema version 1, the ready `document`
+and `reused`. It returns 201 for a new original or 200 for a reuse, and retains
+the result for an identical retry. Reusing a key with changed metadata returns
+409. An interrupted upload whose reservation has expired returns 410.
+Selecting the file again starts a new request. The original name and creator
+remain recorded on a reuse. The upload
+receipt records the owner who retained it. In a local installation, the
+protected service verifies and stores the file through the native socket.
 
 A local MCP companion reads only explicitly approved import files and writes
 only to an approved export directory. It moves bytes over a Unix socket for a
@@ -81,8 +100,9 @@ A failed Book does not stop the other selected Books, and diagnostics report
 only that cleanup needs retrying. Server operators can enable the supplied
 [isolated expiry timer](server.md#automatic-server-expiry) for the offline
 `expire-documents` command; the online server receives no installation credentials.
-Pending uploads expire after 15 minutes; completed unused originals after 30
-days. A prior source or evidence link permanently excludes ordinary expiry.
+Pending uploads expire after 15 minutes. Completed originals expire after
+30 days if they have never been used or retained by an owner. A prior source
+or evidence link permanently excludes ordinary expiry.
 
 Backups and portable exports must include documents and relationship history.
 Restore must check every original hash and work with a new storage key.

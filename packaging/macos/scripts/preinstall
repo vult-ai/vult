@@ -45,6 +45,17 @@ elif [ -e "$marker" ] || /usr/bin/dscl . -read /Groups/_vultledger >/dev/null 2>
     fail "An incomplete installation needs administrator inspection. No records were replaced."
 fi
 
+browser_marker="/Library/Application Support/ai.vult.ledger/browser-installation"
+if /usr/bin/dscl . -read /Users/_vultbrowser >/dev/null 2>&1; then
+    [ -f "$browser_marker" ] && [ ! -L "$browser_marker" ] || fail "The browser account has no installation record."
+    [ "$(/usr/bin/stat -f %u "$browser_marker")" = 0 ] && [ "$(/usr/bin/stat -f %Lp "$browser_marker")" = 644 ] || fail "The browser installation record is not protected."
+    browser_uid=$(/usr/bin/dscl . -read /Users/_vultbrowser UniqueID | /usr/bin/awk '{print $2}')
+    browser_gid=$(/usr/bin/dscl . -read /Users/_vultbrowser PrimaryGroupID | /usr/bin/awk '{print $2}')
+    [ "$(/bin/cat "$browser_marker")" = "vult-browser-v1 $browser_uid $browser_gid" ] || fail "The browser identity changed."
+elif [ -e "$browser_marker" ] || /usr/bin/dscl . -read /Groups/_vultbrowser >/dev/null 2>&1; then
+    fail "An incomplete browser installation needs administrator inspection."
+fi
+
 # Stop the prior daemon and its private PostgreSQL before replacing software.
 binary=/Library/PrivilegedHelperTools/ai.vult.ledger/vult
 if [ -e "$binary" ]; then
@@ -62,7 +73,10 @@ if [ -e "$binary" ]; then
     [ "${#expected}" = 64 ] || fail "Invalid installed program checksum."
     case "$expected" in *[!0-9a-f]*) fail "Invalid installed program checksum." ;; esac
     /usr/bin/printf '%s  %s\n' "$expected" "$binary" | /usr/bin/shasum -a 256 -c - || fail "The installed control program changed."
-    "$binary" _stop || fail "Could not stop the installed ledger and database."
+    # Without its account and service there is nothing left running to stop.
+    if /usr/bin/dscl . -read /Users/_vultledger >/dev/null 2>&1 || /bin/launchctl print system/ai.vult.ledger >/dev/null 2>&1; then
+        "$binary" _stop || fail "Could not stop the installed ledger and database."
+    fi
 elif /bin/launchctl print system/ai.vult.ledger >/dev/null 2>&1; then
     fail "The running service has no control program; no files were replaced."
 fi

@@ -6,7 +6,6 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/subtle"
-	"encoding/base64"
 	"strings"
 	"time"
 
@@ -164,16 +163,9 @@ func (o Operator) InitializeBuiltin(ctx context.Context, tenant, username, passw
 		return Enrollment{}, ErrDenied
 	}
 	out := Enrollment{TenantID: tenant, AuthenticatorURI: otpKey.URL()}
-	for i := 0; i < 8; i++ {
-		buffer := make([]byte, 16)
-		if _, e = rand.Read(buffer); e != nil {
-			return Enrollment{}, ErrDenied
-		}
-		code := base64.RawURLEncoding.EncodeToString(buffer)
-		out.RecoveryCodes = append(out.RecoveryCodes, code)
-		if _, e = tx.Exec(ctx, "INSERT INTO access.recovery_codes(identity_id,code_hash) VALUES($1,$2)", user, Hash(code)); e != nil {
-			return Enrollment{}, ErrDenied
-		}
+	out.RecoveryCodes, e = addRecoveryCodes(ctx, tx, user)
+	if e != nil {
+		return Enrollment{}, e
 	}
 	if tx.Commit(ctx) != nil {
 		return Enrollment{}, ErrDenied
@@ -219,16 +211,9 @@ func (o Operator) ResetBuiltin(ctx context.Context, username, password string, k
 		return Enrollment{}, ErrDenied
 	}
 	out := Enrollment{TenantID: tenant, AuthenticatorURI: otpKey.URL()}
-	for i := 0; i < 8; i++ {
-		buffer := make([]byte, 16)
-		if _, e = rand.Read(buffer); e != nil {
-			return Enrollment{}, ErrDenied
-		}
-		code := base64.RawURLEncoding.EncodeToString(buffer)
-		out.RecoveryCodes = append(out.RecoveryCodes, code)
-		if _, e = tx.Exec(ctx, "INSERT INTO access.recovery_codes(identity_id,code_hash) VALUES($1,$2)", user, Hash(code)); e != nil {
-			return Enrollment{}, ErrDenied
-		}
+	out.RecoveryCodes, e = addRecoveryCodes(ctx, tx, user)
+	if e != nil {
+		return Enrollment{}, e
 	}
 	if tx.Commit(ctx) != nil {
 		return Enrollment{}, ErrDenied

@@ -1,0 +1,618 @@
+.vult-studio {
+  --vult-studio-canvas: #ffffff;
+  --color-text-primary: #171717;
+  --color-text-secondary: #737373;
+  --color-text-secondary_hover: #171717;
+  --color-text-tertiary: #737373;
+  --color-text-tertiary_hover: #525252;
+  --color-text-quaternary: #a3a3a3;
+  --color-text-placeholder: #737373;
+  --color-text-error-primary: var(--color-red-700);
+  --color-fg-error-primary: var(--color-red-600);
+  --color-bg-error-primary: var(--color-red-50);
+  --color-border-error_subtle: var(--color-red-200);
+  --color-border-primary: #d4d4d4;
+  --color-border-secondary: #e5e5e5;
+  --color-border-secondary_alt: rgb(31 39 55 / 0.08);
+  --color-border-tertiary: #eef1f5;
+  --color-border-brand: #007df9;
+  --color-border-brand_alt: #006edb;
+  --color-fg-primary: #252921;
+  --color-fg-secondary: #464d43;
+  --color-fg-secondary_hover: #252921;
+  --color-fg-tertiary: #687066;
+  --color-fg-tertiary_hover: #464d43;
+  --color-fg-quaternary: #858c82;
+  --color-fg-quaternary_hover: #626a60;
+  --color-fg-brand-primary: #006edb;
+  --color-fg-brand-primary_alt: #006edb;
+  --color-fg-brand-secondary: #007df9;
+  --color-fg-brand-secondary_alt: #007df9;
+  --color-fg-brand-secondary_hover: #006edb;
+  --color-bg-primary: #ffffff;
+  --color-bg-primary_hover: #f7f8fa;
+  --color-bg-secondary: #f6f8fa;
+  --color-bg-secondary_hover: #eef1f5;
+  --color-bg-tertiary: #edf1f5;
+  --color-bg-quaternary: #dfe5ec;
+  --color-bg-primary_alt: #ffffff;
+  --color-bg-secondary_alt: #f6f8fa;
+  --color-bg-active: #eff8ff;
+  --color-bg-overlay: #252921;
+  --color-bg-brand-primary: #eff8ff;
+  --color-bg-brand-primary_alt: #eff8ff;
+  --color-bg-brand-secondary: #dbeeff;
+  --color-bg-brand-solid: #006edb;
+  --color-bg-brand-solid_hover: #005bb8;
+  --color-brand-400: #53adff;
+  --color-brand-500: #007df9;
+  --color-brand-600: #006edb;
+  --color-brand-700: #005bb8;
+
+  --background-color-primary: var(--color-bg-primary);
+  --background-color-primary_hover: var(--color-bg-primary_hover);
+  --background-color-secondary: var(--color-bg-secondary);
+  --background-color-secondary_hover: var(--color-bg-secondary_hover);
+  --background-color-tertiary: var(--color-bg-tertiary);
+  --background-color-quaternary: var(--color-bg-quaternary);
+  --background-color-active: var(--color-bg-active);
+  --background-color-brand-primary: var(--color-bg-brand-primary);
+  --background-color-brand-secondary: var(--color-bg-brand-secondary);
+  --background-color-brand-solid: var(--color-bg-brand-solid);
+  --background-color-brand-solid_hover: var(--color-bg-brand-solid_hover);
+  --shadow-xs: 0 1px 2px rgb(15 23 42 / 0.025);
+  --shadow-sm: 0 2px 5px rgb(15 23 42 / 0.04);
+  --shadow-md: 0 8px 18px -8px rgb(15 23 42 / 0.12);
+  --shadow-lg: 0 16px 32px -16px rgb(15 23 42 / 0.16);
+  --shadow-xs-skeuomorphic:
+    inset 0 0 0 1px rgb(31 39 55 / 0.08), var(--shadow-xs);
+  --vult-surface-paper: #ffffff;
+  --vult-surface-rim: rgb(31 39 55 / 0.08);
+  --vult-navigation-surface: oklch(0.985 0 0);
+  --vult-shell-panel-radius: 0.75rem;
+  --vult-shell-panel-inset: 0.5rem;
+  --vult-shell-panel-shadow:
+    0 0 0 1px var(--vult-workbench-border), 0 1px 2px rgb(0 0 0 / 0.05);
+  --vult-workbench-surface-base: #ffffff;
+  --vult-workbench-surface-control: #fafbfa;
+  --vult-workbench-surface-summary: var(--vult-workbench-surface-control);
+  --vult-workbench-surface-inspector: #ffffff;
+  --vult-workbench-border: #e5e5e5;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  min-height: 100dvh;
+  background: var(--vult-studio-canvas);
+  color: var(--color-text-primary);
+}
+
+.dark-mode .vult-studio {
+  /* shadcn Neutral: page, elevated surface, then muted/interactive surface. */
+  --vult-studio-canvas: oklch(0.145 0 0);
+  --color-text-primary: oklch(0.985 0 0);
+  --color-text-secondary: oklch(0.708 0 0);
+  --color-text-secondary_hover: var(--color-text-primary);
+  --color-text-tertiary: var(--color-text-secondary);
+  --color-text-tertiary_hover: #d4d4d4;
+  --color-text-quaternary: #737373;
+  --color-text-placeholder: var(--color-text-secondary);
+  --color-text-error-primary: var(--color-red-300);
+  --color-fg-error-primary: var(--color-red-400);
+  --color-bg-error-primary: var(--color-red-950);
+  --color-border-error_subtle: var(--color-red-800);
+  --color-border-primary: oklch(1 0 0 / 15%);
+  --color-border-secondary: oklch(1 0 0 / 10%);
+  --color-border-secondary_alt: rgb(255 255 255 / 0.1);
+  --color-border-tertiary: oklch(1 0 0 / 6%);
+  --color-border-brand: #007df9;
+  --color-border-brand_alt: #53adff;
+  --color-fg-primary: var(--color-text-primary);
+  --color-fg-secondary: #d4d4d4;
+  --color-fg-secondary_hover: var(--color-text-primary);
+  --color-fg-tertiary: var(--color-text-secondary);
+  --color-fg-tertiary_hover: #d4d4d4;
+  --color-fg-quaternary: #8c8c8c;
+  --color-fg-quaternary_hover: #b4b4b4;
+  --color-fg-brand-primary: #53adff;
+  --color-fg-brand-primary_alt: #53adff;
+  --color-fg-brand-secondary: #53adff;
+  --color-fg-brand-secondary_alt: #53adff;
+  --color-fg-brand-secondary_hover: #8dccff;
+  --color-bg-primary: var(--vult-studio-canvas);
+  --color-bg-primary_hover: oklch(0.269 0 0);
+  --color-bg-secondary: var(--vult-surface-paper);
+  --color-bg-secondary_hover: var(--color-bg-primary_hover);
+  --color-bg-tertiary: var(--color-bg-primary_hover);
+  --color-bg-quaternary: #404040;
+  --color-bg-primary_alt: var(--color-bg-primary);
+  --color-bg-secondary_alt: var(--color-bg-secondary);
+  --color-bg-active: #0b2b48;
+  --color-bg-overlay: #0a0a0a;
+  --color-bg-brand-primary: #0d2d4d;
+  --color-bg-brand-primary_alt: #0d2d4d;
+  --color-bg-brand-secondary: #103b63;
+  --color-bg-brand-solid: #006edb;
+  --color-bg-brand-solid_hover: #0074e8;
+  --color-brand-400: #53adff;
+  --color-brand-500: #007df9;
+  --color-brand-600: #006edb;
+  --color-brand-700: #005bb8;
+
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.16);
+  --shadow-sm: 0 2px 5px rgb(0 0 0 / 0.2);
+  --shadow-md: 0 8px 18px -8px rgb(0 0 0 / 0.44);
+  --shadow-lg: 0 16px 32px -16px rgb(0 0 0 / 0.56);
+  --shadow-xs-skeuomorphic:
+    inset 0 0 0 1px rgb(255 255 255 / 0.12), var(--shadow-xs);
+  --vult-surface-paper: oklch(0.205 0 0);
+  --vult-surface-rim: var(--color-border-secondary);
+  --vult-navigation-surface: var(--vult-surface-paper);
+  --vult-workbench-surface-base: var(--vult-studio-canvas);
+  --vult-workbench-surface-control: var(--vult-surface-paper);
+  --vult-workbench-surface-summary: var(--color-bg-tertiary);
+  --vult-workbench-surface-inspector: var(--vult-surface-paper);
+  --vult-workbench-border: var(--color-border-secondary);
+}
+
+.vult-workbench-surface-base {
+  background-color: var(--vult-workbench-surface-base);
+}
+
+.vult-surface-paper {
+  background-color: var(--vult-surface-paper);
+}
+
+.vult-navigation-surface {
+  background-color: var(--vult-navigation-surface);
+}
+
+.light-mode .vult-navigation-surface [data-vult-surface="application-chrome"] {
+  --vult-interaction-hover: oklch(0.97 0 0);
+  --vult-interaction-selected: oklch(0.97 0 0);
+  --vult-interaction-selected-hover: oklch(0.97 0 0);
+}
+
+.dark-mode .vult-navigation-surface {
+  --vult-interaction-hover: var(--color-bg-tertiary);
+  --vult-interaction-selected: var(--color-bg-tertiary);
+  --vult-interaction-selected-hover: var(--color-bg-tertiary);
+}
+
+.vult-dropdown-popover {
+  --vult-dropdown-elevation:
+    0 0 0 1px rgb(24 28 24 / 0.14), 0 4px 8px -4px rgb(24 28 24 / 0.18),
+    0 16px 40px -8px rgb(24 28 24 / 0.22);
+}
+
+.dark-mode .vult-dropdown-popover {
+  --color-bg-primary: var(--vult-surface-paper);
+  --vult-interaction-hover: var(--color-bg-tertiary);
+  --vult-interaction-selected: var(--color-bg-tertiary);
+  --vult-interaction-selected-hover: var(--color-bg-tertiary);
+  background: var(--vult-surface-paper);
+  --vult-dropdown-elevation:
+    0 0 0 1px rgb(255 255 255 / 0.14), 0 4px 8px -4px rgb(0 0 0 / 0.48),
+    0 16px 40px -8px rgb(0 0 0 / 0.6);
+}
+
+.dark-mode .vult-dropdown-popover .vult-secondary-surface {
+  background-color: var(--vult-control-secondary-background);
+  background-image: none;
+  box-shadow: inset 0 0 0 1px var(--vult-control-border);
+}
+
+.dark-mode .vult-dropdown-popover .vult-secondary-surface:disabled,
+.dark-mode .vult-dropdown-popover .vult-secondary-surface[data-disabled] {
+  background-color: var(--vult-control-secondary-background);
+  background-image: none;
+  box-shadow: inset 0 0 0 1px var(--color-border-secondary);
+  color: var(--color-text-quaternary);
+}
+
+.vult-workbench-surface-control {
+  background-color: var(--vult-workbench-surface-control);
+}
+
+.vult-import-card {
+  box-shadow:
+    var(
+      --vult-import-card-stroke,
+      0 0 0 0.5px color-mix(in srgb, var(--color-fg-primary) 9%, transparent)
+    ),
+    0 3px 6px -2px color-mix(in srgb, var(--color-fg-primary) 2%, transparent),
+    0 1px 1px color-mix(in srgb, var(--color-fg-primary) 4%, transparent);
+}
+
+.vult-import-composer {
+  /* Its top edge meets a scroll viewport, so the stroke must stay inside it. */
+  --vult-import-card-stroke: inset 0 0 0 1px var(--color-border-secondary);
+  height: 15rem;
+}
+
+/* Activity has no percentage: the import API confirms an outcome, not progress. */
+.vult-import-operation [data-file-progress-fill][data-indeterminate="true"] {
+  width: 40%;
+  animation: vult-import-processing 1.2s linear infinite;
+}
+
+@keyframes vult-import-processing {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vult-import-operation [data-file-progress-fill][data-indeterminate="true"] {
+    animation: none;
+    transform: translateX(100%);
+  }
+}
+
+@media (max-width: 40rem) {
+  .vult-import-composer {
+    height: 18rem;
+  }
+}
+
+.vult-import-composer[data-stable-intake="true"] {
+  height: clamp(9rem, calc(100dvh - 22rem), 15rem);
+}
+
+.dark-mode .vult-import-card {
+  box-shadow:
+    var(
+      --vult-import-card-stroke,
+      0 0 0 0.5px color-mix(in srgb, white 12%, transparent)
+    ),
+    0 3px 6px -2px rgb(0 0 0 / 0.22),
+    0 1px 1px rgb(0 0 0 / 0.28);
+}
+
+.vult-sliding-tabs {
+  background: var(--vult-workbench-surface-control);
+}
+
+.vult-sliding-tabs::before {
+  position: absolute;
+  inset-block: 2px;
+  inset-inline-start: 2px;
+  width: calc((100% - 4px) / 2);
+  border-radius: var(--radius-md);
+  background: var(--vult-interaction-selected);
+  box-shadow: inset 0 0 0 1px var(--vult-workbench-border);
+  content: "";
+  pointer-events: none;
+  transform: translateX(0);
+  transition: transform 220ms cubic-bezier(0.23, 1, 0.32, 1);
+  will-change: transform;
+}
+
+.vult-sliding-tabs[data-active-tab="1"]::before {
+  transform: translateX(100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vult-sliding-tabs::before {
+    transition-duration: 0ms;
+  }
+}
+
+.vult-workbench-surface-inspector {
+  background-color: var(--vult-workbench-surface-inspector);
+}
+
+.vult-studio [data-vult-surface="main-canvas"] {
+  background-color: var(--vult-workbench-surface-base);
+  border-color: var(--vult-workbench-border);
+}
+
+.vult-studio :where(input:not([type="checkbox"]):not([type="radio"]), select) {
+  min-height: var(--vult-control-height-md);
+}
+
+.vult-studio .vult-table-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.vult-studio .vult-table-scroll {
+  border-radius: 0;
+}
+
+.vult-studio .vult-table-header {
+  background: transparent;
+}
+
+.vult-studio .vult-table-header > tr > th {
+  background: var(--vult-workbench-surface-control);
+}
+
+.vult-studio .vult-table-header > tr > th:first-child {
+  border-radius: 0.5rem 0 0 0.5rem;
+}
+
+.vult-studio .vult-table-header > tr > th:last-child {
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.vult-studio .vult-table-row {
+  background: transparent;
+}
+
+.vult-studio .vult-table-card-viewport .vult-table-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.vult-studio .vult-table-column-header {
+  height: var(--vult-compact-toolbar-height);
+  border-radius: var(--radius-lg);
+  background: var(--vult-workbench-surface-control);
+}
+
+.vult-studio .vult-table-semantic-header,
+.vult-studio .vult-table-semantic-header > tr,
+.vult-studio .vult-table-semantic-header > tr > th {
+  height: 0;
+  padding-block: 0;
+  border: 0;
+  opacity: 0;
+  line-height: 0;
+  pointer-events: none;
+}
+
+.vult-studio .vult-table-semantic-header > tr > th * {
+  height: 0;
+  overflow: hidden;
+}
+
+.vult-studio .vult-table-pagination {
+  min-height: var(--vult-compact-toolbar-height);
+  padding: 4px 8px;
+  border-radius: var(--radius-lg);
+  background: var(--vult-workbench-surface-control);
+}
+
+.vult-studio .vult-settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.vult-studio .vult-settings-content .vult-settings-section-body {
+  border: 1px solid
+    color-mix(in srgb, var(--color-border-secondary) 65%, transparent);
+  border-radius: 10px;
+  background: var(--vult-surface-paper);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
+}
+
+.vult-studio .vult-settings-content .vult-settings-section-header {
+  border-bottom-color: transparent;
+}
+
+.vult-studio .vult-settings-content .vult-settings-section-footer {
+  border-color: color-mix(
+    in srgb,
+    var(--color-border-secondary) 78%,
+    transparent
+  );
+  margin-inline: 16px;
+  padding-inline: 0;
+}
+
+/* Surface roles are intentionally few. Local content can vary without redefining application depth. */
+.vult-studio [data-vult-surface="application-chrome"] {
+  background: inherit;
+  box-shadow: none;
+}
+
+.vult-studio
+  [data-vult-surface="application-chrome"]
+  .vult-action-fill:not([aria-current="page"]):not([data-selected]):active {
+  background: var(--vult-interaction-selected);
+  color: var(--color-text-primary);
+}
+
+.vult-studio [data-vult-surface="main-canvas"] {
+  box-shadow: none;
+}
+
+.dark-mode .vult-studio [data-vult-surface="main-canvas"] {
+  background: var(--vult-studio-canvas);
+}
+
+.vult-studio [data-vult-surface="bounded-object"] {
+  border: 1px solid var(--color-border-secondary);
+  border-color: var(--color-border-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--vult-surface-paper);
+  box-shadow: none;
+}
+
+.vult-studio [data-vult-surface="overlay"] {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.vult-dropdown-popover,
+.vult-studio [data-vult-surface="overlay"].vult-dropdown-popover {
+  box-shadow: var(--vult-dropdown-elevation);
+}
+
+.vult-studio [data-vult-surface="overlay"].vult-settings-surface {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.vult-studio [data-vult-surface="semantic"] {
+  box-shadow: none;
+}
+
+/* Collections consume the working canvas instead of sitting inside another card. */
+.vult-studio [data-vult-page-shape="collection"] .vult-page-body,
+.vult-studio
+  [data-vult-page-shape="collection"]
+  [data-testid="workspace-contact-list"] {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.vult-studio [data-vult-page-shape="collection"] .vult-table-card {
+  border: 0;
+  border-radius: 0;
+}
+
+.vult-studio [data-vult-page-shape="collection"] .vult-table-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  border-radius: 0;
+}
+
+/* Draft inspector rows share the results inspector's density and type roles. */
+.vult-draft-property {
+  font-family: var(--font-body);
+  font-size: var(--text-vult-label);
+  line-height: var(--text-vult-label--line-height);
+  font-weight: 500;
+}
+.vult-draft-property button,
+.vult-draft-property textarea,
+.vult-draft-property input,
+.vult-draft-property button p {
+  font: inherit;
+}
+.vult-draft-property button,
+.vult-draft-property textarea {
+  min-height: 28px;
+  padding-block: 3px;
+}
+.vult-draft-property > button,
+.vult-draft-property textarea,
+.vult-draft-property input {
+  text-align: right;
+}
+.vult-draft-property button > span {
+  padding-block: 0;
+}
+.vult-draft-property > :last-child {
+  min-width: 0;
+}
+.vult-draft-property button p {
+  text-align: right;
+}
+
+.vult-draft-property button > span {
+  font: inherit;
+}
+.vult-draft-property button > span > section {
+  justify-content: flex-end;
+}
+
+.vult-draft-property > button,
+.vult-draft-property button > span {
+  padding-inline: 0;
+}
+
+.vult-import-step-track,
+.vult-import-method-track {
+  display: flex;
+  width: 200%;
+  height: 100%;
+  transform: translateX(0);
+}
+
+.vult-import-step-track[data-step="review"],
+.vult-import-method-track[data-method="manual"] {
+  transform: translateX(-50%);
+}
+
+.vult-import-step-track[data-motion="true"],
+.vult-import-method-track[data-motion="true"] {
+  transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.vult-contact-entry-viewport {
+  overflow: hidden;
+  transition: height 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.vult-exclusion-step-viewport {
+  overflow: hidden;
+  transition: height 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.vult-exclusion-step-track {
+  display: flex;
+  align-items: flex-start;
+  width: 200%;
+  transform: translateX(0);
+  transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.vult-exclusion-step-track[data-step="csv"] {
+  transform: translateX(-50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vult-import-step-track[data-motion="true"],
+  .vult-import-method-track[data-motion="true"],
+  .vult-contact-entry-viewport,
+  .vult-exclusion-step-viewport,
+  .vult-exclusion-step-track {
+    transition: none;
+  }
+}
+
+.dark-mode .vult-import-card {
+  box-shadow:
+    var(
+      --vult-import-card-stroke,
+      0 0 0 0.5px color-mix(in srgb, white 12%, transparent)
+    ),
+    0 3px 6px -2px rgb(0 0 0 / 0.22),
+    0 1px 1px rgb(0 0 0 / 0.28);
+}
+
+.dark-mode .vult-import-composer[data-embedded="true"] {
+  box-shadow: none;
+}
+
+.vult-sliding-tabs {
+  background: var(--vult-workbench-surface-control);
+}
+
+.vult-sliding-tabs::before {
+  position: absolute;
+  inset-block: 2px;
+  inset-inline-start: 2px;
+  width: calc((100% - 4px) / 2);
+  border-radius: var(--radius-md);
+  background: var(--vult-interaction-selected);
+  box-shadow: inset 0 0 0 1px var(--vult-workbench-border);
+  content: "";
+  pointer-events: none;
+  transform: translateX(0);
+  transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  will-change: transform;
+}
+
+.vult-sliding-tabs[data-active-tab="1"]::before {
+  transform: translateX(100%);
+}
+
+.vult-sliding-tabs[data-motion="false"]::before {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vult-sliding-tabs::before {
+    transition-duration: 0ms;
+  }
+}

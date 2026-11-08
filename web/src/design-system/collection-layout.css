@@ -1,0 +1,124 @@
+/* Opt-in empty collections fill the usable body between header and footer.
+   Keep the source grid tracks and horizontal scrolling intact. */
+.vult-collection-layout[data-vult-region="records-table"] {
+  --records-top-inset: 0px;
+  padding-block-end: var(--vult-collection-bottom-inset, 24px);
+}
+
+[data-vult-focus-visible="true"]
+  [data-vult-region="collection-filters"]
+  button {
+  transition: none;
+}
+
+[data-vult-focus-visible="true"] .vult-collection-layout button {
+  transition: none;
+  transform: none;
+}
+
+/* A passive cell navigates a read-only record. Paint its keyboard focus around
+   that row; nested buttons, checkboxes and header controls keep their own rings. */
+.vult-collection-row-focus tbody > tr.vult-focus-target,
+.vult-collection-row-focus tbody > tr > td.vult-focus-target {
+  outline: none;
+}
+
+/* Paint on the cells so sticky identity/amount columns cannot cover the row's
+   shared indicator. These are continuous bands, with sides only at row edges. */
+.vult-collection-row-focus
+  tbody
+  > tr:is([data-focus-visible], :has(> td[data-focus-visible]))
+  > td {
+  --vult-row-ring-start: 0px;
+  --vult-row-ring-end: 0px;
+  box-shadow:
+    inset 0 var(--vult-focus-ring-width) 0 var(--vult-control-focus-ring),
+    inset 0 calc(-1 * var(--vult-focus-ring-width)) 0
+      var(--vult-control-focus-ring),
+    inset var(--vult-row-ring-start) 0 0 var(--vult-control-focus-ring),
+    inset var(--vult-row-ring-end) 0 0 var(--vult-control-focus-ring);
+}
+
+.vult-collection-row-focus
+  tbody
+  > tr:is([data-focus-visible], :has(> td[data-focus-visible]))
+  > td:first-child {
+  --vult-row-ring-start: var(--vult-focus-ring-width);
+}
+
+.vult-collection-row-focus
+  tbody
+  > tr:is([data-focus-visible], :has(> td[data-focus-visible]))
+  > td:last-child {
+  --vult-row-ring-end: calc(-1 * var(--vult-focus-ring-width));
+}
+
+.vult-collection-layout [data-vult-view-scroll][data-empty] > tr {
+  height: 100%;
+}
+
+.vult-collection-layout [data-vult-view-scroll][data-empty] > tr > td {
+  display: flex;
+  align-items: safe center;
+}
+
+.vult-collection-layout [data-vult-view-scroll][data-empty] > tr > td > div {
+  position: sticky;
+  left: 0;
+  width: 100%;
+  max-width: 100cqw;
+  padding-block: 24px;
+}
+
+/* The shared table keeps every data field reachable on phones: scroll the identity track
+   with the other columns while the fixed action rail remains available. */
+@media (width < 640px) {
+  .vult-collection-layout thead > tr > th:first-child,
+  .vult-collection-layout tbody > tr > td:first-child {
+    position: static;
+  }
+}
+
+@container (width < 360px) {
+  /* The navigation remains named, and "Page" remains available to assistive
+     technology. Keep the source control sizes and spacing on narrow phones. */
+  .vult-collection-layout
+    [data-vult-region="table-pagination"]
+    > nav[aria-label]
+    > span:first-of-type {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  /* The same count is available in the collection filters above. Keep the
+     pager and page-size control visible instead of clipping that count. */
+  .vult-collection-layout
+    [data-vult-region="table-pagination"]
+    > nav[aria-label]
+    > span:last-child {
+    display: none;
+  }
+  /* The pager fits a 375px phone without scrolling: the page box holds four
+     digits and the page-size select is as wide as "100 rows". */
+  .vult-collection-layout [data-vult-region="table-pagination"] > nav[aria-label] {
+    flex: 1;
+    gap: 6px;
+  }
+  /* The pager stays together at the start and the page size sits at the
+     end, so the footer spans the table instead of bunching to the left. */
+  .vult-collection-layout [data-vult-region="table-pagination"] > nav[aria-label] > .vult-compact-select {
+    margin-inline-start: auto;
+  }
+  .vult-collection-layout [data-vult-region="table-pagination"] > nav[aria-label] > .vult-input-control {
+    width: 52px;
+  }
+  .vult-collection-layout [data-vult-region="table-pagination"] .vult-compact-select {
+    width: auto;
+  }
+  .vult-collection-layout [data-vult-region="table-pagination"] .vult-select-value {
+    padding-inline: 8px;
+  }
+}

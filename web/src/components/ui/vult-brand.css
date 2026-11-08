@@ -1,0 +1,34 @@
+/*
+ * The approved lockup. --mark is the triangle's size; the wordmark follows the
+ * lockup geometry in public/brand: it is 0.813 marks tall and 1.993 wide, starts
+ * 0.306 marks after the mark, and its top sits 0.02 marks above the mark's box.
+ */
+.vult-brand {
+  --mark: 20px;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--mark) * 0.306);
+  height: var(--mark);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+.vult-brand[data-size="16"] {
+  --mark: 16px;
+}
+.vult-brand-mark {
+  flex: none;
+  width: var(--mark);
+  height: var(--mark);
+  margin-top: calc(var(--mark) * 0.02);
+}
+.vult-brand-word {
+  display: inline-flex;
+}
+.vult-brand-word > svg {
+  display: block;
+  flex: none;
+  width: calc(var(--mark) * 1.993);
+  height: calc(var(--mark) * 0.813);
+  margin-bottom: calc(var(--mark) * 0.207);
+}

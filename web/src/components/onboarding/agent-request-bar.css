@@ -1,0 +1,50 @@
+/* A request from an agent on this Mac, floating above the Book until answered. */
+.agent-request-bar {
+  position: fixed;
+  z-index: 60;
+  top: 12px;
+  left: 50%;
+  display: flex;
+  width: min(560px, calc(100vw - 32px));
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 12px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-lg);
+  transform: translateX(-50%);
+  animation: agent-request-in 280ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.agent-request-avatar {
+  display: grid;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  font-weight: var(--text-vult-label--font-weight);
+}
+.agent-request-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+}
+.agent-request-text small {
+  overflow: hidden;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-metadata);
+  line-height: var(--text-vult-metadata--line-height);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@keyframes agent-request-in {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-request-bar { animation: none; }
+}

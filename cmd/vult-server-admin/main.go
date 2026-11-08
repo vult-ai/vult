@@ -44,6 +44,7 @@ type request struct {
 	KeyDirectory    string `json:"key_directory,omitempty"`
 	RecoveryKeyFile string `json:"recovery_key_file,omitempty"`
 	ArchiveFile     string `json:"archive_file,omitempty"`
+	Origin          string `json:"origin,omitempty"`
 }
 
 func openDatabase(ctx context.Context, path string) (*pgxpool.Pool, error) {
@@ -80,11 +81,15 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return errOperation
 	}
 	command := args[0]
+	if command == "inspect-import" {
+		return inspectImport(ctx, args[1:], out)
+	}
 	if command == "--help" {
-		_, _ = fmt.Fprintln(out, "Usage: vult-server-admin migrate|bind-owner|revoke-identity|init|recover|book|document-key|expire-documents|backup|restore|export --dsn-file FILE --input FILE --output FILE")
+		_, _ = fmt.Fprintln(out, "Usage: vult-server-admin migrate|bind-owner|revoke-identity|init|recover|passkey-setup|passkey-recover|book|document-key|expire-documents|backup|restore|export --dsn-file FILE --input FILE --output FILE")
+		_, _ = fmt.Fprintln(out, "       vult-server-admin inspect-import --archive FILE --output FILE")
 		return nil
 	}
-	if command != "migrate" && command != "bind-owner" && command != "revoke-identity" && command != "init" && command != "recover" && command != "book" && command != "document-key" && command != "expire-documents" && command != "backup" && command != "restore" && command != "export" {
+	if command != "migrate" && command != "bind-owner" && command != "revoke-identity" && command != "init" && command != "recover" && command != "passkey-setup" && command != "passkey-recover" && command != "book" && command != "document-key" && command != "expire-documents" && command != "backup" && command != "restore" && command != "export" {
 		return errOperation
 	}
 	f := flag.NewFlagSet("vult-server-admin", flag.ContinueOnError)
@@ -155,6 +160,22 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		} else {
 			result, e = operator.ResetBuiltin(ctx, q.Username, q.Passphrase, key)
 		}
+	case "passkey-setup", "passkey-recover":
+		if q.Passphrase != "" || q.KeyFile != "" {
+			return errOperation
+		}
+		var setup access.PasskeySetup
+		if command == "passkey-setup" {
+			setup, e = operator.InitializePasskeys(ctx, q.TenantID, q.Username, q.Origin)
+		} else {
+			setup, e = operator.ResetPasskeys(ctx, q.Username, q.Origin)
+		}
+		result = struct {
+			TenantID      string   `json:"tenant_id"`
+			SetupURL      string   `json:"setup_url"`
+			ExpiresIn     int      `json:"expires_in_seconds"`
+			RecoveryCodes []string `json:"recovery_codes,omitempty"`
+		}{setup.TenantID, q.Origin + "/auth/setup#setup=" + setup.Token, 300, setup.RecoveryCodes}
 	case "book":
 		var owner ledger.TenantAdmin
 		owner, e = (ledger.Admin{DB: db}).ForTenant(ctx, q.TenantID)

@@ -28,6 +28,7 @@ vult_install() {
         return 1
     fi
     /usr/bin/printf '%s\n' 'Installing Vult @VERSION@. macOS will ask for administrator approval.'
+    /usr/bin/printf '%s\n' 'Next, run /Library/PrivilegedHelperTools/ai.vult.ledger/vult mcp install, then /Library/PrivilegedHelperTools/ai.vult.ledger/vult setup. Setup opens a page in your browser to create your passkey.'
     /usr/bin/osascript <<'VULT_ADMIN'
 @ROOT_LINES@
 set previousDelimiters to AppleScript's text item delimiters
@@ -35,7 +36,7 @@ set AppleScript's text item delimiters to linefeed
 set installScript to installLines as text
 set AppleScript's text item delimiters to previousDelimiters
 set installCommand to "/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin LANG=C LC_ALL=C /bin/sh -c " & quoted form of installScript
-do shell script installCommand with administrator privileges with prompt "Install Vult @VERSION@ and its protected local ledger."
+do shell script installCommand with administrator privileges with prompt "Install Vult @VERSION@ on this Mac, with its own private database. Next, Vult opens in your browser to finish setting up."
 VULT_ADMIN
 }
 

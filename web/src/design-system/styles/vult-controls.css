@@ -1,0 +1,1023 @@
+/* Canonical control rules. Standards: docs/design/. */
+:root {
+  --vult-control-height-sm: 32px;
+  --vult-control-height-md: 36px;
+  --vult-control-height-lg: 40px;
+  --vult-control-radius: 8px;
+  --vult-control-icon-size: 16px;
+  /* Menu standard v1 (docs/design/menus.md): size follows content within limits. */
+  --vult-menu-min-width: 144px;
+  --vult-menu-max-width: 280px;
+  --vult-menu-select-max-width: 320px;
+  --vult-menu-max-height: 360px;
+  --vult-menu-padding: 4px;
+  --vult-menu-row-height: var(--vult-control-height-sm);
+  --vult-menu-row-start: 8px;
+  --vult-menu-row-end: 12px;
+  --vult-menu-icon-size: var(--vult-control-icon-size);
+  --vult-menu-icon-gap: 8px;
+  --vult-menu-row-radius: calc(var(--vult-control-radius) - var(--vult-menu-padding));
+  --vult-control-foreground: oklch(0.145 0 0);
+  --vult-control-background: oklch(1 0 0);
+  --vult-control-muted: #737373;
+  --vult-control-border: oklch(0.922 0 0);
+  --vult-control-hover: oklch(0.97 0 0);
+  --vult-control-primary: oklch(0.205 0 0);
+  --vult-control-primary-foreground: oklch(0.985 0 0);
+  --vult-control-primary-hover: color-mix(
+    in oklab,
+    var(--vult-control-primary) 80%,
+    transparent
+  );
+  --vult-control-secondary-background: var(--vult-control-background);
+  --vult-control-secondary-hover: var(--vult-control-hover);
+  --vult-control-input-background: var(--vult-surface-paper);
+  --vult-control-shadow: 0 1px 2px 0 rgb(0 0 0 / 5%);
+  --vult-control-shadow-pressed: var(--vult-control-shadow);
+  --vult-control-focus-border: oklch(0.708 0 0);
+  --vult-control-focus-width: 3px;
+  --vult-focus-ring-width: var(--vult-control-focus-width);
+  --vult-control-focus-ring: color-mix(
+    in oklab,
+    var(--vult-control-focus-border) 50%,
+    transparent
+  );
+  --color-focus-ring: var(--vult-control-focus-ring);
+  --vult-control-ghost-foreground: #0a0a0a;
+  --vult-control-ghost-hover: var(--vult-control-hover);
+  --vult-link-hover: #171717;
+}
+
+.dark-mode {
+  --vult-control-foreground: oklch(0.985 0 0);
+  --vult-control-background: oklch(0.145 0 0);
+  --vult-control-muted: #a3a3a3;
+  --vult-control-border: oklch(1 0 0 / 15%);
+  --vult-control-hover: oklch(0.269 0 0);
+  --vult-control-primary: oklch(0.922 0 0);
+  --vult-control-primary-foreground: oklch(0.205 0 0);
+  --vult-control-secondary-background: color-mix(
+    in oklab,
+    var(--vult-control-border) 30%,
+    transparent
+  );
+  --vult-control-secondary-hover: color-mix(
+    in oklab,
+    var(--vult-control-border) 50%,
+    transparent
+  );
+  --vult-control-input-background: var(--vult-surface-paper);
+  --vult-control-focus-border: oklch(0.556 0 0);
+  --vult-control-ghost-foreground: #fafafa;
+  --vult-control-ghost-hover: color-mix(
+    in oklab,
+    var(--vult-control-hover) 50%,
+    transparent
+  );
+  --vult-link-hover: #e5e5e5;
+}
+
+/* Pointer focus retains the caret, selection and validation state, without a ring. */
+:root[data-vult-focus-visible="false"] {
+  --vult-focus-ring-width: 0px;
+}
+
+@layer base {
+  * {
+    outline-color: var(--vult-control-focus-ring);
+  }
+}
+
+.vult-button {
+  --vult-control-height: var(--vult-control-height-md);
+  display: inline-flex;
+  position: relative;
+  height: var(--vult-control-height);
+  min-height: var(--vult-control-height);
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--vult-control-radius);
+  outline: none;
+  background: transparent;
+  color: var(--vult-control-foreground);
+  font-size: var(--text-vult-label);
+  font-weight: var(--text-vult-label--font-weight);
+  line-height: var(--text-vult-label--line-height);
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 150ms ease,
+    transform 100ms ease-out;
+}
+
+.vult-button-sm {
+  --vult-control-height: var(--vult-control-height-sm);
+  padding-inline: 10px;
+}
+
+.vult-kbd {
+  display: inline-flex;
+  height: 20px;
+  min-width: 20px;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 4px;
+  border-radius: calc(var(--vult-control-radius) - 3px);
+  background: var(--vult-control-hover);
+  color: var(--vult-control-muted);
+  font-family: var(--font-body);
+  pointer-events: none;
+  user-select: none;
+}
+.vult-button-lg {
+  --vult-control-height: var(--vult-control-height-lg);
+  padding-inline: 16px;
+}
+.vult-kbd-plain {
+  background: transparent;
+}
+.vult-button[data-icon-only] {
+  width: var(--vult-control-height);
+  padding-inline: 0;
+}
+.vult-button > [data-icon] {
+  width: var(--vult-control-icon-size);
+  height: var(--vult-control-icon-size);
+  flex-shrink: 0;
+  color: inherit;
+  pointer-events: none;
+}
+.vult-button > [data-text] {
+  padding-inline: 0;
+}
+
+/* Editable item previews share the form controls' outline, scale, and icon slots. */
+.vult-disclosure-item {
+  min-width: 0;
+  border: 1px solid var(--vult-control-border);
+  border-radius: var(--vult-control-radius);
+  background: var(--vult-control-input-background);
+}
+.vult-disclosure-item__summary {
+  display: grid;
+  grid-template-columns: var(--vult-control-height-sm) minmax(0, 1fr) var(
+      --vult-control-height-sm
+    );
+  align-items: center;
+  gap: 4px;
+  padding: 12px;
+}
+.vult-disclosure-item__icon {
+  display: grid;
+  width: var(--vult-control-height-sm);
+  height: var(--vult-control-height-sm);
+  place-items: center;
+  color: var(--color-text-secondary);
+}
+.vult-disclosure-item__icon > svg {
+  width: var(--vult-control-icon-size);
+  height: var(--vult-control-icon-size);
+}
+.vult-disclosure-item__text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.vult-disclosure-item__value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.vult-disclosure-item__content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 12px 12px;
+  border-top: 1px solid var(--vult-control-border);
+}
+
+/* Numbered accordion rows share one trigger, keyboard focus, and answer layout. */
+.vult-numbered-accordion {
+  min-width: 0;
+}
+.vult-numbered-accordion__item {
+  position: relative;
+}
+.vult-numbered-accordion__item:not(:last-child)::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: -10%;
+  height: 1px;
+  background: var(--color-border-secondary);
+  mask-image: linear-gradient(to right, transparent, black 8%);
+  pointer-events: none;
+  content: "";
+}
+.vult-numbered-accordion__trigger {
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr) 1rem;
+  width: 100%;
+  min-height: 4rem;
+  align-items: stretch;
+  padding: 0 1rem 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  text-align: start;
+  cursor: pointer;
+}
+.vult-numbered-accordion__trigger[aria-expanded="true"] {
+  border-bottom: 1px solid var(--color-border-secondary);
+}
+.vult-numbered-accordion__number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-inline-end: 1px solid var(--color-border-secondary);
+}
+.vult-numbered-accordion__title {
+  align-self: center;
+  padding: 0.75rem 1rem;
+}
+.vult-numbered-accordion__icon {
+  width: var(--vult-control-icon-size);
+  height: var(--vult-control-icon-size);
+  align-self: center;
+  color: var(--color-text-tertiary);
+  transition: transform 150ms ease-out;
+}
+.vult-numbered-accordion__trigger[aria-expanded="true"]
+  .vult-numbered-accordion__icon {
+  transform: rotate(180deg);
+}
+.vult-numbered-accordion__panel {
+  position: relative;
+}
+.vult-numbered-accordion__panel::before {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 4rem;
+  border-inline-end: 1px dashed var(--color-border-secondary);
+  content: "";
+}
+.vult-numbered-accordion__content {
+  padding: 2rem 1rem 2rem 5rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vult-numbered-accordion__icon {
+    transition: none;
+  }
+}
+
+.vult-button-primary {
+  background: var(--vult-control-primary);
+  color: var(--vult-control-primary-foreground);
+}
+.vult-button-secondary {
+  border-color: var(--vult-control-border);
+  background: var(--vult-control-secondary-background);
+  box-shadow: var(--vult-control-shadow);
+}
+.vult-button-ghost {
+  color: var(--vult-control-ghost-foreground);
+}
+.vult-button-destructive {
+  background: var(--color-bg-error-solid);
+  color: #ffffff;
+}
+.vult-button-link {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  justify-content: flex-start;
+}
+/* One focus treatment; components only choose the element and activation state.
+   Outline preserves existing elevation shadows without stacking a second ring.
+   React Aria owns focus visibility on its buttons: native :focus-visible can
+   remain true after pointer-driven menu dismissal restores trigger focus. */
+.vult-focus-visible,
+.vult-focus-target:not([data-rac]):focus-visible,
+.vult-focus-target[data-focus-visible],
+.vult-focus-within:focus-within,
+.group:focus-visible .vult-focus-group,
+.group[data-focus-visible] .vult-focus-group,
+.vult-focus-group-parent:focus-visible .vult-focus-group,
+.vult-select-group:has(> select:focus-visible),
+.vult-button:not([data-rac]):focus-visible,
+.vult-button[data-focus-visible],
+.vult-text-link:focus-visible,
+.vult-input-focused,
+[data-vult-joined] > .vult-input-group:has(.vult-input-focused),
+.vult-action-target:not([data-rac]):focus-visible,
+.vult-action-target[data-focus-visible],
+.vult-pressable:not([data-rac]):focus-visible,
+.vult-pressable[data-focus-visible],
+.vult-row-state:focus-visible,
+.vult-toggle[data-focus-visible] .vult-toggle__track,
+.vult-slider__thumb.is-focus-visible,
+.vult-time-scale__resize-handle:focus-visible::before,
+.vult-time-scale__thumb.is-focus-visible .vult-time-scale__handle,
+.vult-segmented__item[data-focus-visible],
+.vult-context-picker__item[data-focus-visible],
+.vult-context-picker__search:focus-within,
+.prose a:focus-visible:not(:where(.not-prose, .not-prose *)),
+.outline-focus-ring:not([data-rac]):focus-visible,
+.outline-focus-ring[data-focus-visible] {
+  --tw-ring-color: var(--vult-control-focus-border);
+  outline: var(--vult-focus-ring-width) solid var(--vult-control-focus-ring);
+  outline-offset: var(--vult-focus-offset, 0px);
+}
+
+:where(:root:not([data-vult-focus-visible="false"]))
+  :is(
+    .vult-button:not([data-rac]):focus-visible,
+    .vult-button[data-focus-visible]
+  ) {
+  border-color: var(--vult-control-focus-border);
+}
+
+/* Scroll-clipped rows use the same ring inside their boundary. */
+.vult-focus-contained,
+.vult-row-state,
+.vult-shell-rail .vult-navigation-item :is(a, button) {
+  --vult-focus-offset: calc(-1 * var(--vult-control-focus-width));
+}
+
+.vult-focus-visible[aria-invalid="true"],
+.vult-focus-visible[data-invalid],
+.group[data-invalid] .vult-focus-visible,
+.vult-focus-invalid {
+  --tw-ring-color: var(--color-border-error);
+  --vult-control-focus-ring: color-mix(
+    in oklab,
+    var(--color-border-error) 50%,
+    transparent
+  );
+}
+.vult-button:disabled,
+.vult-button[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.vult-button[data-loading] {
+  cursor: progress;
+}
+.vult-button[data-pressed]:not([data-focus-visible]),
+.vult-button:active:not(:focus-visible):not(:disabled) {
+  transform: scale(0.98);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .vult-button-primary:not(:disabled):not([data-disabled]):hover {
+    background: var(--vult-control-primary-hover);
+  }
+  .vult-button-secondary:not(:disabled):not([data-disabled]):hover {
+    background: var(--vult-control-secondary-hover);
+  }
+  .vult-button-ghost:not(:disabled):not([data-disabled]):hover {
+    background: var(--vult-control-ghost-hover);
+  }
+  .vult-button-destructive:not(:disabled):not([data-disabled]):hover {
+    background: var(--color-bg-error-solid_hover);
+  }
+  .vult-button-destructive-outline:not(:disabled):not([data-disabled]):hover,
+  .vult-button-destructive-ghost:not(:disabled):not([data-disabled]):hover {
+    background: var(--color-bg-error-primary);
+  }
+  .vult-button-link:hover,
+  .vult-button-brand-link:hover,
+  .vult-button-destructive-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+}
+
+.vult-text-link {
+  border-radius: var(--radius-xs);
+  color: inherit;
+  font: inherit;
+  text-decoration-line: underline;
+  text-decoration-color: currentColor;
+  text-underline-offset: 4px;
+}
+
+/* Navigable list rows stay on the canvas; text and the arrow provide feedback. */
+.vult-row-link {
+  color: var(--color-text-secondary);
+  transition: color 150ms ease;
+}
+.vult-row-link:focus-visible {
+  color: var(--vult-link-hover);
+}
+@media (hover: hover) and (pointer: fine) {
+  .vult-text-link:hover,
+  .vult-row-link:hover {
+    color: var(--vult-link-hover);
+  }
+}
+
+.vult-input-control {
+  --vult-control-height: var(--vult-control-height-md);
+  height: var(--vult-control-height);
+  min-height: var(--vult-control-height);
+  border: 1px solid var(--vult-control-border);
+  border-radius: var(--vult-control-radius);
+  background: var(--vult-control-input-background);
+  box-shadow: var(--vult-control-shadow);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.vult-input-control[data-control-size="sm"] {
+  --vult-control-height: var(--vult-control-height-sm);
+}
+.vult-input-control[data-control-size="lg"] {
+  --vult-control-height: var(--vult-control-height-lg);
+}
+select.vult-input-control {
+  padding-block: 0;
+  padding-inline: 12px 36px;
+  color: var(--vult-control-foreground);
+}
+.vult-input-control input {
+  height: 100%;
+  min-height: 0;
+  padding-block: 0;
+  color: var(--vult-control-foreground);
+  font-size: var(--text-vult-ui);
+  font-weight: var(--text-vult-ui--font-weight);
+  line-height: var(--text-vult-ui--line-height);
+}
+.vult-input-control input::placeholder {
+  color: var(--vult-control-muted);
+}
+.vult-input-control > svg,
+.vult-input-control button svg {
+  width: var(--vult-control-icon-size);
+  height: var(--vult-control-icon-size);
+}
+:where(:root:not([data-vult-focus-visible="false"]))
+  :is(
+    .vult-input-focused,
+    .vult-context-picker__search:focus-within,
+    [data-vult-joined] > .vult-input-group:has(.vult-input-focused)
+  ) {
+  border-color: var(--vult-control-focus-border);
+}
+.vult-input-invalid {
+  border-color: var(--color-border-error_subtle);
+}
+.vult-input-invalid.vult-input-focused {
+  --vult-control-focus-ring: color-mix(
+    in oklab,
+    var(--color-border-error) 50%,
+    transparent
+  );
+}
+.vult-input-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Inline selects keep document metadata quiet until it is edited. */
+.vult-select-control[data-variant="inline"] {
+  width: fit-content;
+  max-width: 100%;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.vult-select-control[data-variant="inline"] .vult-select-value {
+  padding-inline: 6px;
+}
+.vult-select-control[data-variant="inline"] .vult-select-value > svg {
+  opacity: 0;
+}
+.vult-audience-select
+  .vult-select-control[data-variant="inline"]
+  .vult-select-value
+  > svg {
+  opacity: 0.65;
+}
+.vult-select-control[data-variant="default"]:not(:disabled):not(
+    [data-disabled]
+  ):is(:hover, [aria-expanded="true"]),
+.vult-select-control[data-variant="inline"]:not(:disabled):not(
+    [data-disabled]
+  ):is(:hover, :focus-visible, [aria-expanded="true"]) {
+  background: var(--vult-control-hover);
+}
+.vult-select-control[data-variant="inline"]:is(
+    :hover,
+    :focus-visible,
+    [aria-expanded="true"]
+  )
+  .vult-select-value
+  > svg {
+  opacity: 1;
+}
+
+/* Inspector properties keep the label and value together in one full-row target. */
+.vult-select-control:is([data-variant="property"], [data-variant="inspector"]) {
+  height: 52px;
+  min-height: 52px;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: 0 0 0 1px var(--vult-control-border);
+}
+.vult-select-control:is(
+    [data-variant="property"],
+    [data-variant="inspector"]
+  ):is(:hover, [aria-expanded="true"]) {
+  background: var(--vult-control-hover);
+}
+.vult-select-control:is([data-variant="property"], [data-variant="inspector"])
+  .vult-select-property-label {
+  font-weight: var(--text-vult-ui--font-weight);
+}
+.vult-select-control:is([data-variant="property"], [data-variant="inspector"])
+  .vult-select-value {
+  height: auto;
+  padding: 0 28px 0 0;
+}
+.vult-select-control:is([data-variant="property"], [data-variant="inspector"])
+  .vult-select-value
+  > svg {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  color: var(--vult-control-foreground);
+}
+
+/* Collapsed inspector controls open their select menu from the icon itself. */
+.vult-select-control[data-variant="icon"] {
+  width: var(--vult-control-height-sm);
+  height: var(--vult-control-height-sm);
+  min-height: var(--vult-control-height-sm);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  box-shadow: none;
+}
+.vult-select-control[data-variant="icon"] .vult-select-value {
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  color: var(--color-text-quaternary);
+}
+.vult-select-control[data-variant="icon"]:is(:hover, [aria-expanded="true"]) {
+  background: var(--vult-control-hover);
+}
+
+/* One mounted trigger follows the sidebar's interpolated width and spacing. */
+.vult-select-control[data-variant="inspector"] {
+  height: calc(52px - 20px * var(--vult-sidebar-collapse));
+  min-height: calc(52px - 20px * var(--vult-sidebar-collapse));
+  padding: 0;
+  overflow: hidden;
+  border-radius: calc(10px - 4px * var(--vult-sidebar-collapse));
+  box-shadow: 0 0 0 1px
+    color-mix(
+      in oklab,
+      var(--vult-control-border) calc(100% * (1 - var(--vult-sidebar-collapse))),
+      transparent
+    );
+  transition: background-color 150ms ease;
+}
+.vult-select-control[data-variant="inspector"] .vult-select-property-label {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  white-space: nowrap;
+  opacity: max(0, calc(1 - 2 * var(--vult-sidebar-collapse)));
+}
+.vult-select-control[data-variant="inspector"] .vult-select-value {
+  height: 100%;
+  padding: 0;
+}
+.vult-select-control[data-variant="inspector"] .vult-select-value > span {
+  position: absolute;
+  inset: 24px 38px auto 10px;
+  white-space: nowrap;
+  opacity: max(0, calc(1 - 2 * var(--vult-sidebar-collapse)));
+}
+.vult-select-control[data-variant="inspector"] .vult-select-value > svg {
+  right: calc(
+    10px * (1 - var(--vult-sidebar-collapse)) +
+      (32px - var(--vult-control-icon-size)) / 2 * var(--vult-sidebar-collapse)
+  );
+  color: color-mix(
+    in oklab,
+    var(--vult-control-foreground)
+      calc(100% * (1 - var(--vult-sidebar-collapse))),
+    var(--color-text-quaternary)
+  );
+}
+
+/* Selects share input geometry and use a neutral, inset menu like shadcn. */
+.vult-select-value > svg {
+  width: var(--vult-control-icon-size);
+  height: var(--vult-control-icon-size);
+}
+.vult-select-menu,
+.vult-option-menu {
+  border-radius: var(--vult-control-radius);
+  background: var(--vult-surface-paper);
+  color: var(--vult-control-foreground);
+  --tw-ring-color: var(--vult-control-border);
+}
+/* Menu standard v1. Width follows the longest row within fixed limits; the
+   16px after that row comes from menu padding plus row end padding. */
+.vult-menu {
+  width: max-content;
+  min-width: var(--vult-menu-min-width);
+  max-width: min(var(--vult-menu-max-width), calc(100vw - 16px));
+  /* Keep the shared cap when the overlay engine applies its inline height. */
+  max-height: min(var(--vult-menu-max-height), calc(100dvh - 16px)) !important;
+}
+.vult-menu[data-menu-kind="select"] {
+  min-width: max(var(--vult-menu-min-width), var(--trigger-width, 0px));
+  max-width: min(
+    max(var(--vult-menu-select-max-width), var(--trigger-width, 0px)),
+    calc(100vw - 16px)
+  );
+}
+.vult-menu-list {
+  padding: var(--vult-menu-padding);
+}
+.vult-menu-row {
+  display: flex;
+  align-items: center;
+  gap: var(--vult-menu-icon-gap);
+  min-height: var(--vult-menu-row-height);
+  padding-inline: var(--vult-menu-row-start) var(--vult-menu-row-end);
+  border-radius: var(--vult-menu-row-radius);
+}
+.vult-menu-row > svg,
+.vult-menu-row > [data-menu-icon] {
+  width: var(--vult-menu-icon-size);
+  height: var(--vult-menu-icon-size);
+  flex: none;
+}
+.vult-menu-row [data-menu-addon] {
+  margin-inline-start: 4px;
+}
+.vult-menu-separator {
+  margin-block: var(--vult-menu-padding);
+}
+.vult-select-menu [data-select-option],
+.vult-option-menu [data-menu-option] {
+  background: transparent;
+}
+.vult-select-menu [data-select-option][data-highlighted],
+.vult-option-menu [data-menu-option][data-highlighted] {
+  background: var(--vult-control-hover);
+}
+.vult-select-menu [slot="label"],
+.vult-select-menu [slot="description"],
+.vult-option-menu [data-menu-label] {
+  font-size: var(--text-vult-ui);
+  font-weight: var(--text-vult-ui--font-weight);
+  line-height: var(--text-vult-ui--line-height);
+}
+.vult-option-menu [data-menu-label]:not(.text-error-primary) {
+  color: var(--vult-control-foreground);
+}
+.vult-select-menu [data-select-check] {
+  width: var(--vult-control-icon-size);
+  height: var(--vult-control-icon-size);
+  color: var(--vult-control-foreground);
+}
+
+/* Toolbar calendars share Vult's neutral menus and control geometry. */
+.vult-date-range-picker {
+  width: 292px;
+  max-width: calc(100vw - 24px);
+  max-height: inherit;
+  overflow-y: auto;
+  background: var(--vult-surface-paper);
+  border-radius: var(--vult-control-radius);
+  --tw-ring-color: var(--vult-control-border);
+}
+.vult-date-range-picker__quick {
+  display: flex;
+  gap: 4px;
+  margin: 12px 12px 0;
+  padding: 4px;
+  border-radius: var(--vult-control-radius);
+  background: var(--vult-control-hover);
+}
+.vult-date-range-picker__quick-button {
+  flex: 1;
+  min-width: 0;
+  padding-inline: 4px;
+  color: var(--vult-control-muted);
+}
+.vult-date-range-picker__quick-button[aria-pressed="true"] {
+  border-color: var(--vult-control-border);
+  background: var(--vult-surface-paper);
+  color: var(--vult-control-foreground);
+  box-shadow: var(--vult-control-shadow);
+}
+.vult-range-calendar__month {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.vult-range-calendar__month > table {
+  align-self: center;
+}
+.vult-range-calendar__weekday {
+  display: flex;
+  width: 36px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+}
+.vult-range-calendar__cell {
+  width: 36px;
+  height: 36px;
+}
+.vult-range-calendar__cell[data-selection-start] {
+  border-start-start-radius: var(--vult-control-radius);
+  border-end-start-radius: var(--vult-control-radius);
+}
+.vult-range-calendar__cell[data-selection-end] {
+  border-start-end-radius: var(--vult-control-radius);
+  border-end-end-radius: var(--vult-control-radius);
+}
+.vult-range-calendar__date {
+  border-radius: var(--vult-control-radius);
+  color: var(--vult-control-foreground);
+}
+.vult-range-calendar__date[data-disabled] {
+  color: var(--vult-control-muted);
+  opacity: 0.4;
+}
+.vult-range-calendar__date[data-today]:not([data-selected]) {
+  box-shadow: inset 0 0 0 1px var(--vult-control-border);
+}
+.vult-range-calendar__date[data-selected] {
+  background: var(--vult-control-primary);
+  color: var(--vult-control-primary-foreground);
+}
+.vult-range-calendar__date[data-selected]:hover {
+  background: var(--vult-control-primary-hover);
+  color: var(--vult-control-primary-foreground);
+}
+.vult-date-range-picker__footer {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  padding: 12px;
+  background: var(--vult-surface-paper);
+}
+/* Inline text edits keep the text's footprint instead of form-field geometry. */
+.vult-inline-input {
+  display: inline-grid;
+  position: relative;
+  max-width: 100%;
+  vertical-align: baseline;
+}
+.vult-inline-input__measure,
+.vult-inline-input__field {
+  grid-area: 1 / 1;
+  min-width: 1ch;
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+}
+.vult-inline-input__measure {
+  visibility: hidden;
+  overflow: hidden;
+  white-space: pre;
+  pointer-events: none;
+}
+.vult-inline-input[data-multiline] {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+}
+.vult-inline-input[data-multiline] > .vult-inline-input__measure,
+.vult-inline-input[data-multiline] > .vult-inline-input__field {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.vult-inline-input[data-multiline] > .vult-inline-input__field {
+  resize: none;
+  overflow: hidden;
+}
+.vult-inline-input > .vult-inline-input__field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  outline: none;
+}
+.vult-inline-input__field:focus {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--vult-control-muted);
+}
+.vult-inline-input:not([data-multiline])
+  > .vult-inline-input__field:not(:focus) {
+  text-overflow: ellipsis;
+}
+@media (hover: hover) and (pointer: fine) {
+  .vult-inline-input__field:not(:disabled):hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--vult-control-muted);
+  }
+}
+
+.vult-input-prefix {
+  padding-block: 0;
+  font-size: var(--text-vult-ui);
+}
+/* Joined fields retain rounded outer corners and a straight shared seam. */
+.vult-input-group:has(> [data-leading]) > .vult-input-control {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.vult-input-group:has(> [data-trailing]) > .vult-input-control {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* Joined inputs share one surface, border and focus ring across their addons. */
+[data-vult-joined] > .vult-input-group {
+  --vult-control-height: var(--vult-control-height-md);
+  height: var(--vult-control-height);
+  min-height: var(--vult-control-height);
+  border: 1px solid var(--vult-control-border);
+  border-radius: var(--vult-control-radius);
+  background: var(--vult-control-input-background);
+  box-shadow: var(--vult-control-shadow);
+  transition: border-color 150ms ease;
+}
+[data-vult-joined] > .vult-input-group[data-input-size="sm"] {
+  --vult-control-height: var(--vult-control-height-sm);
+}
+[data-vult-joined] > .vult-input-group[data-input-size="lg"] {
+  --vult-control-height: var(--vult-control-height-lg);
+}
+[data-vult-joined] > .vult-input-group > :is([data-leading], [data-trailing]) {
+  flex: 0 0 auto;
+  opacity: 1;
+}
+[data-vult-joined] > .vult-input-group > [data-leading] {
+  border-inline-end: 1px solid
+    color-mix(in oklab, var(--vult-control-border) 65%, transparent);
+}
+[data-vult-joined] > .vult-input-group > [data-trailing] {
+  border-inline-start: 1px solid
+    color-mix(in oklab, var(--vult-control-border) 65%, transparent);
+}
+[data-vult-joined]
+  > .vult-input-group
+  > :is([data-leading], [data-trailing])
+  > .vult-button {
+  height: 100%;
+  min-height: 0;
+  border-radius: 0;
+}
+[data-vult-joined] > .vult-input-group > [data-leading] > .vult-button {
+  border-start-start-radius: calc(var(--vult-control-radius) - 1px);
+  border-end-start-radius: calc(var(--vult-control-radius) - 1px);
+}
+[data-vult-joined] > .vult-input-group > [data-trailing] > .vult-button {
+  border-start-end-radius: calc(var(--vult-control-radius) - 1px);
+  border-end-end-radius: calc(var(--vult-control-radius) - 1px);
+}
+[data-vult-joined] .vult-input-prefix {
+  margin: 0;
+  padding-inline: 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+[data-vult-joined] > .vult-input-group > .vult-input-control {
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  opacity: 1;
+}
+[data-vult-joined][data-disabled] > .vult-input-group {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+[data-vult-joined] > .vult-input-group:has(.vult-input-invalid) {
+  border-color: var(--color-border-error_subtle);
+}
+[data-vult-joined]
+  > .vult-input-group:has(.vult-input-invalid.vult-input-focused) {
+  --vult-control-focus-ring: color-mix(
+    in oklab,
+    var(--color-border-error) 50%,
+    transparent
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vult-button {
+    transition-property: background-color, border-color, color, opacity;
+  }
+  .vult-button[data-pressed],
+  .vult-button:active {
+    transform: none;
+  }
+}
+
+/* Switches share the neutral control palette and typography roles. */
+.vult-toggle {
+  display: inline-flex;
+  min-height: var(--vult-control-height-md);
+  align-items: center;
+  gap: 12px;
+  color: var(--vult-control-foreground);
+  cursor: pointer;
+}
+.vult-toggle__track {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: var(--vult-control-border);
+  transition: background-color 150ms ease;
+}
+.vult-toggle__thumb {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+  background: var(--vult-control-background);
+  box-shadow: var(--vult-control-shadow);
+  transform: translateX(0);
+  transition: transform 150ms ease;
+}
+.vult-toggle[data-selected] .vult-toggle__track {
+  background: var(--vult-control-primary);
+}
+.vult-toggle[data-selected] .vult-toggle__thumb {
+  transform: translateX(14px);
+}
+.vult-toggle[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.vult-toggle__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.vult-toggle__hint {
+  color: var(--color-text-secondary);
+}
+@media (prefers-reduced-motion: reduce) {
+  .vult-toggle__track,
+  .vult-toggle__thumb {
+    transition: none;
+  }
+}

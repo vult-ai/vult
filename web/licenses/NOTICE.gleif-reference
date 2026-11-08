@@ -1,0 +1,8 @@
+GLEIF legal identity reference data
+
+The pinned country, Accepted Legal Jurisdictions v1.5 and ISO 20275 Entity Legal
+Forms v1.6 references are provided by the Global Legal Entity Identifier Foundation
+under CC0: https://www.gleif.org/en/about/open-data . Generated data preserves
+source identifiers and native names. Source versions, hashes, bounded crosswalks
+and reproduction are documented in docs/legal-identity-catalog.md and
+scripts/legal-identity/generate-reference.py. No GLEIF endorsement is implied.

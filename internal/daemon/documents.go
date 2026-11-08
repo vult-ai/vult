@@ -3,8 +3,10 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 
+	"github.com/vult-ai/vult/access"
 	"github.com/vult-ai/vult/internal/local"
 	"github.com/vult-ai/vult/internal/strictjson"
 	"github.com/vult-ai/vult/ledger"
@@ -63,4 +65,84 @@ func (s *Server) documentStream(ctx context.Context, uid uint32, q local.Request
 		return
 	}
 	_ = json.NewEncoder(dst).Encode(local.Response{Result: json.RawMessage(`{"status":"complete"}`)})
+	s.note(scope, local.AgentActivity{Kind: "opened", Document: clip(inspection.Document.Name, 255)})
+}
+
+func (s *Server) ownerDocumentPeer(uid uint32) bool {
+	return s.Browser != nil && s.Browser.uid != 0 && uid == s.Browser.uid && s.Browser.documents != nil && s.Ledger.Documents != nil
+}
+
+func (s *Server) ownerDocumentStream(ctx context.Context, uid uint32, q local.Request, dst io.Writer) {
+	fail := func(err error) {
+		if errors.Is(err, access.ErrDenied) {
+			err = ledger.ErrDenied
+		}
+		_ = json.NewEncoder(dst).Encode(local.Response{Error: safeError(err)})
+	}
+	if !s.ownerDocumentPeer(uid) {
+		fail(ledger.ErrDenied)
+		return
+	}
+	var query local.OwnerDocumentQuery
+	if strictjson.Decode(q.Payload, &query) != nil || !ledger.ValidID(query.BookID) || !ledger.ValidID(query.DocumentID) {
+		fail(ledger.ErrInvalid)
+		return
+	}
+	reader := s.Browser.documents
+	metadata, err := reader.Document(ctx, q.Authorization, query.BookID, query.DocumentID)
+	if err != nil {
+		fail(err)
+		return
+	}
+	if metadata.Document.State != "ready" {
+		fail(ledger.ErrNotFound)
+		return
+	}
+	if err = json.NewEncoder(dst).Encode(local.Response{Result: marshal(metadata.Document), StreamSize: metadata.Document.Size}); err != nil {
+		return
+	}
+	if err = reader.Download(ctx, q.Authorization, query.BookID, query.DocumentID, s.Ledger.Documents, dst); err != nil {
+		return
+	}
+	_ = json.NewEncoder(dst).Encode(local.Response{Result: json.RawMessage(`{"status":"complete"}`)})
+}
+
+func (s *Server) ownerDocumentUpload(ctx context.Context, uid uint32, q local.Request, size int64, source io.Reader, dst io.Writer) {
+	var response local.Response
+	switch {
+	case !s.ownerDocumentPeer(uid):
+		response.Error = ledger.ErrDenied.Error()
+	default:
+		var request local.OwnerDocumentUploadRequest
+		if strictjson.Decode(q.Payload, &request) != nil || request.Document.Size != size {
+			response.Error = ledger.ErrInvalid.Error()
+			break
+		}
+		result, err := s.Browser.documents.Upload(ctx, q.Authorization, request.BookID, request.Document, s.Ledger.Documents, source)
+		if errors.Is(err, access.ErrDenied) {
+			err = ledger.ErrDenied
+		}
+		if err != nil {
+			response.Error = safeError(err)
+		} else {
+			response.Result = marshal(result)
+		}
+	}
+	_ = json.NewEncoder(dst).Encode(response)
+}
+
+type ownerUploadBody struct {
+	io.LimitedReader
+	complete func()
+}
+
+func (b *ownerUploadBody) Read(dst []byte) (int, error) {
+	n, err := b.LimitedReader.Read(dst)
+	if b.N == 0 && b.complete != nil {
+		// The framed bytes are consumed. Only the disconnect watcher can
+		// read the socket while the service verifies and records the upload.
+		b.complete()
+		b.complete = nil
+	}
+	return n, err
 }

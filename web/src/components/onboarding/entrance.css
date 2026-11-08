@@ -1,0 +1,586 @@
+/*
+ * The entrance uses the app's own canvas, particles, type roles and controls.
+ * Its scale comes from space and motion: each stage gives way to the next in
+ * place, and creating the Book carries the owner into its dashboard.
+ */
+.entrance {
+  overflow: hidden;
+}
+.entrance-header {
+  position: absolute;
+  inset: 28px 32px auto;
+  z-index: 2;
+}
+.entrance-stages {
+  position: relative;
+  flex: 1;
+  min-height: 100svh;
+  outline: none;
+}
+.entrance-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 104px 24px 56px;
+  text-align: center;
+  overflow-y: auto;
+  transition:
+    opacity 700ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    transform 900ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    filter 700ms ease;
+}
+.entrance-stage[data-state="next"] {
+  opacity: 0;
+  transform: scale(0.96) translateY(12px);
+  filter: blur(4px);
+  pointer-events: none;
+}
+.entrance-stage[data-state="past"] {
+  opacity: 0;
+  transform: scale(1.08);
+  filter: blur(6px);
+  pointer-events: none;
+}
+.entrance h1 {
+  max-width: 22ch;
+  margin: 0;
+  font-size: var(--text-vult-page-title);
+  font-weight: var(--text-vult-page-title--font-weight);
+  line-height: var(--text-vult-page-title--line-height);
+  letter-spacing: var(--text-vult-page-title--letter-spacing);
+  text-wrap: balance;
+}
+.entrance-lede {
+  max-width: 42ch;
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-body);
+  line-height: var(--text-vult-body--line-height);
+}
+.entrance-fine {
+  margin: 0;
+  color: var(--color-text-quaternary);
+  font-size: var(--text-vult-metadata);
+  line-height: var(--text-vult-metadata--line-height);
+}
+.entrance-status {
+  min-height: 20px;
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+}
+.entrance-field-note {
+  margin-top: -10px;
+}
+.entrance-error {
+  margin: 0;
+  color: var(--color-text-error-primary);
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+}
+.entrance-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-metadata);
+  font-weight: var(--text-vult-metadata--font-weight);
+  line-height: var(--text-vult-metadata--line-height);
+}
+.entrance-eyebrow svg {
+  width: 14px;
+  height: 14px;
+}
+.entrance .vult-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* The threshold: a dial around the fingerprint that opens once the passkey exists. */
+.entrance-dial {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  margin-bottom: 12px;
+  color: var(--color-fg-secondary);
+}
+.entrance-dial > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: none;
+}
+.entrance-dial circle {
+  stroke: var(--color-border-secondary);
+  stroke-width: 1;
+}
+.entrance-dial .entrance-ticks {
+  stroke: var(--color-fg-quaternary);
+  stroke-width: 2;
+  stroke-dasharray: 1 15.27;
+}
+.entrance-dial .entrance-dash {
+  stroke: var(--color-border-primary);
+  stroke-dasharray: 36 12;
+}
+.entrance-dial .entrance-dots {
+  stroke: var(--color-fg-quaternary);
+  stroke-dasharray: 2 7;
+  opacity: 0.6;
+}
+.entrance-ring-outer,
+.entrance-ring-inner {
+  transform-origin: 114px 114px;
+  transition:
+    transform 1100ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 800ms ease;
+}
+.entrance-ring-outer {
+  animation: entrance-spin 60s linear infinite;
+}
+.entrance-ring-inner {
+  animation: entrance-spin 90s linear infinite reverse;
+}
+.entrance-core {
+  position: absolute;
+  inset: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-lg), 0 0 0 1px var(--color-border-secondary);
+  transition:
+    transform 800ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 500ms ease;
+}
+.entrance-core svg {
+  width: 44px;
+  height: 44px;
+}
+.entrance-dial[data-phase="reading"] .entrance-core {
+  box-shadow: var(--shadow-xl), 0 0 0 2px var(--color-border-primary);
+}
+.entrance-dial[data-phase="reading"] .entrance-core svg {
+  animation: entrance-scan 1s ease-in-out infinite;
+}
+.entrance-dial[data-phase="open"] .entrance-ring-outer {
+  animation: none;
+  transform: scale(1.8);
+  opacity: 0;
+}
+.entrance-dial[data-phase="open"] .entrance-ring-inner {
+  animation: none;
+  transform: scale(2.4);
+  opacity: 0;
+}
+.entrance-dial[data-phase="open"] .entrance-core {
+  color: var(--color-fg-success-primary);
+  transform: scale(0.9);
+}
+
+/* Authenticator app, instead of a passkey. */
+.entrance-authenticator {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: min(340px, 100%);
+}
+.entrance-authenticator .field {
+  width: 100%;
+  text-align: left;
+}
+.entrance-authenticator code {
+  font-family: var(--font-log);
+  letter-spacing: 0.04em;
+}
+.entrance-qr {
+  width: 168px;
+  height: 168px;
+  padding: 8px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-primary);
+}
+
+/* Recovery codes. */
+.entrance-keys {
+  gap: 20px;
+}
+.entrance-codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 32px;
+  width: min(480px, 100%);
+  margin: 0;
+  padding: 20px 24px;
+  list-style: none;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-2xl);
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-sm);
+  text-align: left;
+}
+.entrance-codes li {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  opacity: 0;
+  transform: translateY(4px);
+  animation: entrance-rise 400ms ease-out forwards;
+}
+.entrance-codes span {
+  color: var(--color-text-quaternary);
+  font-family: var(--font-log);
+  font-size: var(--text-vult-metadata);
+  line-height: var(--text-vult-metadata--line-height);
+}
+.entrance-codes code {
+  font-family: var(--font-log);
+  font-size: var(--text-vult-log-value);
+  line-height: var(--text-vult-log-value--line-height);
+  letter-spacing: 0.04em;
+}
+.entrance-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(480px, 100%);
+}
+.entrance-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+  cursor: pointer;
+}
+.entrance-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-fg-primary);
+}
+
+/* The first Book: the form beside the dashboard it creates. */
+.entrance-book {
+  flex-direction: row;
+  align-items: center;
+  gap: 56px;
+  max-width: 1180px;
+  margin-inline: auto;
+  text-align: left;
+}
+.entrance-book-form {
+  display: flex;
+  flex: 0 0 380px;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  transition:
+    opacity 600ms ease,
+    transform 800ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.entrance-book-form > .vult-button {
+  align-self: flex-start;
+}
+.entrance-book-form .welcome-purpose {
+  margin: 0;
+}
+.entrance-chip {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  font-size: var(--text-vult-metadata);
+  font-weight: var(--text-vult-metadata--font-weight);
+  line-height: var(--text-vult-metadata--line-height);
+}
+
+/* Inside the Book: the form steps away and the agent work takes the stage. */
+.entrance-book[data-inside] .entrance-book-form {
+  position: absolute;
+  opacity: 0;
+  transform: translateX(-32px);
+  pointer-events: none;
+}
+.entrance-book[data-inside] {
+  justify-content: center;
+}
+.entrance-guide {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-xl);
+  animation: entrance-arrive-up 600ms cubic-bezier(0.2, 0.7, 0.2, 1) 300ms both;
+}
+.entrance-skip {
+  justify-self: start;
+}
+.entrance-guide-step {
+  display: grid;
+  gap: 12px;
+}
+.entrance-guide-head {
+  display: grid;
+  gap: 2px;
+}
+.entrance-guide-head strong {
+  font-size: var(--text-vult-compact-title);
+  font-weight: var(--text-vult-compact-title--font-weight);
+  line-height: var(--text-vult-compact-title--line-height);
+}
+.entrance-guide-head small,
+.entrance-agent-text small {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+}
+.entrance-guide .welcome-agent-tabs {
+  margin: 0;
+}
+.entrance-steps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: entrance-step;
+}
+.entrance-steps li {
+  display: grid;
+  gap: 6px;
+  padding-left: 24px;
+  position: relative;
+  color: var(--color-text-secondary);
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+  counter-increment: entrance-step;
+}
+.entrance-steps li::before {
+  content: counter(entrance-step) ".";
+  position: absolute;
+  left: 0;
+  color: var(--color-text-quaternary);
+  font-variant-numeric: tabular-nums;
+}
+.entrance-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+}
+.entrance-copy code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  color: var(--color-text-primary);
+  font-family: var(--font-log);
+  font-size: var(--text-vult-log);
+  line-height: var(--text-vult-log--line-height);
+  white-space: nowrap;
+}
+.entrance-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+}
+.entrance-live {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-fg-tertiary);
+  animation: entrance-wait 1.4s ease-in-out infinite;
+}
+.entrance-guide-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.entrance-guide-row[data-arrived] {
+  animation: entrance-arrive-up 500ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.entrance-agent-avatar {
+  display: grid;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  font-weight: var(--text-vult-label--font-weight);
+}
+.entrance-agent-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+}
+.entrance-drop {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 20px;
+  border: 1px dashed var(--color-border-primary);
+  border-radius: var(--radius-xl);
+  color: var(--color-text-secondary);
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.entrance-drop:hover,
+.entrance-drop[data-dragging] {
+  border-color: var(--color-border-primary);
+  background: var(--color-bg-secondary);
+}
+.entrance-drop:has(input:focus-visible) {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+.entrance-drop svg {
+  width: 22px;
+  height: 22px;
+  color: var(--color-fg-tertiary);
+}
+.entrance-drop small {
+  color: var(--color-text-quaternary);
+  font-size: var(--text-vult-metadata);
+  line-height: var(--text-vult-metadata--line-height);
+}
+.entrance-drop input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+/* Vult's view of the agent's work on the statement, beside the form and inside the Book. */
+.entrance-journey {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+.entrance-journey-head {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  text-align: center;
+}
+.entrance-journey-head h2 {
+  margin: 0;
+  font-size: var(--text-vult-page-title);
+  font-weight: var(--text-vult-page-title--font-weight);
+  line-height: var(--text-vult-page-title--line-height);
+  letter-spacing: var(--text-vult-page-title--letter-spacing);
+}
+.entrance-count {
+  flex: none;
+  padding-inline: 6px;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-log);
+  font-size: var(--text-vult-log);
+  line-height: var(--text-vult-log--line-height);
+  font-variant-numeric: tabular-nums;
+}
+.entrance-book[data-inside] .entrance-journey {
+  flex: 0 1 560px;
+}
+/* Without the agent's work to show yet, the form stands on its own. */
+.entrance-book:not(:has(.entrance-journey)) {
+  justify-content: center;
+}
+.entrance-book[data-inside] .entrance-guide,
+.entrance-book[data-inside] .agent-status {
+  width: min(560px, 100%);
+}
+
+@keyframes entrance-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes entrance-scan {
+  50% { opacity: 0.4; }
+}
+@keyframes entrance-rise {
+  to { opacity: 1; transform: none; }
+}
+@keyframes entrance-arrive-up {
+  from { opacity: 0; transform: translateY(10px); }
+}
+@keyframes entrance-count {
+  from { opacity: 0.3; transform: translateY(4px); }
+}
+@keyframes entrance-grow {
+  from { transform: scaleY(0); }
+}
+@keyframes entrance-arrive {
+  from { opacity: 0; transform: translateY(-8px); background: var(--color-bg-secondary); }
+}
+@keyframes entrance-wait {
+  50% { opacity: 0.45; }
+}
+
+@media (max-width: 900px) {
+  .entrance-book {
+    flex-direction: column;
+    gap: 24px;
+  }
+  .entrance-book-form {
+    flex-basis: auto;
+    width: min(380px, 100%);
+  }
+
+  .entrance-book[data-inside] .entrance-journey {
+    flex-basis: auto;
+    width: 100%;
+  }
+
+  .entrance-codes {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .entrance-stage,
+  .entrance-ring-outer,
+  .entrance-ring-inner,
+  .entrance-core,
+  .entrance-book-form,
+  .entrance-guide,
+  .entrance-guide-row,
+  .entrance-live,
+  .entrance-codes li {
+    animation: none;
+    transition: none;
+  }
+  .entrance-codes li {
+    opacity: 1;
+    transform: none;
+  }
+}

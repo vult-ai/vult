@@ -1,0 +1,48 @@
+/* Never decorate a composite root, including shared link-style buttons. */
+.vult-name-link.vult-name-link:is(:hover, :focus, :active),
+.vult-button.vult-button-link:is(:hover, :focus, :active) {
+  text-decoration: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .vult-button.vult-button-link:not(:disabled):not([data-disabled]):hover
+    > [data-text] {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+}
+@layer components {
+  .vult-name-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-primary);
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+  .vult-name-link-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: inherit;
+  }
+  .vult-name-link-decoration {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .vult-name-link:not(:disabled):hover > .vult-name-link-label {
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+  }
+}

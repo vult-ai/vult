@@ -19,7 +19,7 @@ import (
 	"github.com/vult-ai/vult/ledger"
 )
 
-const Version = "0.3.0"
+const Version = "0.4.0"
 
 type grant struct {
 	Action, Digest string
@@ -32,13 +32,21 @@ type session struct {
 	Expires time.Time
 }
 type Server struct {
-	Admin         ledger.Admin
-	Ledger        ledger.Store
-	RecoveryKey   string
-	ProvisionKeys func(context.Context, string) error
-	mu            sync.Mutex
-	grants        map[string]grant
-	sessions      map[string]session
+	Admin          ledger.Admin
+	Ledger         ledger.Store
+	RecoveryKey    string
+	ProvisionKeys  func(context.Context, string) error
+	Browser        *browserOwner
+	AuthorizeOwner func(context.Context, local.Peer, local.OwnerRequest) error
+	mu             sync.Mutex
+	grants         map[string]grant
+	sessions       map[string]session
+	ownerPrompts   map[uint32]bool
+	agents         map[string]*agentRequest
+	draft          *local.BookDraft
+	recovery       *pendingRecovery
+	activity       map[string]*bookActivity
+	agentNames     map[string]string
 }
 
 func (s *Server) initMaps() {
@@ -61,8 +69,15 @@ func (s *Server) authorize(uid uint32, input json.RawMessage) (json.RawMessage, 
 	if _, e := hex.DecodeString(q.Digest); e != nil {
 		return nil, ledger.ErrInvalid
 	}
+	return s.issueGrant(context.Background(), q)
+}
+
+func (s *Server) issueGrant(ctx context.Context, q local.Authorization) (json.RawMessage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if ctx.Err() != nil {
+		return nil, ledger.ErrDenied
+	}
 	s.initMaps()
 	now := time.Now()
 	for k, v := range s.grants {
@@ -78,6 +93,38 @@ func (s *Server) authorize(uid uint32, input json.RawMessage) (json.RawMessage, 
 	return marshal(struct {
 		Token string `json:"token"`
 	}{token}), nil
+}
+
+func (s *Server) ownerAuthorization(ctx context.Context, peer local.Peer, input json.RawMessage) (json.RawMessage, error) {
+	if s.AuthorizeOwner == nil || peer.UID == 0 || peer.PID == 0 || ctx.Err() != nil || len(input) > 16<<10 {
+		return nil, ledger.ErrDenied
+	}
+	var request local.OwnerRequest
+	if strictjson.Decode(input, &request) != nil || !json.Valid(request.Payload) {
+		return nil, ledger.ErrInvalid
+	}
+	if _, err := local.OwnerPrompt(request.Action, request.Payload); err != nil {
+		return nil, ledger.ErrInvalid
+	}
+	s.mu.Lock()
+	if s.ownerPrompts == nil {
+		s.ownerPrompts = map[uint32]bool{}
+	}
+	if s.ownerPrompts[peer.UID] || len(s.ownerPrompts) >= 4 {
+		s.mu.Unlock()
+		return nil, ledger.ErrDenied
+	}
+	s.ownerPrompts[peer.UID] = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.ownerPrompts, peer.UID)
+		s.mu.Unlock()
+	}()
+	if err := s.AuthorizeOwner(ctx, peer, request); err != nil {
+		return nil, ledger.ErrDenied
+	}
+	return s.issueGrant(ctx, local.Authorization{Action: request.Action, Digest: local.Digest(request.Payload), UID: peer.UID})
 }
 func (s *Server) consume(uid uint32, q local.Request) bool {
 	s.mu.Lock()
@@ -108,6 +155,18 @@ func (s *Server) admit(uid uint32, h local.Header) bool {
 	if h.Size < 2 || h.Size > local.MaxMessage {
 		return false
 	}
+	if ok, handled := s.admitAgent(uid, h); handled {
+		return ok && h.StreamSize == 0
+	}
+	if h.Method == "owner_document_download" || h.Method == "owner_document_upload" {
+		if !s.ownerDocumentPeer(uid) || len(h.Authorization) != 43 || h.Size > 4096 {
+			return false
+		}
+		if h.Method == "owner_document_upload" {
+			return h.StreamSize > 0 && h.StreamSize <= documents.MaxSize
+		}
+		return h.StreamSize == 0
+	}
 	if h.Method == "document_upload" || h.Method == "document_download" {
 		scope, ok := s.scope(uid, h.Authorization)
 		if !ok || h.Size > 4096 || s.Ledger.Documents == nil {
@@ -121,11 +180,14 @@ func (s *Server) admit(uid uint32, h local.Header) bool {
 	if h.StreamSize != 0 && h.Method != "archive_restore" {
 		return false
 	}
-	if h.Method == "status" {
+	if h.Method == "status" || h.Method == "browser_status" {
 		return h.Size <= 128
 	}
 	if h.Method == "authorize" {
 		return uid == 0 && h.Size <= 4096
+	}
+	if h.Method == "owner_authorization" {
+		return s.AuthorizeOwner != nil && uid != 0 && h.Authorization == "" && h.Size <= 16<<10
 	}
 	if local.OwnerAction(h.Method) {
 		if h.Method == "archive_backup" && h.Size > 4096 {
@@ -140,7 +202,7 @@ func (s *Server) admit(uid uint32, h local.Header) bool {
 		g, ok := s.grants[tokenKey(h.Authorization)]
 		return ok && g.UID == uid && g.Action == h.Method && time.Now().Before(g.Expires)
 	}
-	if h.Size > 1<<20 || !ledger.Supported(h.Method) {
+	if h.Size > 1<<20 || !ledger.Supported(h.Method) && h.Method != local.WaitForDocumentMethod && h.Method != local.ReportUnusableMethod {
 		return false
 	}
 	_, ok := s.scope(uid, h.Authorization)
@@ -154,6 +216,13 @@ func marshal(v any) json.RawMessage {
 	return b
 }
 func (s *Server) Handle(ctx context.Context, uid uint32, q local.Request) (json.RawMessage, error) {
+	if q.Method == "browser_status" {
+		if strictjson.Decode(q.Payload, &struct{}{}) != nil {
+			return nil, ledger.ErrInvalid
+		}
+		status, err := s.Browser.status(ctx, s.Admin)
+		return marshal(status), err
+	}
 	if q.Method == "status" {
 		if strictjson.Decode(q.Payload, &struct{}{}) != nil {
 			return nil, ledger.ErrInvalid
@@ -167,6 +236,9 @@ func (s *Server) Handle(ctx context.Context, uid uint32, q local.Request) (json.
 	if q.Method == "authorize" {
 		return s.authorize(uid, q.Payload)
 	}
+	if out, err, handled := s.handleAgent(ctx, uid, q); handled {
+		return out, err
+	}
 	if local.OwnerAction(q.Method) {
 		if !s.consume(uid, q) {
 			return nil, ledger.ErrDenied
@@ -177,7 +249,14 @@ func (s *Server) Handle(ctx context.Context, uid uint32, q local.Request) (json.
 	if !ok {
 		return nil, ledger.ErrDenied
 	}
-	return s.Ledger.Call(ctx, scope, q.Method, q.Payload)
+	if out, err, handled := s.agentTool(ctx, scope, q.Method, q.Payload); handled {
+		return out, err
+	}
+	out, err := s.Ledger.Call(ctx, scope, q.Method, q.Payload)
+	if err == nil {
+		s.observe(scope, q.Method, q.Payload, out)
+	}
+	return out, err
 }
 func (s *Server) owner(ctx context.Context, uid uint32, method string, input []byte) (json.RawMessage, error) {
 	decode := func(v any) error {
@@ -187,6 +266,21 @@ func (s *Server) owner(ctx context.Context, uid uint32, method string, input []b
 		return nil
 	}
 	switch method {
+	case "browser_setup", "browser_reset":
+		if decode(&struct{}{}) != nil {
+			return nil, ledger.ErrInvalid
+		}
+		result, err := s.Browser.setup(ctx, s.Admin, method == "browser_reset")
+		if err != nil {
+			return nil, err
+		}
+		// The recovery codes and backup key are shown once in the browser,
+		// after the passkey exists, never in the terminal that asked.
+		s.mu.Lock()
+		s.recovery = &pendingRecovery{codes: result.RecoveryCodes, key: s.RecoveryKey, created: time.Now()}
+		s.mu.Unlock()
+		result.RecoveryCodes = nil
+		return marshal(result), nil
 	case "init":
 		if decode(&struct{}{}) != nil {
 			return nil, ledger.ErrInvalid
@@ -356,7 +450,7 @@ func (s *Server) owner(ctx context.Context, uid uint32, method string, input []b
 	return nil, ledger.ErrInvalid
 }
 func safeError(e error) string {
-	for _, known := range []error{ledger.ErrInvalid, ledger.ErrDenied, ledger.ErrConflict, ledger.ErrNotFound, ledger.ErrUncertain, ledger.ErrLimit, ledger.ErrArchive, ledger.ErrArchiveCleanup, documents.ErrUnavailable, documents.ErrIntegrity} {
+	for _, known := range []error{ledger.ErrInvalid, ledger.ErrDenied, ledger.ErrConflict, ledger.ErrNotFound, ledger.ErrUncertain, ledger.ErrLimit, ledger.ErrArchive, ledger.ErrArchiveCleanup, ledger.ErrApprovalRequired, ledger.ErrProposalStale, ledger.ErrProposalExpired, ledger.ErrUploadExpired, documents.ErrUnavailable, documents.ErrIntegrity, documents.ErrMediaType} {
 		if errors.Is(e, known) {
 			return known.Error()
 		}
@@ -396,7 +490,7 @@ func (s *Server) Serve(ctx context.Context, listener *net.UnixListener) error {
 			defer func() { <-slots }()
 			defer c.Close()
 			c.SetDeadline(time.Now().Add(5 * time.Second))
-			uid, e := local.PeerUID(c)
+			peer, e := local.PeerIdentity(c)
 			if e != nil {
 				return
 			}
@@ -406,15 +500,16 @@ func (s *Server) Serve(ctx context.Context, listener *net.UnixListener) error {
 				return
 			}
 			var h local.Header
-			if strictjson.Decode(b[:len(b)-1], &h) != nil || !s.admit(uid, h) {
+			if strictjson.Decode(b[:len(b)-1], &h) != nil || !s.admit(peer.UID, h) {
 				json.NewEncoder(c).Encode(local.Response{Error: ledger.ErrDenied.Error()})
 				return
 			}
-			s.servePayload(ctx, uid, h, reader, c)
+			s.servePayload(ctx, peer, h, reader, c)
 		}()
 	}
 }
-func (s *Server) servePayload(ctx context.Context, uid uint32, h local.Header, reader io.Reader, c net.Conn) {
+func (s *Server) servePayload(ctx context.Context, peer local.Peer, h local.Header, reader io.Reader, c net.Conn) {
+	uid := peer.UID
 	var e error
 	duration := 90 * time.Second
 	if h.Method == "archive_backup" || h.Method == "archive_restore" {
@@ -430,8 +525,39 @@ func (s *Server) servePayload(ctx context.Context, uid uint32, h local.Header, r
 		return
 	}
 	q := local.Request{Method: h.Method, Authorization: h.Authorization, Payload: payload}
+	if h.Method == "owner_authorization" || h.Method == "owner_document_download" {
+		// These methods accept no further input. Stop the prompt or original
+		// read when the peer disconnects or sends unexpected bytes.
+		stopWatching := watchPeer(reader, c, cancel)
+		defer stopWatching()
+	}
+	if h.Method == "owner_authorization" {
+		result, err := s.ownerAuthorization(callCtx, peer, payload)
+		if err == nil && callCtx.Err() == nil {
+			json.NewEncoder(c).Encode(local.Response{Result: result})
+		} else {
+			json.NewEncoder(c).Encode(local.Response{Error: ledger.ErrDenied.Error()})
+		}
+		return
+	}
 	if h.Method == "archive_backup" || h.Method == "archive_restore" {
 		s.archiveStream(callCtx, uid, q, h.StreamSize, reader, c)
+		return
+	}
+	if h.Method == "owner_document_download" {
+		s.ownerDocumentStream(callCtx, uid, q, c)
+		return
+	}
+	if h.Method == "owner_document_upload" {
+		var stopWatching func()
+		body := &ownerUploadBody{
+			LimitedReader: io.LimitedReader{R: reader, N: h.StreamSize},
+			complete:      func() { stopWatching = watchPeer(reader, c, cancel) },
+		}
+		s.ownerDocumentUpload(callCtx, uid, q, h.StreamSize, body, c)
+		if stopWatching != nil {
+			stopWatching()
+		}
 		return
 	}
 	if h.Method == "document_upload" || h.Method == "document_download" {
@@ -445,6 +571,20 @@ func (s *Server) servePayload(ctx context.Context, uid uint32, h local.Header, r
 		response.Error = safeError(e)
 	}
 	json.NewEncoder(c).Encode(response)
+}
+
+func watchPeer(reader io.Reader, conn net.Conn, cancel context.CancelFunc) func() {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		var extra [1]byte
+		reader.Read(extra[:])
+		cancel()
+	}()
+	return func() {
+		conn.SetReadDeadline(time.Now())
+		<-done
+	}
 }
 
 func Listen(path string) (*net.UnixListener, error) {

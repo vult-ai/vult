@@ -35,11 +35,17 @@ func dbError(e error) error {
 	if e == nil {
 		return nil
 	}
+	if errors.Is(e, ErrDenied) {
+		return ErrDenied
+	}
 	if errors.Is(e, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
 	var p *pgconn.PgError
 	if errors.As(e, &p) {
+		if p.Code == "VP001" {
+			return ErrProposalStale
+		}
 		if p.Code == "42501" {
 			return ErrDenied
 		}
@@ -56,6 +62,8 @@ func Writing(method string) bool {
 	switch method {
 	case "create_account", "revise_account", "post_journal", "reverse_journal", "add_document", "complete_document_upload", "correct_source_citation", "attach_evidence", "detach_evidence":
 		return true
+	case "prepare_operation", "execute_proposal", setBookLogoOperation:
+		return true
 	}
 	return false
 }
@@ -63,8 +71,11 @@ func Supported(method string) bool {
 	if documentMethod(method) || citationMethod(method) || evidenceMethod(method) {
 		return true
 	}
+	if method == "prepare_operation" || method == "get_operation_proposal" || method == "execute_proposal" || method == setBookLogoOperation {
+		return true
+	}
 	switch method {
-	case "get_book", "list_accounts", "create_account", "revise_account", "post_journal", "get_journal", "list_journals", "reverse_journal", "get_balance", "get_trial_balance", "get_request_outcome":
+	case "get_book", "list_accounts", "create_account", "revise_account", "post_journal", "get_journal", "list_journals", "reverse_journal", "get_balance", "get_trial_balance", "get_request_outcome", "search_book":
 		return true
 	}
 	return false
@@ -75,7 +86,20 @@ func (s Store) Call(ctx context.Context, scope Scope, method string, input json.
 	if !Supported(method) {
 		return nil, ErrDenied
 	}
+	if method == "prepare_operation" {
+		return s.prepareOperation(ctx, scope, input)
+	}
+	if method == setBookLogoOperation {
+		change, key, err := decodeBookLogoTool(input)
+		if err != nil {
+			return nil, err
+		}
+		return s.SetBookLogo(ctx, scope, key, change)
+	}
 	return s.transact(ctx, scope, method, input, func(tx pgx.Tx) (json.RawMessage, error) {
+		if method == "get_operation_proposal" || method == "execute_proposal" {
+			return s.proposalCall(ctx, tx, scope, method, input)
+		}
 		if documentMethod(method) {
 			return s.documentCall(ctx, tx, scope, method, input)
 		}
@@ -115,6 +139,11 @@ func (s Store) transact(ctx context.Context, scope Scope, method string, input j
 		return nil, ErrDenied
 	}
 	if Writing(method) {
+		if method == "execute_proposal" {
+			if e = holdProposalOwner(ctx, tx, scope, input); e != nil {
+				return nil, e
+			}
+		}
 		if _, e = tx.Exec(ctx, "SELECT public.ledger_lock($1,$2)", scope.TenantID, scope.BookID); e != nil {
 			return nil, dbError(e)
 		}
@@ -130,7 +159,7 @@ func (s Store) transact(ctx context.Context, scope Scope, method string, input j
 	}
 	if e = tx.Commit(ctx); e != nil {
 		var rejected *pgconn.PgError
-		if errors.As(e, &rejected) && (strings.HasPrefix(rejected.Code, "22") || strings.HasPrefix(rejected.Code, "23") || rejected.Code == "25001") {
+		if errors.As(e, &rejected) && (strings.HasPrefix(rejected.Code, "22") || strings.HasPrefix(rejected.Code, "23") || rejected.Code == "25001" || rejected.Code == "42501" || rejected.Code == "VP001") {
 			return nil, dbError(e)
 		}
 		return nil, ErrUncertain
@@ -183,11 +212,16 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 		if len(entries) > 0 {
 			next = entries[len(entries)-1].Sequence
 		}
+		state, e := immutableReadState(ctx, tx, s)
+		if e != nil {
+			return nil, e
+		}
 		return raw(struct {
+			RecordedState
 			Entries   []Entry `json:"entries"`
 			NextAfter int64   `json:"next_after"`
 			HasMore   bool    `json:"has_more"`
-		}{entries, next, more}), nil
+		}{state, entries, next, more}), nil
 	case "get_balance":
 		var q AccountQuery
 		if decode(&q) != nil || !ValidID(q.AccountID) || (q.Through != "" && !ValidDate(q.Through)) {
@@ -195,6 +229,20 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 		}
 		balance, e := readBalance(ctx, tx, s, q)
 		return raw(balance), dbError(e)
+	case "search_book":
+		var q SearchQuery
+		if decode(&q) != nil {
+			return nil, ErrInvalid
+		}
+		header, e := readBook(ctx, tx, s)
+		if e != nil {
+			return nil, dbError(e)
+		}
+		v, e := searchRecorded(ctx, tx, s, header, q)
+		if e != nil {
+			return nil, e
+		}
+		return raw(v), nil
 	case "get_trial_balance":
 		var q TrialQuery
 		if decode(&q) != nil || (q.Through != "" && !ValidDate(q.Through)) {
@@ -219,37 +267,19 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 		return raw(Outcome{Status: "recorded", Operation: operation, Result: result}), nil
 	case "create_account":
 		var q CreateAccount
-		if decode(&q) != nil || !validAccount(q.Class, q.Code, q.Name) {
+		if decode(&q) != nil || !validAccount(q.Class, q.Code, q.Name) || q.Code == "" && !validAccountCodeInput(input, false) {
 			return nil, ErrInvalid
 		}
 		return write(ctx, tx, s, method, q.RequestKey, raw(q), admit, func(receipt string) (json.RawMessage, error) {
-			id := ID()
-			if _, e := tx.Exec(ctx, "INSERT INTO public.accounts(tenant_id,book_id,id,class) VALUES($1,$2,$3,$4)", s.TenantID, s.BookID, id, q.Class); e != nil {
-				return nil, e
-			}
-			if _, e := tx.Exec(ctx, "INSERT INTO public.account_revisions(tenant_id,book_id,account_id,revision,code,name,actor_id) VALUES($1,$2,$3,1,$4,$5,$6)", s.TenantID, s.BookID, id, q.Code, q.Name, s.ActorID); e != nil {
-				return nil, e
-			}
-			return raw(Account{id, q.Class, q.Code, q.Name, 1}), nil
+			return createAccount(ctx, tx, s, q, receipt)
 		})
 	case "revise_account":
 		var q ReviseAccount
-		if decode(&q) != nil || !ValidID(q.AccountID) || q.ExpectedRevision < 1 || !codePattern.MatchString(q.Code) || len(q.Name) < 1 || len(q.Name) > 120 {
+		if decode(&q) != nil || !ValidID(q.AccountID) || q.ExpectedRevision < 1 || !validCode(q.Code) || len(q.Name) < 1 || len(q.Name) > 120 || q.Code == "" && !validAccountCodeInput(input, true) {
 			return nil, ErrInvalid
 		}
 		return write(ctx, tx, s, method, q.RequestKey, raw(q), admit, func(receipt string) (json.RawMessage, error) {
-			var class string
-			var revision int64
-			if e := tx.QueryRow(ctx, "SELECT class,revision FROM public.accounts WHERE tenant_id=$1 AND book_id=$2 AND id=$3", s.TenantID, s.BookID, q.AccountID).Scan(&class, &revision); e != nil {
-				return nil, e
-			}
-			if revision != q.ExpectedRevision {
-				return nil, ErrConflict
-			}
-			if _, e := tx.Exec(ctx, "INSERT INTO public.account_revisions(tenant_id,book_id,account_id,revision,code,name,actor_id) VALUES($1,$2,$3,$4,$5,$6,$7)", s.TenantID, s.BookID, q.AccountID, revision+1, q.Code, q.Name, s.ActorID); e != nil {
-				return nil, e
-			}
-			return raw(Account{q.AccountID, class, q.Code, q.Name, revision + 1}), nil
+			return reviseAccount(ctx, tx, s, q, receipt)
 		})
 	case "post_journal":
 		var q PostJournal
@@ -257,9 +287,12 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 			return nil, ErrInvalid
 		}
 		return write(ctx, tx, s, method, q.RequestKey, raw(q), admit, func(receipt string) (json.RawMessage, error) {
-			v := Entry{ID: ID(), ReceiptID: receipt, ActorID: s.ActorID, EconomicDate: q.EconomicDate, AccountingDate: q.AccountingDate, Description: q.Description, Lines: []Line{}}
+			if err := prepareMeasurements(ctx, tx, s, &q); err != nil {
+				return nil, err
+			}
+			v := Entry{ID: ID(), ReceiptID: receipt, ActorID: s.ActorID, EconomicDate: q.EconomicDate, AccountingDate: q.AccountingDate, Description: q.Description, Lines: []Line{}, MeasurementPolicy: q.MeasurementPolicy}
 			for _, l := range q.Lines {
-				v.Lines = append(v.Lines, Line{ID: ID(), AccountID: l.AccountID, Side: l.Side, AmountMinor: l.AmountMinor, Memo: l.Memo})
+				v.Lines = append(v.Lines, Line{ID: ID(), AccountID: l.AccountID, Side: l.Side, AmountMinor: l.AmountMinor, Memo: l.Memo, Native: l.Native, Contexts: l.Contexts, Valuation: l.Valuation})
 			}
 			if e := insertEntry(ctx, tx, s, &v); e != nil {
 				return nil, e
@@ -281,13 +314,13 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 			if e != nil {
 				return nil, e
 			}
-			v := Entry{ID: ID(), ReceiptID: receipt, ActorID: s.ActorID, EconomicDate: old.EconomicDate, AccountingDate: q.AccountingDate, Description: q.Reason, ReversalOf: old.ID, Lines: []Line{}}
+			v := Entry{ID: ID(), ReceiptID: receipt, ActorID: s.ActorID, EconomicDate: old.EconomicDate, AccountingDate: q.AccountingDate, Description: q.Reason, ReversalOf: old.ID, Lines: []Line{}, MeasurementPolicy: old.MeasurementPolicy}
 			for _, l := range old.Lines {
 				side := "debit"
 				if l.Side == "debit" {
 					side = "credit"
 				}
-				v.Lines = append(v.Lines, Line{ID: ID(), AccountID: l.AccountID, Side: side, AmountMinor: l.AmountMinor, Memo: l.Memo, ReversesLineID: l.ID})
+				v.Lines = append(v.Lines, Line{ID: ID(), AccountID: l.AccountID, Side: side, AmountMinor: l.AmountMinor, Memo: l.Memo, ReversesLineID: l.ID, Native: l.Native, Contexts: l.Contexts, Valuation: l.Valuation})
 			}
 			if e := insertEntry(ctx, tx, s, &v); e != nil {
 				return nil, e
@@ -298,8 +331,21 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 	return nil, ErrInvalid
 }
 
+func validCode(code string) bool { return code == "" || codePattern.MatchString(code) }
+
+func validAccountCodeInput(input []byte, required bool) bool {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(input, &fields) != nil {
+		return false
+	}
+	code, present := fields["code"]
+	// A revision must explicitly retain or clear the code. Omission must not
+	// silently clear an established label; null is not an accepted string.
+	return !present && !required || present && !bytes.Equal(bytes.TrimSpace(code), []byte("null"))
+}
+
 func validAccount(class, code, name string) bool {
-	if !codePattern.MatchString(code) || len(name) < 1 || len(name) > 120 {
+	if !validCode(code) || len(name) < 1 || len(name) > 120 {
 		return false
 	}
 	switch class {
@@ -317,11 +363,11 @@ func validatePost(q PostJournal) error {
 	}
 	total := new(big.Int)
 	for _, l := range q.Lines {
-		n, e := positiveAmount(l.AmountMinor)
+		n, e := nonnegativeAmount(l.AmountMinor)
 		if e != nil || !ValidID(l.AccountID) || len(l.Memo) > 1000 {
 			return ErrInvalid
 		}
-		v := big.NewInt(n)
+		v := new(big.Int).Set(n)
 		if l.Side == "credit" {
 			v.Neg(v)
 		} else if l.Side != "debit" {
@@ -359,7 +405,7 @@ func write(ctx context.Context, tx pgx.Tx, s Scope, method, key string, request 
 	id := ID()
 	result, e := apply(id)
 	if e != nil {
-		for _, safe := range []error{ErrConflict, ErrInvalid, ErrDenied, ErrNotFound, documents.ErrIntegrity, documents.ErrUnavailable} {
+		for _, safe := range []error{ErrConflict, ErrInvalid, ErrDenied, ErrNotFound, ErrUploadExpired, documents.ErrIntegrity, documents.ErrUnavailable} {
 			if errors.Is(e, safe) {
 				return nil, safe
 			}
@@ -372,22 +418,34 @@ func write(ctx context.Context, tx pgx.Tx, s Scope, method, key string, request 
 	}
 	return result, nil
 }
-func readBook(ctx context.Context, tx pgx.Tx, s Scope) (Book, error) {
+
+const bookColumns = `b.tenant_id::text,b.id::text,coalesce(m.name,b.name),b.currency,b.scale,b.created_at,m.revision,
+ coalesce(m.founder,''),coalesce(m.profile,''),coalesce(m.start_date::text,''),m.fiscal_year_start_month,m.fiscal_year_start_day,coalesce(m.accounting_timezone,''),m.logo`
+const bookFrom = ` FROM public.books b LEFT JOIN LATERAL(
+ SELECT name,founder,profile,start_date,fiscal_year_start_month,fiscal_year_start_day,accounting_timezone,revision,logo
+ FROM public.book_revisions r WHERE r.tenant_id=b.tenant_id AND r.book_id=b.id ORDER BY revision DESC LIMIT 1) m ON true`
+
+func scanBook(row pgx.Row) (Book, error) {
 	var b Book
-	e := tx.QueryRow(ctx, "SELECT tenant_id::text,id::text,name,currency,scale,created_at FROM public.books WHERE tenant_id=$1 AND id=$2", s.TenantID, s.BookID).Scan(&b.TenantID, &b.ID, &b.Name, &b.Currency, &b.Scale, &b.CreatedAt)
-	return b, e
+	err := row.Scan(&b.TenantID, &b.ID, &b.Name, &b.Currency, &b.Scale, &b.CreatedAt, &b.MetadataRevision, &b.Founder, &b.Profile, &b.StartDate,
+		&b.FiscalYearStartMonth, &b.FiscalYearStartDay, &b.AccountingTimezone, &b.Logo)
+	return b, err
 }
+func readBook(ctx context.Context, tx pgx.Tx, s Scope) (Book, error) {
+	return scanBook(tx.QueryRow(ctx, "SELECT "+bookColumns+bookFrom+" WHERE b.tenant_id=$1 AND b.id=$2", s.TenantID, s.BookID))
+}
+
 func readAccounts(ctx context.Context, tx pgx.Tx, s Scope) ([]Account, error) {
-	rows, e := tx.Query(ctx, "SELECT id::text,class,code,name,revision FROM public.accounts WHERE tenant_id=$1 AND book_id=$2 ORDER BY code,id", s.TenantID, s.BookID)
+	rows, e := tx.Query(ctx, "SELECT "+accountColumns+" FROM public.accounts WHERE tenant_id=$1 AND book_id=$2 ORDER BY code,id", s.TenantID, s.BookID)
 	if e != nil {
 		return nil, e
 	}
 	defer rows.Close()
 	out := []Account{}
 	for rows.Next() {
-		var a Account
-		if e = rows.Scan(&a.ID, &a.Class, &a.Code, &a.Name, &a.Revision); e != nil {
-			return nil, e
+		a, err := scanAccount(rows)
+		if err != nil {
+			return nil, err
 		}
 		out = append(out, a)
 	}
@@ -395,17 +453,23 @@ func readAccounts(ctx context.Context, tx pgx.Tx, s Scope) ([]Account, error) {
 }
 
 const entryColumns = `id::text,sequence,receipt_id::text,actor_id::text,economic_date::text,accounting_date::text,
- description,coalesce(reversal_of::text,''),recorded_at`
+ description,coalesce(reversal_of::text,''),recorded_at,measurement_policy`
 
-func scanEntry(row pgx.Row) (Entry, error) {
+func scanEntry(row pgx.Row, extra ...any) (Entry, error) {
 	var v Entry
 	v.Lines = []Line{}
-	err := row.Scan(&v.ID, &v.Sequence, &v.ReceiptID, &v.ActorID, &v.EconomicDate, &v.AccountingDate, &v.Description, &v.ReversalOf, &v.RecordedAt)
+	fields := []any{&v.ID, &v.Sequence, &v.ReceiptID, &v.ActorID, &v.EconomicDate, &v.AccountingDate, &v.Description, &v.ReversalOf, &v.RecordedAt, &v.MeasurementPolicy}
+	err := row.Scan(append(fields, extra...)...)
 	return v, err
 }
 
 func readEntry(ctx context.Context, tx pgx.Tx, s Scope, id string) (Entry, error) {
-	v, err := scanEntry(tx.QueryRow(ctx, "SELECT "+entryColumns+" FROM public.entries WHERE tenant_id=$1 AND book_id=$2 AND id=$3", s.TenantID, s.BookID, id))
+	row := tx.QueryRow(ctx, "SELECT "+entryColumns+" FROM public.entries WHERE tenant_id=$1 AND book_id=$2 AND id=$3", s.TenantID, s.BookID, id)
+	return readEntryRow(ctx, tx, s, row)
+}
+
+func readEntryRow(ctx context.Context, tx pgx.Tx, s Scope, row pgx.Row, extra ...any) (Entry, error) {
+	v, err := scanEntry(row, extra...)
 	if err != nil {
 		return v, err
 	}
@@ -450,8 +514,11 @@ func readEntryLines(ctx context.Context, tx pgx.Tx, s Scope, entries []Entry) er
 	for i := range entries {
 		ids[i], positions[entries[i].ID] = entries[i].ID, i
 	}
-	rows, err := tx.Query(ctx, `SELECT entry_id::text,id::text,account_id::text,side,amount_minor::text,memo,coalesce(reverses_line_id::text,'')
- FROM public.lines WHERE tenant_id=$1 AND book_id=$2 AND entry_id=ANY($3::uuid[]) ORDER BY entry_id,position`, s.TenantID, s.BookID, ids)
+	rows, err := tx.Query(ctx, `SELECT l.entry_id::text,l.id::text,l.account_id::text,l.side,l.amount_minor::text,l.memo,coalesce(l.reverses_line_id::text,''),
+ l.native_currency,l.native_scale,l.native_amount_minor::text,l.native_account_revision,r.currency_definition,l.contexts,l.valuation
+ FROM public.lines l LEFT JOIN public.account_revisions r ON r.tenant_id=l.tenant_id AND r.book_id=l.book_id
+ AND r.account_id=l.account_id AND r.revision=l.native_account_revision
+ WHERE l.tenant_id=$1 AND l.book_id=$2 AND l.entry_id=ANY($3::uuid[]) ORDER BY l.entry_id,l.position`, s.TenantID, s.BookID, ids)
 	if err != nil {
 		return err
 	}
@@ -459,8 +526,22 @@ func readEntryLines(ctx context.Context, tx pgx.Tx, s Scope, entries []Entry) er
 	for rows.Next() {
 		var entry string
 		var line Line
-		if err := rows.Scan(&entry, &line.ID, &line.AccountID, &line.Side, &line.AmountMinor, &line.Memo, &line.ReversesLineID); err != nil {
+		var currency, amount, definition *string
+		var scale *int
+		var revision *int64
+		if err := rows.Scan(&entry, &line.ID, &line.AccountID, &line.Side, &line.AmountMinor, &line.Memo, &line.ReversesLineID,
+			&currency, &scale, &amount, &revision, &definition, &line.Contexts, &line.Valuation); err != nil {
 			return err
+		}
+		if currency != nil {
+			// A time-sensitive row policy can hide the joined revision after
+			// admitting its line. An incomplete visible unit is not a native zero.
+			if scale == nil || amount == nil || revision == nil || definition == nil {
+				return ErrDenied
+			}
+			line.Native = &NativeMovement{Currency: *currency, Scale: scale, AmountMinor: *amount, AccountRevision: *revision, UnitDefinition: *definition}
+		} else if scale != nil || amount != nil || revision != nil || definition != nil {
+			return ErrDenied
 		}
 		i, ok := positions[entry]
 		if !ok {
@@ -471,15 +552,24 @@ func readEntryLines(ctx context.Context, tx pgx.Tx, s Scope, entries []Entry) er
 	return rows.Err()
 }
 func insertEntry(ctx context.Context, tx pgx.Tx, s Scope, v *Entry) error {
-	e := tx.QueryRow(ctx, `INSERT INTO public.entries(tenant_id,book_id,id,sequence,receipt_id,actor_id,economic_date,accounting_date,description,reversal_of)
- VALUES($1,$2,$3,1,$4,$5,$6,$7,$8,nullif($9,'')::uuid) RETURNING sequence,recorded_at`,
-		s.TenantID, s.BookID, v.ID, v.ReceiptID, v.ActorID, v.EconomicDate, v.AccountingDate, v.Description, v.ReversalOf).Scan(&v.Sequence, &v.RecordedAt)
+	e := tx.QueryRow(ctx, `INSERT INTO public.entries(tenant_id,book_id,id,sequence,receipt_id,actor_id,economic_date,accounting_date,description,reversal_of,measurement_policy)
+ VALUES($1,$2,$3,1,$4,$5,$6,$7,$8,nullif($9,'')::uuid,$10) RETURNING sequence,recorded_at`,
+		s.TenantID, s.BookID, v.ID, v.ReceiptID, v.ActorID, v.EconomicDate, v.AccountingDate, v.Description, v.ReversalOf, v.MeasurementPolicy).Scan(&v.Sequence, &v.RecordedAt)
 	if e != nil {
 		return e
 	}
 	for i, l := range v.Lines {
-		_, e = tx.Exec(ctx, `INSERT INTO public.lines(tenant_id,book_id,id,entry_id,position,account_id,side,amount_minor,memo,reverses_line_id)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8::bigint,$9,nullif($10,'')::uuid)`, s.TenantID, s.BookID, l.ID, v.ID, i+1, l.AccountID, l.Side, l.AmountMinor, l.Memo, l.ReversesLineID)
+		var currency, amount *string
+		var scale *int
+		var revision *int64
+		if l.Native != nil {
+			currency, amount, scale, revision = &l.Native.Currency, &l.Native.AmountMinor, l.Native.Scale, &l.Native.AccountRevision
+		}
+		_, e = tx.Exec(ctx, `INSERT INTO public.lines(tenant_id,book_id,id,entry_id,position,account_id,side,amount_minor,memo,reverses_line_id,
+ native_currency,native_scale,native_amount_minor,native_account_revision,contexts,valuation)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8::bigint,$9,nullif($10,'')::uuid,$11,$12,$13::bigint,$14,$15,$16)`,
+			s.TenantID, s.BookID, l.ID, v.ID, i+1, l.AccountID, l.Side, l.AmountMinor, l.Memo, l.ReversesLineID,
+			currency, scale, amount, revision, emptyContexts(l.Contexts), l.Valuation)
 		if e != nil {
 			return e
 		}
@@ -487,35 +577,53 @@ func insertEntry(ctx context.Context, tx pgx.Tx, s Scope, v *Entry) error {
 	return nil
 }
 
-const balanceQuery = `SELECT a.id::text,a.code,a.name,coalesce(sum(CASE WHEN e.id IS NULL THEN 0
- WHEN l.side='debit' THEN l.amount_minor::numeric ELSE -l.amount_minor::numeric END),0)::text
- FROM public.accounts a LEFT JOIN public.lines l ON l.tenant_id=a.tenant_id AND l.book_id=a.book_id AND l.account_id=a.id
- LEFT JOIN public.entries e ON e.tenant_id=l.tenant_id AND e.book_id=l.book_id AND e.id=l.entry_id
- AND($3='' OR e.accounting_date<=nullif($3,'')::date)
+const balanceQuery = `SELECT a.id::text,a.code,a.name,p.book_minor::text,
+ p.status,coalesce(p.currency,''),p.native_scale,coalesce(p.native_minor::text,''),p.last_sequence
+ FROM public.accounts a CROSS JOIN LATERAL public.ledger_native_position(a.tenant_id,a.book_id,a.id,$3,0) p
  WHERE a.tenant_id=$1 AND a.book_id=$2`
 
+func scanBalance(row pgx.Row) (Balance, error) {
+	var v Balance
+	n := &NativePosition{}
+	err := row.Scan(&v.AccountID, &v.Code, &v.Name, &v.DebitPositiveMinor, &n.Status, &n.Currency, &n.Scale, &n.DebitPositiveMinor, &n.ThroughSequence)
+	if n.Status != "not_recorded" {
+		v.Native = n
+	}
+	return v, err
+}
+
 func readBalance(ctx context.Context, tx pgx.Tx, s Scope, q AccountQuery) (Balance, error) {
-	var balance Balance
-	err := tx.QueryRow(ctx, balanceQuery+" AND a.id=$4 GROUP BY a.id,a.code,a.name",
-		s.TenantID, s.BookID, q.Through, q.AccountID).Scan(&balance.AccountID, &balance.Code, &balance.Name, &balance.DebitPositiveMinor)
-	return balance, err
+	out, err := scanBalance(tx.QueryRow(ctx, balanceQuery+" AND a.id=$4", s.TenantID, s.BookID, q.Through, q.AccountID))
+	if err != nil {
+		return Balance{}, err
+	}
+	state, err := immutableReadState(ctx, tx, s)
+	if err != nil {
+		return Balance{}, err
+	}
+	out.RecordedState = state
+	return out, nil
 }
 
 func readTrial(ctx context.Context, tx pgx.Tx, s Scope, through string) (Trial, error) {
-	b, e := readBook(ctx, tx, s)
-	if e != nil {
-		return Trial{}, e
+	b, err := readBook(ctx, tx, s)
+	if err != nil {
+		return Trial{}, err
 	}
-	out := Trial{Currency: b.Currency, Scale: b.Scale, Through: through, Balances: []Balance{}}
-	rows, e := tx.Query(ctx, balanceQuery+" GROUP BY a.id,a.code,a.name ORDER BY a.code,a.id", s.TenantID, s.BookID, through)
-	if e != nil {
-		return out, e
+	state, err := captureReadState(ctx, tx, s, b, recordedReadScope{AllAccepted: true})
+	if err != nil {
+		return Trial{}, err
+	}
+	out := Trial{RecordedState: state.RecordedState, Currency: b.Currency, Scale: b.Scale, Through: through, Balances: []Balance{}}
+	rows, err := tx.Query(ctx, balanceQuery+" ORDER BY a.code,a.id", s.TenantID, s.BookID, through)
+	if err != nil {
+		return out, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var v Balance
-		if e = rows.Scan(&v.AccountID, &v.Code, &v.Name, &v.DebitPositiveMinor); e != nil {
-			return out, e
+		v, err := scanBalance(rows)
+		if err != nil {
+			return out, err
 		}
 		out.Balances = append(out.Balances, v)
 	}

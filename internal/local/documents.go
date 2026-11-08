@@ -30,6 +30,16 @@ type DocumentTransport struct {
 	Authorization string
 }
 
+type OwnerDocumentQuery struct {
+	BookID     string `json:"book_id"`
+	DocumentID string `json:"document_id"`
+}
+
+type OwnerDocumentUploadRequest struct {
+	BookID   string             `json:"book_id"`
+	Document ledger.AddDocument `json:"document"`
+}
+
 func (t *DocumentTransport) Call(ctx context.Context, method string, input json.RawMessage) (json.RawMessage, error) {
 	return t.Client.Call(ctx, method, t.Authorization, input)
 }
@@ -97,14 +107,42 @@ func (c Client) Upload(ctx context.Context, token, uploadID string, size int64, 
 	if !ledger.ValidID(uploadID) || size < 1 || size > documents.MaxSize || source == nil {
 		return nil, ledger.ErrInvalid
 	}
+	return c.upload(ctx, "document_upload", token, struct {
+		UploadID string `json:"upload_id"`
+	}{uploadID}, size, source)
+}
+
+// UploadForOwner transfers the bounded original to the protected service.
+func (c Client) UploadForOwner(ctx context.Context, session, book string, q ledger.AddDocument, source io.Reader) (ledger.OwnerDocumentUpload, error) {
+	if !ledger.ValidID(book) || !q.ValidOwnerUpload() || source == nil {
+		return ledger.OwnerDocumentUpload{}, ledger.ErrInvalid
+	}
+	data, err := c.upload(ctx, "owner_document_upload", session, OwnerDocumentUploadRequest{BookID: book, Document: q}, q.Size, source)
+	if err != nil {
+		for _, known := range []error{ledger.ErrDenied, ledger.ErrNotFound, ledger.ErrInvalid, ledger.ErrConflict, ledger.ErrLimit, ledger.ErrUploadExpired, documents.ErrUnavailable, documents.ErrIntegrity, documents.ErrMediaType} {
+			if err.Error() == known.Error() {
+				return ledger.OwnerDocumentUpload{}, known
+			}
+		}
+		return ledger.OwnerDocumentUpload{}, err
+	}
+	var out ledger.OwnerDocumentUpload
+	if strictjson.Decode(data, &out) != nil || !ledger.ValidID(out.Document.ID) || out.Document.State != "ready" ||
+		out.Document.Size != q.Size || out.Document.SHA256 != q.SHA256 || out.Document.ExpiresAt != nil {
+		return ledger.OwnerDocumentUpload{}, documents.ErrIntegrity
+	}
+	return out, nil
+}
+
+func (c Client) upload(ctx context.Context, method, token string, payload any, size int64, source io.Reader) (json.RawMessage, error) {
 	conn, err := c.dial(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	if err = streamRequest(conn, "document_upload", token, struct {
-		UploadID string `json:"upload_id"`
-	}{uploadID}, size); err != nil {
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer stop()
+	if err = streamRequest(conn, method, token, payload, size); err != nil {
 		return nil, err
 	}
 	if _, err = io.CopyN(conn, source, size); err != nil {
@@ -123,6 +161,27 @@ func (c Client) Upload(ctx context.Context, token, uploadID string, size int64, 
 // Download is successful only after exact bytes, hash and the final service
 // result. The caller must discard partial output on any returned error.
 func (c Client) Download(ctx context.Context, token, documentID string, dst io.Writer) error {
+	return c.download(ctx, "document_download", token, documentID, ledger.DocumentQuery{DocumentID: documentID}, dst)
+}
+
+// DownloadForOwner uses the browser session and the service's verified peer;
+// it does not create an agent connection or expose the encryption key.
+func (c Client) DownloadForOwner(ctx context.Context, session, book, documentID string, dst io.Writer) error {
+	if !ledger.ValidID(book) {
+		return ledger.ErrInvalid
+	}
+	err := c.download(ctx, "owner_document_download", session, documentID, OwnerDocumentQuery{BookID: book, DocumentID: documentID}, dst)
+	if err != nil {
+		for _, known := range []error{ledger.ErrDenied, ledger.ErrNotFound, ledger.ErrInvalid, documents.ErrUnavailable, documents.ErrIntegrity} {
+			if err.Error() == known.Error() {
+				return known
+			}
+		}
+	}
+	return err
+}
+
+func (c Client) download(ctx context.Context, method, token, documentID string, query any, dst io.Writer) error {
 	if !ledger.ValidID(documentID) || dst == nil {
 		return ledger.ErrInvalid
 	}
@@ -131,7 +190,9 @@ func (c Client) Download(ctx context.Context, token, documentID string, dst io.W
 		return err
 	}
 	defer conn.Close()
-	if err = streamRequest(conn, "document_download", token, ledger.DocumentQuery{DocumentID: documentID}, 0); err != nil {
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer stop()
+	if err = streamRequest(conn, method, token, query, 0); err != nil {
 		return err
 	}
 	reader := bufio.NewReaderSize(conn, 4096)

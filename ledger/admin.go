@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -58,16 +59,16 @@ func (a Admin) CreateBook(ctx context.Context, name, currency string, scale int)
 	return b, dbError(e)
 }
 func (a Admin) Books(ctx context.Context) ([]Book, error) {
-	rows, e := a.DB.Query(ctx, "SELECT tenant_id::text,id::text,name,currency,scale,created_at FROM public.books ORDER BY created_at,id")
+	rows, e := a.DB.Query(ctx, "SELECT "+bookColumns+bookFrom+" ORDER BY b.created_at,b.id")
 	if e != nil {
 		return nil, e
 	}
 	defer rows.Close()
 	out := []Book{}
 	for rows.Next() {
-		var b Book
-		if e = rows.Scan(&b.TenantID, &b.ID, &b.Name, &b.Currency, &b.Scale, &b.CreatedAt); e != nil {
-			return nil, e
+		b, err := scanBook(rows)
+		if err != nil {
+			return nil, err
 		}
 		out = append(out, b)
 	}
@@ -184,7 +185,7 @@ func (a Admin) Export(ctx context.Context, book string) (Export, error) {
 }
 
 func exportBook(ctx context.Context, tx pgx.Tx, s Scope) (Export, error) {
-	out := Export{Format: "vult-journal-v1", Entries: []Entry{}}
+	out := Export{Format: journalExportFormat, Entries: []Entry{}}
 	var e error
 	if out.Book, e = readBook(ctx, tx, s); e != nil {
 		return Export{}, dbError(e)
@@ -192,31 +193,12 @@ func exportBook(ctx context.Context, tx pgx.Tx, s Scope) (Export, error) {
 	if out.Accounts, e = readAccounts(ctx, tx, s); e != nil {
 		return Export{}, dbError(e)
 	}
-	var count int
-	if e = tx.QueryRow(ctx, `SELECT count(*) FROM (SELECT 1 FROM public.entries
- WHERE tenant_id=$1 AND book_id=$2 LIMIT 100001) bounded`, s.TenantID, s.BookID).Scan(&count); e != nil {
-		return Export{}, dbError(e)
-	}
-	if count > 100000 {
-		return Export{}, errors.New("export exceeds the supported entry limit")
-	}
-	if count == 0 {
-		return out, nil
-	}
-	var after int64
-	for {
-		entries, more, e := readEntryPage(ctx, tx, s, after, 100)
-		if e != nil {
-			return Export{}, dbError(e)
-		}
-		out.Entries = append(out.Entries, entries...)
-		if len(out.Entries) > 100000 || len(out.Entries) == 100000 && more {
-			return Export{}, errors.New("export exceeds the supported entry limit")
-		}
-		if !more {
-			break
-		}
-		after = entries[len(entries)-1].Sequence
+	e = visitExportEntries(ctx, tx, s, func(entry Entry) error {
+		out.Entries = append(out.Entries, entry)
+		return nil
+	})
+	if e != nil {
+		return Export{}, e
 	}
 	return out, nil
 }
@@ -241,26 +223,27 @@ func verifyExport(v Export) (Verification, error) {
 	out := Verification{BookID: v.Book.ID, Entries: len(v.Entries), Status: "verified"}
 	seenEntries, seenLines := map[string]Entry{}, map[string]bool{}
 	for _, entry := range v.Entries {
-		q := PostJournal{RequestKey: "verification", EconomicDate: entry.EconomicDate, AccountingDate: entry.AccountingDate, Description: entry.Description}
+		q := PostJournal{RequestKey: "verification", EconomicDate: entry.EconomicDate, AccountingDate: entry.AccountingDate, Description: entry.Description, MeasurementPolicy: entry.MeasurementPolicy}
 		for _, l := range entry.Lines {
 			if seenLines[l.ID] || !ValidID(l.ID) {
 				return Verification{}, ErrInvalid
 			}
 			seenLines[l.ID] = true
 			out.Lines++
-			q.Lines = append(q.Lines, PostLine{l.AccountID, l.Side, l.AmountMinor, l.Memo})
+			q.Lines = append(q.Lines, PostLine{AccountID: l.AccountID, Side: l.Side, AmountMinor: l.AmountMinor, Memo: l.Memo,
+				Native: l.Native, Contexts: l.Contexts, Valuation: l.Valuation})
 		}
-		if validatePost(q) != nil {
+		if validatePost(q) != nil || entryHasMeasurements(entry) && validateMeasurements(q, v.Book) != nil {
 			return Verification{}, ErrInvalid
 		}
 		if entry.ReversalOf != "" {
 			old, ok := seenEntries[entry.ReversalOf]
-			if !ok || len(old.Lines) != len(entry.Lines) || old.EconomicDate != entry.EconomicDate {
+			if !ok || !bytes.Equal(raw(old.MeasurementPolicy), raw(entry.MeasurementPolicy)) || len(old.Lines) != len(entry.Lines) || old.EconomicDate != entry.EconomicDate {
 				return Verification{}, ErrInvalid
 			}
 			for i, l := range entry.Lines {
 				o := old.Lines[i]
-				if l.ReversesLineID != o.ID || l.AccountID != o.AccountID || l.AmountMinor != o.AmountMinor || l.Side == o.Side || l.Memo != o.Memo {
+				if l.ReversesLineID != o.ID || l.AccountID != o.AccountID || l.AmountMinor != o.AmountMinor || l.Side == o.Side || l.Memo != o.Memo || !bytes.Equal(raw(l.Native), raw(o.Native)) || !bytes.Equal(raw(l.Contexts), raw(o.Contexts)) || !bytes.Equal(raw(l.Valuation), raw(o.Valuation)) {
 					return Verification{}, ErrInvalid
 				}
 			}
@@ -280,34 +263,60 @@ type Snapshot struct {
 	Tables       map[string]json.RawMessage `json:"tables"`
 }
 
-var snapshotTables = []string{"tenants", "books", "accounts", "account_revisions", "requests", "entries", "lines", "closed_periods"}
+var releasedSnapshotTables = []string{"tenants", "books", "accounts", "account_revisions", "requests", "entries", "lines", "closed_periods"}
+var bookSnapshotTables = append(append([]string{}, releasedSnapshotTables...), "book_revisions")
+var proposalSnapshotTables = append(append([]string{}, bookSnapshotTables...), "operation_proposals", "operation_decisions", "operation_consumptions")
+var snapshotTables = append(append([]string{}, proposalSnapshotTables...), "book_addresses", "book_identity_revisions", "book_logo_images")
 
-func snapshotRows(ctx context.Context, tx pgx.Tx, table, book string, budget int) ([]byte, error) {
+func readSnapshotRows(ctx context.Context, tx pgx.Tx, table string, scope Scope, order string, owner bool, budget int) ([]byte, error) {
 	if budget < 2 {
 		return nil, ErrLimit
+	}
+	if order == "" {
+		return nil, ErrInvalid
 	}
 	projection := "to_jsonb(t)"
 	if table == "books" {
 		projection = "to_jsonb(t)-'write_epoch'"
 	}
+	// Omit only absent columns introduced after the original backup format.
+	// Recursive null stripping would alter retained source and request objects.
+	if optional := snapshotOptionalColumns[table]; len(optional) > 0 {
+		names := make([]string, len(optional))
+		for i, name := range optional {
+			names[i] = "'" + name + "'"
+		}
+		projection = "(" + projection + ") - ARRAY(SELECT key FROM jsonb_each(to_jsonb(t)) WHERE key IN(" + strings.Join(names, ",") + ") AND value='null'::jsonb)"
+	}
 	query := "SELECT (" + projection + ")::text AS rowdata FROM public." + pgx.Identifier{table}.Sanitize() + " t"
 	var args []any
-	if book != "" {
-		where := "t.book_id=$1"
+	if scope.BookID != "" {
+		args = []any{scope.TenantID, scope.BookID}
 		switch table {
 		case "tenants":
-			where = "t.id=(SELECT tenant_id FROM public.books WHERE id=$1)"
+			args = args[:1]
+			if owner {
+				query = "SELECT to_jsonb(t)::text AS rowdata FROM access.book_archive_tenant($1) t"
+			} else {
+				query += " WHERE t.id=$1"
+			}
 		case "books":
-			where = "t.id=$1"
+			query += " WHERE t.tenant_id=$1 AND t.id=$2"
+		default:
+			query += " WHERE t.tenant_id=$1 AND t.book_id=$2"
 		}
-		query += " WHERE " + where
-		args = []any{book}
 	}
-	rows, err := tx.Query(ctx, query+" ORDER BY rowdata", args...)
+	queryCtx, cancel := context.WithCancel(ctx)
+	rows, err := tx.Query(queryCtx, query+" ORDER BY "+order, args...)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		// Closing a live pgx result drains its remaining rows.
+		cancel()
+		rows.Close()
+	}()
 	data := []byte{'['}
 	var compact bytes.Buffer
 	for rows.Next() {
@@ -344,6 +353,15 @@ func (a Admin) Snapshot(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, e
 	}
 	defer tx.Rollback(context.Background())
+	names := migrationNames()
+	applied, e := verifyReceipts(ctx, tx, names, false)
+	if e != nil {
+		return Snapshot{}, e
+	}
+	tables, format := releasedSnapshotTables, "vult-ledger-backup-v1"
+	if slices.Contains(names[:applied], recordedBookMigration) {
+		tables, format = snapshotTables, "vult-ledger-backup-v5"
+	}
 	var documentTable bool
 	if e = tx.QueryRow(ctx, "SELECT to_regclass('public.documents') IS NOT NULL").Scan(&documentTable); e != nil {
 		return Snapshot{}, dbError(e)
@@ -357,10 +375,10 @@ func (a Admin) Snapshot(ctx context.Context) (Snapshot, error) {
 			return Snapshot{}, errors.New("documents require a portable archive backup")
 		}
 	}
-	out := Snapshot{Format: "vult-ledger-backup-v1", SchemaSHA256: SchemaSHA256(), CreatedAt: time.Now().UTC(), Tables: map[string]json.RawMessage{}}
+	out := Snapshot{Format: format, SchemaSHA256: SchemaSHA256(), CreatedAt: time.Now().UTC(), Tables: map[string]json.RawMessage{}}
 	total := 0
-	for _, t := range snapshotTables {
-		b, e := snapshotRows(ctx, tx, t, "", int(maxArchiveMetadata)-total)
+	for _, t := range tables {
+		b, e := readSnapshotRows(ctx, tx, t, Scope{}, "rowdata", false, int(maxArchiveMetadata)-total)
 		if e != nil {
 			return Snapshot{}, e
 		}
@@ -376,15 +394,24 @@ func (a Admin) Snapshot(ctx context.Context) (Snapshot, error) {
 	return out, nil
 }
 func (a Admin) Restore(ctx context.Context, s Snapshot) error {
-	if s.Format != "vult-ledger-backup-v1" || s.SchemaSHA256 != SchemaSHA256() || len(s.Tables) != len(snapshotTables) {
+	if (s.Format != "vult-ledger-backup-v1" && s.Format != "vult-ledger-backup-v2" && s.Format != "vult-ledger-backup-v3" && s.Format != "vult-ledger-backup-v4" && s.Format != "vult-ledger-backup-v5") || s.SchemaSHA256 != SchemaSHA256() {
 		return ErrInvalid
+	}
+	var normalizeErr error
+	s, normalizeErr = normalizeBookTables(s, false)
+	if normalizeErr != nil {
+		return normalizeErr
 	}
 	tx, err := a.DB.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return dbError(err)
 	}
 	defer tx.Rollback(context.Background())
-	if err = restoreSnapshotRows(ctx, tx, s, snapshotTables); err != nil {
+	tables := proposalSnapshotTables
+	if s.Format == "vult-ledger-backup-v5" {
+		tables = snapshotTables
+	}
+	if err = restoreSnapshotRows(ctx, tx, s, tables, false); err != nil {
 		return err
 	}
 	if err = tx.Commit(ctx); err != nil {
@@ -393,7 +420,7 @@ func (a Admin) Restore(ctx context.Context, s Snapshot) error {
 	return nil
 }
 
-func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder []string) error {
+func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder []string, archive bool) error {
 	var e error
 	if _, e = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(769305014)"); e != nil {
 		return e
@@ -412,20 +439,33 @@ func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder 
 		return e
 	}
 	columns := map[string][]string{
-		"tenants":           {"id", "created_at"},
-		"books":             {"tenant_id", "id", "name", "currency", "scale", "created_at"},
-		"accounts":          {"tenant_id", "book_id", "id", "class", "created_at"},
-		"account_revisions": {"tenant_id", "book_id", "account_id", "revision", "code", "name", "actor_id", "recorded_at"},
-		"requests":          {"tenant_id", "book_id", "id", "actor_id", "request_key", "operation", "request_bytes", "result_bytes", "recorded_at"},
-		"entries":           {"tenant_id", "book_id", "id", "sequence", "receipt_id", "actor_id", "economic_date", "accounting_date", "description", "reversal_of", "recorded_at"},
-		"lines":             {"tenant_id", "book_id", "id", "entry_id", "position", "account_id", "side", "amount_minor", "memo", "reverses_line_id"},
-		"closed_periods":    {"tenant_id", "book_id", "id", "start_date", "end_date", "closed_at"},
-		"documents":         {"tenant_id", "book_id", "id", "sequence", "sha256", "size_bytes", "media_type", "original_name", "storage_id", "key_id", "state", "actor_id", "created_at", "ready_at", "expires_at", "used_at"},
-		"document_uploads":  {"tenant_id", "book_id", "id", "document_id", "storage_id", "actor_id", "connection_id", "receipt_id", "created_at", "expires_at"},
-		"source_citations":  {"tenant_id", "book_id", "id", "source_id", "revision", "sequence", "entry_id", "position", "document_id", "location", "actor_id", "receipt_id", "reason", "recorded_at"},
-		"evidence_links":    {"tenant_id", "book_id", "id", "link_id", "revision", "sequence", "entry_id", "document_id", "role", "action", "actor_id", "receipt_id", "reason", "recorded_at"},
+		"tenants":                 {"id", "created_at"},
+		"books":                   {"tenant_id", "id", "name", "currency", "scale", "created_at"},
+		"accounts":                {"tenant_id", "book_id", "id", "class", "created_at"},
+		"account_revisions":       {"tenant_id", "book_id", "account_id", "revision", "code", "name", "actor_id", "recorded_at"},
+		"requests":                {"tenant_id", "book_id", "id", "actor_id", "request_key", "operation", "request_bytes", "result_bytes", "recorded_at"},
+		"entries":                 {"tenant_id", "book_id", "id", "sequence", "receipt_id", "actor_id", "economic_date", "accounting_date", "description", "reversal_of", "recorded_at"},
+		"lines":                   {"tenant_id", "book_id", "id", "entry_id", "position", "account_id", "side", "amount_minor", "memo", "reverses_line_id"},
+		"closed_periods":          {"tenant_id", "book_id", "id", "start_date", "end_date", "closed_at"},
+		"book_logo_images":        {"tenant_id", "book_id", "id", "sha256", "content_type", "data"},
+		"book_addresses":          {"tenant_id", "book_id", "code", "slug", "revision", "aliases"},
+		"book_identity_revisions": {"tenant_id", "book_id", "revision", "id", "prior_kind", "new_kind", "prior_identity", "new_identity", "actor_id", "reason", "effective_date", "recorded_at"},
+		"book_revisions":          {"tenant_id", "book_id", "revision", "actor_id", "request_key", "prior_name", "name", "founder", "profile", "start_date", "fiscal_year_start_month", "fiscal_year_start_day", "accounting_timezone", "request_bytes", "result_bytes", "recorded_at"},
+		"documents":               {"tenant_id", "book_id", "id", "sequence", "sha256", "size_bytes", "media_type", "original_name", "storage_id", "key_id", "state", "actor_id", "created_at", "ready_at", "expires_at", "used_at"},
+		"document_uploads":        {"tenant_id", "book_id", "id", "document_id", "storage_id", "actor_id", "connection_id", "receipt_id", "created_at", "expires_at"},
+		"source_citations":        {"tenant_id", "book_id", "id", "source_id", "revision", "sequence", "entry_id", "position", "document_id", "location", "actor_id", "receipt_id", "reason", "recorded_at"},
+		"evidence_links":          {"tenant_id", "book_id", "id", "link_id", "revision", "sequence", "entry_id", "document_id", "role", "action", "actor_id", "receipt_id", "reason", "recorded_at"},
+		"operation_proposals":     {"tenant_id", "book_id", "id", "sequence", "actor_id", "connection_id", "request_key", "operation", "operation_key", "payload_bytes", "created_at", "expires_at"},
+		"operation_decisions":     {"tenant_id", "book_id", "proposal_id", "revision", "owner_id", "owner_epoch", "request_key", "sha256", "decision", "reason", "executor_actor_id", "executor_connection_id", "recorded_at", "expires_at"},
+		"operation_consumptions":  {"tenant_id", "book_id", "proposal_id", "decision_revision", "receipt_id", "actor_id", "recorded_at"},
+	}
+	for table, optional := range snapshotOptionalColumns {
+		if table != "accounts" {
+			columns[table] = append(columns[table], optional...)
+		}
 	}
 	tables := map[string][]map[string]json.RawMessage{}
+	normalizedTables := map[string]json.RawMessage{}
 	for _, table := range tableOrder {
 		data, ok := s.Tables[table]
 		if !ok || len(data) > 64<<20 {
@@ -435,7 +475,24 @@ func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder 
 		if json.Unmarshal(data, &rows) != nil || rows == nil {
 			return ErrInvalid
 		}
-		if table == "account_revisions" { // Replay revisions in their original order.
+		for _, row := range rows {
+			for _, name := range snapshotOptionalColumns[table] {
+				value, exists := row[name]
+				if exists && string(value) != "null" && strings.HasSuffix(s.Format, "-v1") {
+					return ErrInvalid
+				}
+				if exists && string(value) == "null" {
+					delete(row, name)
+				}
+			}
+		}
+		// Normalize absent optional columns and timestamp display offsets. Every
+		// retained value still participates in the complete-row comparison below.
+		normalizedTables[table], e = canonicalSnapshotTimes(raw(rows))
+		if e != nil {
+			return e
+		}
+		if table == "account_revisions" || table == "book_revisions" || table == "operation_decisions" { // Replay revisions in their original order.
 			sort.SliceStable(rows, func(i, j int) bool {
 				var x, y int64
 				json.Unmarshal(rows[i]["revision"], &x)
@@ -456,7 +513,7 @@ func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder 
 	insert := func(table string, row map[string]json.RawMessage) error {
 		list := []string{}
 		for _, c := range columns[table] {
-			if _, ok := row[c]; !ok {
+			if _, ok := row[c]; !ok && !optionalSnapshotColumn(table, c) {
 				return ErrInvalid
 			}
 			list = append(list, pgx.Identifier{c}.Sanitize())
@@ -464,6 +521,12 @@ func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder 
 		query := fmt.Sprintf("INSERT INTO public.%s(%s) SELECT %s FROM jsonb_populate_record(NULL::public.%s,$1::jsonb)", pgx.Identifier{table}.Sanitize(), strings.Join(list, ","), strings.Join(list, ","), pgx.Identifier{table}.Sanitize())
 		_, err := tx.Exec(ctx, query, string(raw(row)))
 		return dbError(err)
+	}
+	retainAddresses := strings.HasSuffix(s.Format, "-v5")
+	if retainAddresses {
+		if _, e = tx.Exec(ctx, "SELECT set_config('vult.restore_book_details','yes',true)"); e != nil {
+			return dbError(e)
+		}
 	}
 	type bookKey struct{ tenant, book string }
 	groups := map[bookKey]map[string][]map[string]json.RawMessage{}
@@ -483,6 +546,11 @@ func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder 
 			}
 		}
 	}
+	if retainAddresses {
+		if _, e = tx.Exec(ctx, "SELECT set_config('vult.restore_book_details','',true)"); e != nil {
+			return dbError(e)
+		}
+	}
 	for _, table := range tableOrder[2:] {
 		for _, row := range tables[table] {
 			var key bookKey
@@ -497,6 +565,9 @@ func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder 
 		}
 	}
 	for _, key := range order {
+		if retainAddresses && len(groups[key]["book_addresses"]) != 1 {
+			return ErrInvalid
+		}
 		if e = setScope(ctx, tx, Scope{TenantID: key.tenant, BookID: key.book}); e != nil {
 			return e
 		}
@@ -535,21 +606,96 @@ func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder 
  coalesce((SELECT max(e.sequence) FROM public.entries e WHERE e.tenant_id=b.tenant_id AND e.book_id=b.id),0),
  coalesce((SELECT max(d.sequence) FROM public.documents d WHERE d.tenant_id=b.tenant_id AND d.book_id=b.id),0),
  coalesce((SELECT max(c.sequence) FROM public.source_citations c WHERE c.tenant_id=b.tenant_id AND c.book_id=b.id),0),
- coalesce((SELECT max(l.sequence) FROM public.evidence_links l WHERE l.tenant_id=b.tenant_id AND l.book_id=b.id),0))`); e != nil {
+ coalesce((SELECT max(l.sequence) FROM public.evidence_links l WHERE l.tenant_id=b.tenant_id AND l.book_id=b.id),0),
+ coalesce((SELECT max(p.sequence) FROM public.operation_proposals p WHERE p.tenant_id=b.tenant_id AND p.book_id=b.id),0))`); e != nil {
 		return e
 	}
 	// Compare every retained row before commit; reject any coercion or omission.
+	compare := "SELECT $1::jsonb=$2::jsonb"
+	if archive {
+		// Older archives use a different row order. Compare both multisets,
+		// including duplicates, while requiring every field to be equal.
+		compare = `SELECT NOT EXISTS (
+			(SELECT value FROM jsonb_array_elements($1::jsonb) EXCEPT ALL
+			 SELECT value FROM jsonb_array_elements($2::jsonb))
+			UNION ALL
+			(SELECT value FROM jsonb_array_elements($2::jsonb) EXCEPT ALL
+			 SELECT value FROM jsonb_array_elements($1::jsonb)))`
+	}
 	remaining := int(maxArchiveMetadata)
 	for _, table := range tableOrder {
-		actual, e := snapshotRows(ctx, tx, table, "", remaining)
+		order := "rowdata"
+		if archive {
+			order = archiveRowOrder[table]
+		}
+		actual, e := readSnapshotRows(ctx, tx, table, Scope{}, order, false, remaining)
 		if e != nil {
 			return e
 		}
 		remaining -= len(actual)
+		actual, e = canonicalSnapshotTimes(actual)
+		if e != nil {
+			return e
+		}
 		var same bool
-		if e = tx.QueryRow(ctx, "SELECT $1::jsonb=$2::jsonb", string(actual), string(s.Tables[table])).Scan(&same); e != nil || !same {
+		if e = tx.QueryRow(ctx, compare, string(actual), string(normalizedTables[table])).Scan(&same); e != nil || !same {
 			return errors.New("restored rows differ from the backup")
 		}
 	}
 	return nil
+}
+
+// canonicalSnapshotTimes compares timestamp instants independently of a pool's
+// display timezone. Only these top-level SQL timestamptz fields are normalized;
+// nested JSON, dates and opaque request/result bytes retain their exact values.
+func canonicalSnapshotTimes(data []byte) ([]byte, error) {
+	var rows []map[string]json.RawMessage
+	if json.Unmarshal(data, &rows) != nil || rows == nil {
+		return nil, ErrInvalid
+	}
+	for _, row := range rows {
+		if row == nil {
+			return nil, ErrInvalid
+		}
+		for _, name := range []string{"created_at", "recorded_at", "closed_at", "ready_at", "expires_at", "used_at"} {
+			value, exists := row[name]
+			if !exists || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+				continue
+			}
+			instant, err := parseSnapshotTime(value)
+			if err != nil {
+				return nil, err
+			}
+			row[name] = raw(instant.UTC().Format(time.RFC3339Nano))
+		}
+	}
+	return json.Marshal(rows)
+}
+
+func parseSnapshotTime(value json.RawMessage) (time.Time, error) {
+	var text string
+	if json.Unmarshal(value, &text) != nil {
+		return time.Time{}, ErrInvalid
+	}
+	if fraction := strings.IndexAny(text, ".,"); fraction >= 0 {
+		// time.Parse truncates beyond nanoseconds. Check the original decimal
+		// too, so nonzero finer precision can never disappear.
+		for i := fraction + 1; i < len(text) && text[i] >= '0' && text[i] <= '9'; i++ {
+			if i > fraction+6 && text[i] != '0' {
+				return time.Time{}, ErrInvalid
+			}
+		}
+	}
+	instant, err := time.Parse(time.RFC3339Nano, text)
+	if err != nil {
+		// PostgreSQL's XSD encoder retains seconds in a POSIX timezone offset
+		// when needed, beyond RFC3339's minute offsets.
+		instant, err = time.Parse("2006-01-02T15:04:05.999999999Z07:00:00", text)
+	}
+	if err != nil || instant.Nanosecond()%1000 != 0 {
+		// PostgreSQL timestamps have microsecond precision. Never hide a
+		// coercion of an unrepresentable input behind canonical formatting.
+		return time.Time{}, ErrInvalid
+	}
+	return instant.UTC(), nil
 }

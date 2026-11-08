@@ -35,13 +35,13 @@ func DSN(pool *pgxpool.Pool) string {
 	return u.String()
 }
 
-func New(t *testing.T) *Database {
+func New(t testing.TB) *Database {
 	return NewWithInitializer(t, ledger.Apply)
 }
 
 // NewWithInitializer creates the same isolated database and restricted login,
 // with an explicit initializer for upgrade tests against an older schema.
-func NewWithInitializer(t *testing.T, initialize func(context.Context, *pgxpool.Pool, string) error) *Database {
+func NewWithInitializer(t testing.TB, initialize func(context.Context, *pgxpool.Pool, string) error) *Database {
 	t.Helper()
 	file := os.Getenv("VULT_TEST_DSN_FILE")
 	if file == "" || os.Getenv("VULT_TEST_ISOLATED") != "1" {
@@ -128,7 +128,7 @@ func NewWithInitializer(t *testing.T, initialize func(context.Context, *pgxpool.
 	db.Store = ledger.Store{Runtime: db.Runtime}
 	return db
 }
-func (d *Database) Book(t *testing.T, name string) (ledger.Book, ledger.Scope) {
+func (d *Database) Book(t testing.TB, name string) (ledger.Book, ledger.Scope) {
 	t.Helper()
 	book, e := d.Owner.CreateBook(d.Context, name, "USD", 2)
 	if e != nil {
@@ -140,7 +140,7 @@ func (d *Database) Book(t *testing.T, name string) (ledger.Book, ledger.Scope) {
 	}
 	return book, ledger.Scope{TenantID: c.TenantID, BookID: c.BookID, ActorID: c.ActorID, ConnectionID: c.ID, Access: c.Access}
 }
-func (d *Database) Call(t *testing.T, s ledger.Scope, method string, payload any) json.RawMessage {
+func (d *Database) Call(t testing.TB, s ledger.Scope, method string, payload any) json.RawMessage {
 	t.Helper()
 	b, e := json.Marshal(payload)
 	if e != nil {
@@ -152,7 +152,7 @@ func (d *Database) Call(t *testing.T, s ledger.Scope, method string, payload any
 	}
 	return out
 }
-func (d *Database) Account(t *testing.T, s ledger.Scope, code, class string) ledger.Account {
+func (d *Database) Account(t testing.TB, s ledger.Scope, code, class string) ledger.Account {
 	t.Helper()
 	b := d.Call(t, s, "create_account", ledger.CreateAccount{RequestKey: "create-" + code, Class: class, Code: code, Name: "Example " + code})
 	var a ledger.Account

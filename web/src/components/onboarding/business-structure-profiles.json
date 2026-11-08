@@ -1,0 +1,446 @@
+{
+  "reviewed_at": "2026-11-02",
+  "catalog_version": "2026-10-31.2",
+  "countries": {
+    "US": {
+      "source": "https://www.sba.gov/counseling/launch-your-business/",
+      "exclude_jurisdictions": [
+        "US"
+      ],
+      "choices": [
+        {
+          "key": "sole",
+          "label": "Sole proprietorship",
+          "elf_codes": [
+            "88XU",
+            "AREY",
+            "EQAQ",
+            "XHT1"
+          ],
+          "ids": []
+        },
+        {
+          "key": "llc",
+          "label": "Limited liability company (LLC)",
+          "elf_codes": [
+            "3ZXC",
+            "4WN7",
+            "4YOA",
+            "53DC",
+            "6IIM",
+            "7F5B",
+            "7XPF",
+            "8N21",
+            "8RLE",
+            "9C19",
+            "AEK0",
+            "B8XC",
+            "BQRL",
+            "BYFU",
+            "C276",
+            "CWRI",
+            "D4YS",
+            "DBGD",
+            "DQBZ",
+            "DRSE",
+            "EI4J",
+            "EZNQ",
+            "F2QV",
+            "F8DD",
+            "FBN0",
+            "HZEH",
+            "I2XB",
+            "JJ9M",
+            "L10T",
+            "LJH5",
+            "M4FO",
+            "M5RM",
+            "MM8M",
+            "NB58",
+            "O85W",
+            "OE6T",
+            "OJ9K",
+            "P7RH",
+            "QK2J",
+            "RC5L",
+            "RU6X",
+            "SDX0",
+            "VPBH",
+            "WPCN",
+            "WYG5",
+            "X1EL",
+            "Y182"
+          ],
+          "ids": [
+            "us-wy-llc"
+          ]
+        },
+        {
+          "key": "corporation",
+          "label": "Corporation",
+          "elf_codes": [
+            "1QMT",
+            "2I4P",
+            "3JTE",
+            "6M6O",
+            "6S32",
+            "7QV2",
+            "8WM4",
+            "9GXA",
+            "9STD",
+            "AZUK",
+            "BGH4",
+            "BRO8",
+            "C5K7",
+            "DU35",
+            "EJX1",
+            "GCU5",
+            "H1UM",
+            "HFGV",
+            "JZWN",
+            "KC7Z",
+            "L2QV",
+            "MFYJ",
+            "NHYA",
+            "NYUD",
+            "OWR6",
+            "PJ10",
+            "QJ9F",
+            "R0BI",
+            "S2K8",
+            "T5ZE",
+            "TRI2",
+            "TTB3",
+            "U9HL",
+            "VG3S",
+            "XSNP",
+            "XST3",
+            "XTIQ",
+            "Z54A"
+          ],
+          "ids": []
+        },
+        {
+          "key": "partnership",
+          "label": "Partnership",
+          "elf_codes": [],
+          "ids": []
+        },
+        {
+          "key": "nonprofit",
+          "label": "Nonprofit corporation",
+          "elf_codes": [
+            "11GD",
+            "1K9U",
+            "2XXG",
+            "358I",
+            "3N55",
+            "51RC",
+            "9EJ6",
+            "9I4Y",
+            "AVLE",
+            "DX2N",
+            "EVE6",
+            "FEC4",
+            "HSPI",
+            "HUSW",
+            "IY8C",
+            "K2BJ",
+            "NOBH",
+            "O4NK",
+            "OGSS",
+            "P3LZ",
+            "PDLV",
+            "PNZI",
+            "PUJR",
+            "R7QO",
+            "R8SH",
+            "RD1T",
+            "RR8G",
+            "S7VR",
+            "T4M6",
+            "U87X",
+            "UZ83",
+            "V65U",
+            "V89I",
+            "VJXH",
+            "W0U4",
+            "ZJPG"
+          ],
+          "ids": []
+        }
+      ]
+    },
+    "GB": {
+      "source": "https://www.gov.uk/set-up-business",
+      "choices": [
+        {
+          "key": "sole",
+          "label": "Sole trader",
+          "elf_codes": [],
+          "ids": []
+        },
+        {
+          "key": "ltd",
+          "label": "Private company limited by shares (Ltd)",
+          "elf_codes": [
+            "H0PO"
+          ],
+          "ids": [
+            "gb-private-limited-shares"
+          ]
+        },
+        {
+          "key": "partnership",
+          "label": "Partnership",
+          "elf_codes": [],
+          "ids": []
+        },
+        {
+          "key": "llp",
+          "label": "Limited liability partnership (LLP)",
+          "elf_codes": [
+            "Z0EY"
+          ],
+          "ids": []
+        }
+      ]
+    },
+    "CA": {
+      "source": "https://www.canada.ca/en/revenue-agency/services/tax/businesses/small-businesses-self-employed-income/setting-your-business.html",
+      "choices": [
+        {
+          "key": "sole",
+          "label": "Sole proprietorship",
+          "elf_codes": [
+            "1CML",
+            "1EQC",
+            "456Q",
+            "GF6X",
+            "I5NO",
+            "I8VP",
+            "MXLT",
+            "QR4F",
+            "UR1O",
+            "W8XG"
+          ],
+          "ids": [],
+          "exclude_jurisdictions": [
+            "ca-federal"
+          ]
+        },
+        {
+          "key": "corporation",
+          "label": "Corporation",
+          "elf_codes": [
+            "ASWX",
+            "B3RX",
+            "UWMY"
+          ],
+          "ids": [
+            "ca-federal-business-corporation",
+            "ca-on-business-corporation"
+          ]
+        },
+        {
+          "key": "partnership",
+          "label": "Partnership",
+          "elf_codes": [],
+          "ids": [],
+          "exclude_jurisdictions": [
+            "ca-federal"
+          ]
+        }
+      ]
+    },
+    "PL": {
+      "source": "https://www.gov.pl/web/sprawiedliwosc/ogolne-informacje-o-prowadzeniu-dzialalnosci-gospodarczej-w-polsce",
+      "choices": [
+        {
+          "key": "jdg",
+          "label": "Jednoosobowa działalność gospodarcza (JDG)",
+          "elf_codes": [],
+          "ids": [
+            "pl-jdg"
+          ]
+        },
+        {
+          "key": "zoo",
+          "label": "Spółka z ograniczoną odpowiedzialnością (sp. z o.o.)",
+          "elf_codes": [
+            "O7XB"
+          ],
+          "ids": [
+            "pl-spolka-z-oo"
+          ]
+        },
+        {
+          "key": "cywilna",
+          "label": "Spółka cywilna",
+          "elf_codes": [
+            "YLZL"
+          ],
+          "ids": [
+            "pl-spolka-cywilna"
+          ]
+        },
+        {
+          "key": "jawna",
+          "label": "Spółka jawna",
+          "elf_codes": [
+            "629I"
+          ],
+          "ids": [
+            "pl-spolka-jawna"
+          ]
+        },
+        {
+          "key": "komandytowa",
+          "label": "Spółka komandytowa",
+          "elf_codes": [
+            "BSJT"
+          ],
+          "ids": [
+            "pl-spolka-komandytowa"
+          ]
+        }
+      ]
+    },
+    "DE": {
+      "source": "https://www.existenzgruendungsportal.de/Navigation/DE/Gruendungswissen/Rechtsformen/rechtsformen",
+      "choices": [
+        {
+          "key": "sole",
+          "label": "Einzelunternehmen",
+          "elf_codes": [],
+          "ids": []
+        },
+        {
+          "key": "gmbh",
+          "label": "Gesellschaft mit beschränkter Haftung (GmbH)",
+          "elf_codes": [
+            "2HBR"
+          ],
+          "ids": []
+        },
+        {
+          "key": "ug",
+          "label": "Unternehmergesellschaft (UG)",
+          "elf_codes": [
+            "63KS"
+          ],
+          "ids": []
+        },
+        {
+          "key": "gbr",
+          "label": "Gesellschaft bürgerlichen Rechts (GbR)",
+          "elf_codes": [
+            "FR3V"
+          ],
+          "ids": []
+        }
+      ]
+    },
+    "FR": {
+      "source": "https://entreprendre.service-public.gouv.fr/vosdroits/F23844",
+      "choices": [
+        {
+          "key": "ei",
+          "label": "Entrepreneur individuel (EI)",
+          "elf_codes": [
+            "ZY9X"
+          ],
+          "ids": []
+        },
+        {
+          "key": "sarl",
+          "label": "Société à responsabilité limitée (SARL)",
+          "elf_codes": [
+            "V9QP"
+          ],
+          "ids": []
+        },
+        {
+          "key": "eurl",
+          "label": "Entreprise unipersonnelle à responsabilité limitée (EURL)",
+          "elf_codes": [],
+          "ids": []
+        },
+        {
+          "key": "sas",
+          "label": "Société par actions simplifiée (SAS)",
+          "elf_codes": [
+            "6CHY"
+          ],
+          "ids": []
+        },
+        {
+          "key": "sasu",
+          "label": "Société par actions simplifiée unipersonnelle (SASU)",
+          "elf_codes": [],
+          "ids": []
+        }
+      ]
+    },
+    "AU": {
+      "source": "https://business.gov.au/planning/business-structures-and-types/business-structures/choose-your-business-structure",
+      "choices": [
+        {
+          "key": "sole",
+          "label": "Sole trader",
+          "elf_codes": [],
+          "ids": []
+        },
+        {
+          "key": "company",
+          "label": "Company",
+          "elf_codes": [],
+          "ids": []
+        },
+        {
+          "key": "partnership",
+          "label": "Partnership",
+          "elf_codes": [],
+          "ids": []
+        },
+        {
+          "key": "trust",
+          "label": "Trust",
+          "elf_codes": [
+            "7TPC"
+          ],
+          "ids": []
+        }
+      ]
+    },
+    "NZ": {
+      "source": "https://www.business.govt.nz/business-stage-or-type/starting-a-business/choosing-the-right-business-structure",
+      "choices": [
+        {
+          "key": "sole",
+          "label": "Sole trader",
+          "elf_codes": [
+            "QF8K"
+          ],
+          "ids": []
+        },
+        {
+          "key": "company",
+          "label": "Limited liability company",
+          "elf_codes": [
+            "P2R9"
+          ],
+          "ids": []
+        },
+        {
+          "key": "partnership",
+          "label": "Partnership",
+          "elf_codes": [
+            "WEIB"
+          ],
+          "ids": []
+        }
+      ]
+    }
+  }
+}

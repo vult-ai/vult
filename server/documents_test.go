@@ -31,6 +31,8 @@ type documentServerFixture struct {
 	operator        access.Operator
 	server          *http.Server
 	dir             string
+	vault           *documents.Vault
+	auth, owners    *pgxpool.Pool
 	tenant, session string
 	book            ledger.Book
 	identity        access.Identity
@@ -75,6 +77,7 @@ func documentServer(t *testing.T) *documentServerFixture {
 	if err := f.operator.ConfigureRoles(db.Context, db.Role, roles[0], roles[1]); err != nil {
 		t.Fatal(err)
 	}
+	f.auth, f.owners = pools[0], pools[1]
 	var err error
 	f.sessions, err = access.New(pools[0], pools[1], configuration().Origin)
 	if err != nil {
@@ -116,7 +119,8 @@ func documentServer(t *testing.T) *documentServerFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.server, err = New(configuration(), Options{Database: db.Runtime, Access: &Access{Sessions: f.sessions, HTTP: human}, Documents: &documents.Vault{Storage: disk, Keys: keys}})
+	f.vault = &documents.Vault{Storage: disk, Keys: keys}
+	f.server, err = New(configuration(), Options{Database: db.Runtime, Access: &Access{Sessions: f.sessions, HTTP: human}, Documents: f.vault})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +217,7 @@ func TestDocumentMCPStreamsVerifiedOriginalAndRecoversLostReply(t *testing.T) {
 	ctx := f.db.Context
 	client := f.client(t, f.token(t, "write"))
 	catalog, err := client.ListTools(ctx, nil)
-	if err != nil || len(catalog.Tools) != 20 {
+	if err != nil || len(catalog.Tools) != 25 {
 		t.Fatal("document tool catalog missing", err)
 	}
 	data := bytes.Repeat([]byte("synthetic original\n"), 300000)
@@ -262,7 +266,7 @@ func TestDocumentMCPStreamsVerifiedOriginalAndRecoversLostReply(t *testing.T) {
 	}
 	reader := f.client(t, f.token(t, "read"))
 	readCatalog, err := reader.ListTools(ctx, nil)
-	if err != nil || len(readCatalog.Tools) != 12 {
+	if err != nil || len(readCatalog.Tools) != 14 {
 		t.Fatal("wrong read catalog", err)
 	}
 	for _, tool := range readCatalog.Tools {

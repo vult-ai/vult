@@ -13,6 +13,7 @@ import (
 
 	"github.com/vult-ai/vult/internal/strictjson"
 	"github.com/vult-ai/vult/server"
+	"github.com/vult-ai/vult/web"
 )
 
 func run(ctx context.Context, args []string, output io.Writer) error {
@@ -59,7 +60,7 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	if closer != nil {
 		defer closer.Close()
 	}
-	s, e := server.New(config, server.Options{Database: db, Access: auth, Documents: documents})
+	s, e := server.New(config, server.Options{Database: db, Access: auth, Documents: documents, Web: web.App()})
 	if e != nil {
 		return e
 	}

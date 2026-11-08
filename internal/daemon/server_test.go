@@ -3,6 +3,7 @@ package daemon
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,17 @@ import (
 	"github.com/vult-ai/vult/internal/local"
 	"github.com/vult-ai/vult/ledger"
 )
+
+func TestProposalErrorsExposeOnlyCanonicalMessages(t *testing.T) {
+	for _, known := range []error{ledger.ErrApprovalRequired, ledger.ErrProposalStale, ledger.ErrProposalExpired} {
+		if got := safeError(fmt.Errorf("example private context: %w", known)); got != known.Error() {
+			t.Fatal("proposal error lost its safe next step or leaked context", got)
+		}
+	}
+	if got := safeError(errors.New("example private context")); got != "operation failed; no automatic retry" {
+		t.Fatal("unknown error leaked its context")
+	}
+}
 
 func TestOwnerAuthorizationBindsActionPayloadAndPeer(t *testing.T) {
 	for _, variation := range []string{"valid", "peer", "action", "payload", "expired"} {

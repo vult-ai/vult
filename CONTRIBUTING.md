@@ -35,8 +35,8 @@ Every change must preserve these:
 
 ## Build and test
 
-Use Go 1.27.3. The native local service requires Apple Silicon macOS; the separate
-server supports Linux. Build the local command with:
+Use Go 1.27.3. Native local targets are Apple Silicon macOS and Ubuntu 24.04
+x86-64; the separate server supports Linux. Build the local command with:
 
 ```sh
 go build -trimpath -buildvcs=false -o build/vult ./cmd/vult
@@ -57,6 +57,14 @@ VULT_TEST_ISOLATED=1 VULT_TEST_DSN_FILE=/path/to/synthetic-dsn go test -race -co
 
 Missing database configuration is a failure, not a skipped test. Never use an
 existing personal, development or production database as the test server.
+
+Browser components follow the [typography standard](docs/design/typography.md).
+
+The browser sign-in script has dependency-free tests using Node's test runner:
+
+```sh
+node --test access/passkeys.test.mjs
+```
 
 The installer generator and synthetic shell-control tests use Python 3.11 or later:
 

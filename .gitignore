@@ -1,5 +1,7 @@
 /dist/
 /build/
+/web/dist/
+/web/node_modules/
 /install.sh
 *.age
 *.sock

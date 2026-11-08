@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>ai.vult.ledger.browser-setup</string>
+  <key>CFBundleName</key><string>Vult Browser Setup</string>
+  <key>CFBundleDisplayName</key><string>Vult Browser Setup</string>
+  <key>CFBundleExecutable</key><string>browser-setup</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>LSMinimumSystemVersion</key><string>26.0</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>LSUIElement</key><true/>
+</dict>
+</plist>

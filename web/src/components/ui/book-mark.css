@@ -1,0 +1,26 @@
+/* A Book's mark: a rounded square, so it never reads as a person's round avatar. */
+.book-mark {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  box-shadow: inset 0 0 0 1px var(--color-border-secondary);
+}
+.book-mark[data-size="20"] { width: 20px; height: 20px; }
+.book-mark[data-size="24"] { width: 24px; height: 24px; }
+.book-mark[data-size="40"] { width: 40px; height: 40px; border-radius: var(--radius-md); }
+.book-mark[data-size="64"] { width: 64px; height: 64px; border-radius: var(--radius-lg); }
+.book-mark img { width: 100%; height: 100%; object-fit: cover; }
+.book-mark-initials { font-size: var(--text-vult-metadata); font-weight: 600; letter-spacing: 0.02em; }
+.book-mark-initials::before { content: attr(data-initials); }
+.book-mark[data-size="40"] .book-mark-initials,
+.book-mark[data-size="64"] .book-mark-initials { font-size: var(--text-vult-ui); }
+
+/* Settings: the mark beside its upload controls. */
+.book-logo-settings { display: flex; align-items: center; gap: 16px; padding: 16px; }
+.book-logo-settings-controls { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.book-logo-settings-buttons { display: flex; gap: 8px; }
+.book-logo-settings p { margin: 0; }

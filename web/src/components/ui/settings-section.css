@@ -1,0 +1,276 @@
+.workspace-page.book-settings-page {
+  max-width: 1120px;
+  padding-block: 0 max(64px, env(safe-area-inset-bottom));
+}
+
+/* Match Dashboard's borderless white content within the rounded light frame. */
+.light-mode .vult-settings-section > .vult-settings-rows {
+  border: 0;
+}
+
+/* Tabs look like every other tab strip (docs/design/tabs.md); panels stack sections. */
+.book-settings-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding-top: 16px;
+}
+
+.book-settings-tab-panel[data-inert] {
+  display: none;
+}
+
+.vult-settings-section,
+.vult-settings-section-intro,
+.vult-settings-row-intro,
+.vult-settings-row-content {
+  min-width: 0;
+}
+
+.vult-settings-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--color-border-secondary);
+}
+
+.vult-settings-section-intro h2,
+.vult-settings-row-intro p,
+.vult-settings-row-content p {
+  margin: 0;
+}
+
+.vult-settings-description,
+.vult-settings-hint {
+  color: var(--color-text-tertiary);
+}
+
+.vult-settings-section-intro .vult-settings-description,
+.vult-settings-row-intro .vult-settings-description {
+  margin-top: 4px;
+}
+
+.vult-settings-section-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.vult-settings-row {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  padding-block: 24px;
+}
+
+.vult-settings-row + .vult-settings-row {
+  border-top: 1px solid var(--color-border-secondary);
+}
+
+.vult-settings-row-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.vult-settings-row-content > * {
+  max-width: 100%;
+}
+
+.book-settings-exports {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+}
+
+.book-settings-export {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.book-settings-export > span:last-child {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-tertiary);
+}
+
+.book-settings-export svg {
+  width: 16px;
+  height: 16px;
+}
+
+.book-settings-backup {
+  width: 100%;
+}
+
+.book-settings-backup summary {
+  cursor: pointer;
+}
+
+.book-settings-backup[open] p {
+  margin-block: 12px;
+}
+
+.book-settings-access {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  min-width: 0;
+}
+
+.book-settings-token-form {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+}
+
+.book-settings-token-form .field {
+  margin: 0;
+}
+
+.book-settings-token-form > button {
+  justify-self: start;
+}
+
+.book-settings-token-form .access-scopes {
+  display: grid;
+  gap: 12px;
+}
+
+.book-settings-token-secret {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+}
+
+.book-settings-token-secret .field {
+  margin: 0;
+}
+
+.book-settings-tokens {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.book-settings-tokens > li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vult-settings-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-block: 24px;
+  border-top: 1px solid var(--color-border-secondary);
+}
+
+@media (width >= 768px) {
+  .vult-settings-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    column-gap: 64px;
+  }
+}
+
+/* The section's action stays on its title line at every width. */
+.vult-settings-section-intro {
+  flex: 1;
+}
+
+.book-settings-details-form {
+  margin: 0;
+}
+
+.book-settings-identity .identity-fields,
+.book-settings-identity .identity-fields > .form-grid {
+  display: contents;
+}
+
+.book-settings-identity .identity-fields .field {
+  display: grid;
+  min-width: 0;
+  gap: 4px 64px;
+  margin: 0;
+  padding-block: 24px;
+  border-top: 1px solid var(--color-border-secondary);
+}
+
+.book-settings-identity .identity-fields > .field:first-child {
+  border-top: 0;
+}
+
+.book-settings-identity .field > label {
+  margin: 0;
+  font-size: var(--text-vult-label);
+  line-height: var(--text-vult-label--line-height);
+  font-weight: var(--text-vult-label--font-weight);
+}
+
+.book-settings-identity .dialog-footer {
+  margin: 0;
+  padding: 24px 0;
+}
+
+.book-settings-identity .identity-history {
+  margin: 0;
+  padding-block: 24px;
+  border-top: 1px solid var(--color-border-secondary);
+}
+
+.book-settings-identity .identity-history h4 {
+  font-size: var(--text-vult-compact-title);
+  line-height: var(--text-vult-compact-title--line-height);
+  margin-bottom: 12px;
+}
+
+.book-settings-opening {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-block: 24px;
+}
+
+@media (width >= 768px) {
+  .book-settings-identity .identity-fields .field {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+
+  .book-settings-identity .field > :not(label) {
+    grid-column: 2;
+  }
+}
+
+.book-settings-opening[data-embedded] {
+  padding-block: 0;
+}
+
+/* A change whose answer was lost: the notice, then a way to drop it. */
+.book-settings-unresolved {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+.book-settings-unresolved-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

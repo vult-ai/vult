@@ -1,0 +1,81 @@
+/* Canonical product roles: docs/typography-standard.md. Base roles are pinned
+ * in theme.css; dashboard values are a Vult product extension. */
+:root {
+  --font-numeric: var(--font-geist-mono, "Geist Mono"), var(--font-mono);
+  --text-vult-dashboard-value: 24px;
+  --text-vult-dashboard-value--line-height: 32px;
+  --text-vult-dashboard-value--font-weight: 400;
+  --text-vult-dashboard-value--letter-spacing: -0.025em;
+}
+
+/* Compact financial values keep currency, signs and separators in one face. */
+:root
+  :is(
+    .vult-money,
+    .transaction-money,
+    .number,
+    .vult-type-dashboard-value,
+    .account-tree-amount,
+    .account-ledger-money,
+    .account-ledger-summary dd,
+    .book-balances dd,
+    .native-position strong,
+    .statement-inspector-amount,
+    .statement-cash-movement dd,
+    .statement-table td,
+    .statement-print-table td,
+    .account-group-activity-total,
+    .account-activity-value,
+    .financial-grid-value,
+    .vult-code,
+    code,
+    pre,
+    .font-mono,
+    .account-tree-gl-code,
+    input[name="gl_code"],
+    input[inputmode="decimal"],
+    .overview-metric-change
+  ) {
+  font-family: var(--font-numeric);
+  font-variant-numeric: lining-nums tabular-nums slashed-zero;
+}
+
+/* Calendar context and ordinary chart dates remain part of the reading UI. */
+:root .financial-chart__dates button,
+:root .category-dates button,
+:root .category-tooltip-date,
+:root .financial-chart__tooltip-row {
+  font-family: var(--font-body);
+}
+
+:root .v0-performance strong,
+:root .v0-cash-movement strong,
+:root .v0-statement-total strong,
+:root .performance-trend-tooltip strong {
+  font-family: var(--font-numeric);
+  font-variant-numeric: lining-nums tabular-nums slashed-zero;
+}
+
+/* Large summaries use the reading face, with stable numeric alignment. */
+:root
+  :is(
+    .vult-type-dashboard-value,
+    .vult-type-metric-value,
+    .overview-metric.workspace-stat > strong,
+    .performance-trend-total,
+    .v0-performance strong,
+    .v0-cash-movement strong,
+    .v0-statement-total strong
+  ) {
+  font-family: var(--font-body);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.vult-type-dashboard-value {
+  font-family: var(--font-body);
+  font-size: var(--text-vult-dashboard-value);
+  font-weight: var(--text-vult-dashboard-value--font-weight);
+  line-height: var(--text-vult-dashboard-value--line-height);
+  letter-spacing: var(--text-vult-dashboard-value--letter-spacing);
+  font-variant-numeric: tabular-nums;
+}

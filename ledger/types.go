@@ -60,66 +60,96 @@ func raw(v any) json.RawMessage {
 
 type Scope struct{ TenantID, BookID, ActorID, ConnectionID, Access string }
 type Book struct {
-	TenantID  string    `json:"tenant_id"`
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Currency  string    `json:"currency"`
-	Scale     int       `json:"scale"`
-	CreatedAt time.Time `json:"created_at"`
+	TenantID             string    `json:"tenant_id"`
+	ID                   string    `json:"id"`
+	Name                 string    `json:"name"`
+	Currency             string    `json:"currency"`
+	Scale                int       `json:"scale"`
+	CreatedAt            time.Time `json:"created_at"`
+	MetadataRevision     *int64    `json:"metadata_revision,omitempty"`
+	Logo                 *BookLogo `json:"logo,omitempty"`
+	Founder              string    `json:"founder,omitempty"`
+	Profile              string    `json:"profile,omitempty"`
+	StartDate            string    `json:"start_date,omitempty"`
+	FiscalYearStartMonth *int      `json:"fiscal_year_start_month,omitempty"`
+	FiscalYearStartDay   *int      `json:"fiscal_year_start_day,omitempty"`
+	AccountingTimezone   string    `json:"accounting_timezone,omitempty"`
 }
 type Account struct {
-	ID       string `json:"id"`
-	Class    string `json:"class"`
-	Code     string `json:"code"`
-	Name     string `json:"name"`
-	Revision int64  `json:"revision"`
+	ID                   string `json:"id"`
+	Class                string `json:"class"`
+	Code                 string `json:"code"`
+	Name                 string `json:"name"`
+	Revision             int64  `json:"revision"`
+	Currency             string `json:"currency,omitempty"`
+	Scale                *int   `json:"scale,omitempty"`
+	CurrencyDefinition   string `json:"currency_definition,omitempty"`
+	Role                 string `json:"role,omitempty"`
+	CurrencyRevision     *int64 `json:"currency_revision,omitempty"`
+	NativeOriginRevision *int64 `json:"native_origin_revision,omitempty"`
+	RoleRevision         *int64 `json:"role_revision,omitempty"`
 }
 type Line struct {
-	ID             string `json:"id,omitempty"`
-	AccountID      string `json:"account_id"`
-	Side           string `json:"side"`
-	AmountMinor    string `json:"amount_minor"`
-	Memo           string `json:"memo,omitempty"`
-	ReversesLineID string `json:"reverses_line_id,omitempty"`
+	ID             string               `json:"id,omitempty"`
+	AccountID      string               `json:"account_id"`
+	Side           string               `json:"side"`
+	AmountMinor    string               `json:"amount_minor"`
+	Memo           string               `json:"memo,omitempty"`
+	ReversesLineID string               `json:"reverses_line_id,omitempty"`
+	Native         *NativeMovement      `json:"native,omitempty"`
+	Contexts       []ContextMeasurement `json:"contexts,omitempty"`
+	Valuation      *Valuation           `json:"valuation,omitempty"`
 }
 type Entry struct {
-	ID             string    `json:"id"`
-	Sequence       int64     `json:"sequence"`
-	ReceiptID      string    `json:"receipt_id"`
-	ActorID        string    `json:"actor_id"`
-	EconomicDate   string    `json:"economic_date"`
-	AccountingDate string    `json:"accounting_date"`
-	Description    string    `json:"description"`
-	ReversalOf     string    `json:"reversal_of,omitempty"`
-	RecordedAt     time.Time `json:"recorded_at"`
-	Lines          []Line    `json:"lines"`
+	ID                string             `json:"id"`
+	Sequence          int64              `json:"sequence"`
+	ReceiptID         string             `json:"receipt_id"`
+	ActorID           string             `json:"actor_id"`
+	EconomicDate      string             `json:"economic_date"`
+	AccountingDate    string             `json:"accounting_date"`
+	Description       string             `json:"description"`
+	ReversalOf        string             `json:"reversal_of,omitempty"`
+	RecordedAt        time.Time          `json:"recorded_at"`
+	Lines             []Line             `json:"lines"`
+	MeasurementPolicy *MeasurementPolicy `json:"measurement_policy,omitempty"`
 }
 type CreateAccount struct {
-	RequestKey string `json:"request_key"`
-	Class      string `json:"class"`
-	Code       string `json:"code"`
-	Name       string `json:"name"`
+	RequestKey   string `json:"request_key"`
+	Class        string `json:"class"`
+	Code         string `json:"code"`
+	Name         string `json:"name"`
+	Currency     string `json:"currency,omitempty"`
+	Scale        *int   `json:"scale,omitempty"`
+	Role         string `json:"role,omitempty"`
+	NativeOrigin string `json:"native_origin,omitempty"`
 }
 type ReviseAccount struct {
-	RequestKey       string `json:"request_key"`
-	AccountID        string `json:"account_id"`
-	ExpectedRevision int64  `json:"expected_revision"`
-	Code             string `json:"code"`
-	Name             string `json:"name"`
+	RequestKey       string  `json:"request_key"`
+	AccountID        string  `json:"account_id"`
+	ExpectedRevision int64   `json:"expected_revision"`
+	Code             string  `json:"code"`
+	Name             string  `json:"name"`
+	Currency         *string `json:"currency,omitempty"`
+	Scale            *int    `json:"scale,omitempty"`
+	Role             *string `json:"role,omitempty"`
 }
 type PostJournal struct {
-	RequestKey     string        `json:"request_key"`
-	EconomicDate   string        `json:"economic_date"`
-	AccountingDate string        `json:"accounting_date"`
-	Description    string        `json:"description"`
-	Lines          []PostLine    `json:"lines"`
-	Sources        []SourceInput `json:"sources,omitempty"`
+	RequestKey        string             `json:"request_key"`
+	EconomicDate      string             `json:"economic_date"`
+	AccountingDate    string             `json:"accounting_date"`
+	Description       string             `json:"description"`
+	Lines             []PostLine         `json:"lines"`
+	Sources           []SourceInput      `json:"sources,omitempty"`
+	MeasurementPolicy *MeasurementPolicy `json:"measurement_policy,omitempty"`
 }
 type PostLine struct {
-	AccountID   string `json:"account_id"`
-	Side        string `json:"side"`
-	AmountMinor string `json:"amount_minor"`
-	Memo        string `json:"memo,omitempty"`
+	AccountID   string               `json:"account_id"`
+	Side        string               `json:"side"`
+	AmountMinor string               `json:"amount_minor"`
+	Memo        string               `json:"memo,omitempty"`
+	Native      *NativeMovement      `json:"native,omitempty"`
+	Contexts    []ContextMeasurement `json:"contexts,omitempty"`
+	Valuation   *Valuation           `json:"valuation,omitempty"`
 }
 type ReverseJournal struct {
 	RequestKey     string `json:"request_key"`
@@ -145,12 +175,15 @@ type OutcomeQuery struct {
 	RequestKey string `json:"request_key"`
 }
 type Balance struct {
-	AccountID          string `json:"account_id"`
-	Code               string `json:"code"`
-	Name               string `json:"name"`
-	DebitPositiveMinor string `json:"debit_positive_minor"`
+	RecordedState
+	AccountID          string          `json:"account_id"`
+	Code               string          `json:"code"`
+	Name               string          `json:"name"`
+	DebitPositiveMinor string          `json:"debit_positive_minor"`
+	Native             *NativePosition `json:"native,omitempty"`
 }
 type Trial struct {
+	RecordedState
 	Currency string    `json:"currency"`
 	Scale    int       `json:"scale"`
 	Through  string    `json:"through,omitempty"`

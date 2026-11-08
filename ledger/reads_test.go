@@ -19,12 +19,18 @@ import (
 
 type queryCounts struct {
 	reads         atomic.Int64
+	stateReads    atomic.Int64
 	locks         atomic.Int64
 	restoredBooks atomic.Int64
 }
 
 func (q *queryCounts) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
-	if strings.Contains(data.SQL, "FROM public.entries") || strings.Contains(data.SQL, "FROM public.lines") {
+	if strings.HasPrefix(data.SQL, "WITH observed AS MATERIALIZED") {
+		q.stateReads.Add(1)
+		return ctx
+	}
+	if strings.Contains(data.SQL, "FROM public.entries") || strings.Contains(data.SQL, "FROM public.lines") ||
+		strings.Contains(data.SQL, "FROM access.report_postings") {
 		q.reads.Add(1)
 	}
 	if data.SQL == "SELECT public.ledger_lock($1,$2)" {

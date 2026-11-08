@@ -1,3 +1,6 @@
 **
 !build/
 !build/vult-server
+!LICENSE
+!NOTICE
+!THIRD_PARTY_NOTICES.md

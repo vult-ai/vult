@@ -1,0 +1,647 @@
+/* Generated from vult-interaction.css; run npm run design:sync. */
+:root,
+[data-vult-physics="quiet-precision"] {
+  --vult-motion-press: 70ms;
+  --vult-motion-state: 125ms;
+  --vult-motion-spatial: 165ms;
+  --vult-motion-overlay-enter: 155ms;
+  --vult-motion-overlay-exit: 105ms;
+  --vult-ease-settle: cubic-bezier(0.23, 1, 0.32, 1);
+  --vult-ease-spatial: cubic-bezier(0.65, 0, 0.35, 1);
+  --vult-press-scale: 0.992;
+  --vult-press-offset: 0.5px;
+  --vult-instrument-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 5px 14px rgba(0, 0, 0, 0.08);
+  --vult-instrument-glow: 0 0 0 4px
+    color-mix(in srgb, var(--color-brand-500) 13%, transparent);
+  --vult-recessed-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.13);
+  --vult-recessed-shadow-soft: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+  --vult-toggle-track-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.12), 0 1px 0 rgba(255, 255, 255, 0.1);
+  --vult-toggle-selected-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.2),
+    0 0 0 1px color-mix(in srgb, var(--color-brand-400) 20%, transparent),
+    0 4px 12px color-mix(in srgb, var(--color-brand-600) 20%, transparent);
+  --vult-slider-fill-shadow: 0 0 12px
+    color-mix(in srgb, var(--color-brand-500) 24%, transparent);
+  --vult-time-signal-shadow: 0 0 0 4px
+    color-mix(in srgb, var(--color-brand-500) 10%, transparent);
+  --vult-time-instrument-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-fg-primary) 7%, transparent),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+  --vult-time-window-shadow:
+    inset 0 0 18px color-mix(in srgb, var(--color-brand-500) 7%, transparent),
+    0 0 18px color-mix(in srgb, var(--color-brand-500) 7%, transparent);
+  --vult-time-activity-shadow: 0 0 8px
+    color-mix(in srgb, var(--color-brand-500) 18%, transparent);
+  --vult-time-cursor-shadow: 0 0 9px
+    color-mix(in srgb, var(--color-brand-400) 48%, transparent);
+  --vult-status-brand-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--color-brand-500) 12%, transparent);
+  --vult-status-warning-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--color-warning-500, #f79009) 12%, transparent);
+  --vult-status-error-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--color-error-500, #f04438) 12%, transparent);
+  --vult-interaction-hover: var(--color-bg-primary_hover);
+  --vult-interaction-selected: var(--color-bg-secondary_hover);
+  --vult-interaction-selected-hover: var(--color-bg-tertiary);
+  --vult-menu-item-action-hit-area: 28px;
+  --vult-menu-item-action-surface: 24px;
+  --vult-compact-control-height: var(--vult-control-height-sm);
+  --vult-compact-control-icon-size: var(--vult-control-icon-size);
+  --vult-compact-control-padding-inline: 10px;
+  --vult-compact-control-radius: var(--vult-control-radius);
+  --vult-compact-toolbar-height: 36px;
+  --vult-compact-toolbar-padding-inline: 8px;
+}
+
+[data-vult-appearance="light"][data-vult-physics="quiet-precision"],
+.light-mode .vult-product:not([data-vult-appearance]) {
+  --vult-instrument-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    inset 0 -1px 0 rgba(15, 15, 15, 0.05), 0 2px 5px rgba(15, 15, 15, 0.06);
+  --vult-instrument-glow: 0 0 0 2px
+    color-mix(in srgb, var(--color-brand-500) 6%, transparent);
+}
+
+[data-vult-appearance="light"],
+.light-mode .vult-product:not([data-vult-appearance]) {
+  --vult-recessed-shadow: inset 0 1px 2px rgba(15, 15, 15, 0.055);
+  --vult-recessed-shadow-soft: inset 0 1px 2px rgba(15, 15, 15, 0.04);
+  --vult-toggle-track-shadow:
+    inset 0 1px 1px rgba(15, 15, 15, 0.05), 0 1px 0 rgba(255, 255, 255, 0.92);
+  --vult-toggle-selected-shadow:
+    inset 0 1px 1px color-mix(in srgb, var(--color-brand-500) 12%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-brand-400) 12%, transparent),
+    0 1px 2px rgba(15, 15, 15, 0.06);
+  --vult-slider-fill-shadow: 0 1px 2px
+    color-mix(in srgb, var(--color-brand-500) 12%, transparent);
+  --vult-time-signal-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--color-brand-500) 5%, transparent);
+  --vult-time-instrument-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(15, 15, 15, 0.04);
+  --vult-time-window-shadow: inset 0 0 12px
+    color-mix(in srgb, var(--color-brand-500) 5%, transparent);
+  --vult-time-activity-shadow: 0 1px 2px
+    color-mix(in srgb, var(--color-brand-500) 12%, transparent);
+  --vult-time-cursor-shadow: 0 0 4px
+    color-mix(in srgb, var(--color-brand-400) 16%, transparent);
+  --vult-status-brand-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--color-brand-500) 6%, transparent);
+  --vult-status-warning-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--color-warning-500, #f79009) 7%, transparent);
+  --vult-status-error-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--color-error-500, #f04438) 7%, transparent);
+}
+
+[data-vult-physics-speed="inspect"] {
+  --vult-motion-press: 400ms;
+  --vult-motion-state: 680ms;
+  --vult-motion-spatial: 880ms;
+  --vult-motion-overlay-enter: 760ms;
+  --vult-motion-overlay-exit: 520ms;
+}
+
+.vult-pressable {
+  min-height: 36px;
+  transform: translateY(0) scale(1);
+  transition-property:
+    transform, box-shadow, filter, background-color, border-color, color,
+    opacity;
+  transition-duration:
+    var(--vult-motion-press), var(--vult-motion-state),
+    var(--vult-motion-state), var(--vult-motion-state),
+    var(--vult-motion-state), var(--vult-motion-state), var(--vult-motion-state);
+  transition-timing-function: var(--vult-ease-settle);
+  -webkit-tap-highlight-color: transparent;
+}
+.vult-compact-control {
+  height: var(--vult-compact-control-height) !important;
+  min-height: var(--vult-compact-control-height) !important;
+  padding-block: 0 !important;
+  padding-inline: var(--vult-compact-control-padding-inline) !important;
+  border-radius: var(--vult-compact-control-radius) !important;
+  font-weight: 500 !important;
+  line-height: 1rem !important;
+}
+
+.vult-compact-control[data-icon-only] {
+  width: var(--vult-compact-control-height) !important;
+  padding-inline: 0 !important;
+}
+
+.vult-compact-control > [data-icon] {
+  width: var(--vult-compact-control-icon-size) !important;
+  height: var(--vult-compact-control-icon-size) !important;
+}
+
+.vult-compact-field {
+  height: var(--vult-compact-control-height) !important;
+  min-height: var(--vult-compact-control-height) !important;
+  border-radius: var(--vult-compact-control-radius) !important;
+}
+
+.vult-compact-field input {
+  padding-block: 0 !important;
+  padding-inline: var(--vult-compact-control-padding-inline) !important;
+  line-height: 1rem !important;
+}
+
+.vult-compact-select > button {
+  height: var(--vult-compact-control-height) !important;
+  min-height: var(--vult-compact-control-height) !important;
+  border-radius: var(--vult-compact-control-radius) !important;
+}
+
+.vult-compact-select > button > span {
+  padding-block: 0 !important;
+  padding-inline: var(--vult-compact-control-padding-inline) !important;
+  line-height: 1rem !important;
+}
+
+.vult-compact-select > button svg {
+  width: var(--vult-compact-control-icon-size) !important;
+  height: var(--vult-compact-control-icon-size) !important;
+}
+
+.vult-compact-toolbar {
+  height: var(--vult-compact-toolbar-height);
+  padding-inline: var(--vult-compact-toolbar-padding-inline);
+}
+
+.vult-state-transition {
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-duration: var(--vult-motion-state);
+  transition-timing-function: var(--vult-ease-settle);
+}
+
+.vult-disclosure-chevron {
+  transition: transform var(--vult-motion-state) var(--vult-ease-settle);
+}
+.vult-action-target {
+  transform: translateY(0) scale(1);
+  transition-property:
+    transform, background-color, border-color, color, opacity;
+  transition-duration:
+    var(--vult-motion-press), var(--vult-motion-state),
+    var(--vult-motion-state), var(--vult-motion-state), var(--vult-motion-state);
+  transition-timing-function: var(--vult-ease-settle);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.vult-action-target:focus:not(:focus-visible),
+.vult-pressable:focus:not(:focus-visible),
+.vult-action-target[data-rac]:focus:not([data-focus-visible]),
+.vult-pressable[data-rac]:focus:not([data-focus-visible]) {
+  outline: none;
+}
+
+.vult-action-target[data-pressed]:not([data-focus-visible]),
+.vult-action-target:active:not(:focus-visible) {
+  transform: translateY(var(--vult-press-offset)) scale(var(--vult-press-scale));
+}
+
+.vult-action-target[data-disabled],
+.vult-action-target:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+}
+.vult-menu-item-action-slot {
+  display: flex;
+  width: var(--vult-menu-item-action-hit-area);
+  height: var(--vult-menu-item-action-hit-area);
+  flex: 0 0 var(--vult-menu-item-action-hit-area);
+  align-items: center;
+  justify-content: center;
+  margin-inline-end: 2px;
+}
+
+.vult-menu-item-action {
+  width: var(--vult-menu-item-action-surface);
+  height: var(--vult-menu-item-action-surface);
+  min-height: var(--vult-menu-item-action-surface);
+  padding: 4px;
+}
+
+.vult-action-fill[aria-current="page"],
+.vult-action-fill[aria-pressed="true"],
+.vult-action-fill[aria-expanded="true"],
+.vult-action-fill[data-selected] {
+  background: var(--vult-interaction-selected);
+  color: var(--color-text-primary);
+}
+
+.vult-row-state {
+  transition: background-color var(--vult-motion-state) var(--vult-ease-settle);
+}
+
+.vult-row-state[data-selected] {
+  background: var(--vult-interaction-selected);
+}
+
+.vult-calendar-cell__value {
+  transition-property: background-color, color;
+  transition-duration: var(--vult-motion-state);
+  transition-timing-function: var(--vult-ease-settle);
+}
+
+.vult-pressable--surface {
+  box-shadow: var(--vult-control-shadow);
+}
+
+.vult-pressable--surface.vult-primary-surface {
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--color-bg-brand-solid), white 12%) 0%,
+    var(--color-bg-brand-solid) 58%,
+    color-mix(in oklch, var(--color-bg-brand-solid), white 5%) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.24),
+    inset 0 -1px 0 color-mix(in oklch, var(--color-bg-brand-solid), black 8%),
+    0 0 0 1px color-mix(in oklch, var(--color-bg-brand-solid), black 10%),
+    0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+.vult-pressable--surface.vult-secondary-surface {
+  background-image: none;
+  box-shadow: inset 0 0 0 1px var(--color-border-secondary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .vult-pressable--surface.vult-secondary-surface:hover {
+    background-image: none;
+    box-shadow: inset 0 0 0 1px var(--color-border-primary);
+  }
+}
+
+.vult-pressable[data-pressed]:not([data-focus-visible]),
+.vult-pressable:active:not(:focus-visible) {
+  transform: translateY(var(--vult-press-offset)) scale(var(--vult-press-scale));
+}
+
+.vult-pressable--surface[data-pressed]:not([data-focus-visible]),
+.vult-pressable--surface:active:not(:focus-visible) {
+  box-shadow: var(--vult-control-shadow-pressed);
+  filter: saturate(0.97);
+}
+
+.vult-pressable.vult-pressable--surface.vult-secondary-surface[data-pressed]:not(
+    [data-focus-visible]
+  ),
+.vult-pressable.vult-pressable--surface.vult-secondary-surface:active:not(
+    :focus-visible
+  ) {
+  background-color: color-mix(
+    in srgb,
+    var(--color-bg-primary) 96%,
+    var(--color-bg-overlay)
+  );
+  background-image: none;
+  box-shadow: inset 0 0 0 1px var(--color-border-primary);
+  filter: none;
+}
+
+.vult-pressable.vult-pressable--surface.vult-primary-surface[data-pressed]:not(
+    [data-focus-visible]
+  ),
+.vult-pressable.vult-pressable--surface.vult-primary-surface:active:not(
+    :focus-visible
+  ) {
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--color-bg-brand-solid), black 6%) 0%,
+    var(--color-bg-brand-solid) 58%,
+    color-mix(in oklch, var(--color-bg-brand-solid), white 3%) 100%
+  );
+  box-shadow:
+    inset 0 1px 1px color-mix(in oklch, var(--color-bg-brand-solid), black 14%),
+    inset 0 -1px 0 rgb(255 255 255 / 0.08),
+    0 0 0 1px color-mix(in oklch, var(--color-bg-brand-solid), black 12%),
+    0 1px 1px rgb(0 0 0 / 0.03);
+  filter: none;
+}
+.vult-toolbar-control {
+  height: 30px !important;
+  min-height: 30px !important;
+  border-radius: var(--radius-md) !important;
+  font-family: var(--font-body);
+  font-size: var(--text-vult-label);
+  font-weight: 500;
+  line-height: var(--text-vult-label--line-height);
+}
+
+.vult-pressable[data-disabled],
+.vult-pressable:disabled,
+.vult-pressable[data-loading] {
+  transform: none;
+}
+
+.vult-pressable[data-loading] {
+  cursor: progress;
+}
+
+.vult-pressable:not(.vult-pressable--surface)[aria-expanded="true"],
+.vult-pressable:not(.vult-pressable--surface)[aria-pressed="true"] {
+  background: var(--vult-interaction-selected);
+  color: var(--color-text-primary);
+}
+
+.vult-pressable--surface.vult-secondary-surface[aria-haspopup][aria-expanded="true"] {
+  background: var(--vult-interaction-selected);
+  color: var(--color-text-primary);
+  box-shadow: inset 0 0 0 1px var(--color-border-primary);
+}
+
+.vult-slider {
+  display: grid;
+  width: 100%;
+  gap: 8px;
+  color: var(--color-text-primary);
+}
+
+.vult-slider__label {
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.vult-slider__track {
+  position: relative;
+  display: flex;
+  height: 44px;
+  align-items: center;
+  touch-action: none;
+}
+
+.vult-slider__rail,
+.vult-slider__fill {
+  position: absolute;
+  left: 0;
+  height: 8px;
+  border-radius: var(--radius-full);
+}
+
+.vult-slider__rail {
+  width: 100%;
+  border: 1px solid var(--color-border-secondary);
+  background: var(--color-bg-quaternary);
+  box-shadow: var(--vult-recessed-shadow);
+}
+
+.vult-slider__fill {
+  background: linear-gradient(
+    90deg,
+    var(--color-brand-600),
+    var(--color-brand-400)
+  );
+  box-shadow: var(--vult-slider-fill-shadow);
+  transition:
+    left var(--vult-motion-spatial) var(--vult-ease-spatial),
+    width var(--vult-motion-spatial) var(--vult-ease-spatial);
+}
+
+.vult-slider__thumb {
+  top: 50%;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 2px solid var(--color-brand-500);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-primary);
+  box-shadow: var(--vult-instrument-shadow);
+  cursor: grab;
+  outline: none;
+  transition:
+    transform var(--vult-motion-press) var(--vult-ease-settle),
+    box-shadow var(--vult-motion-state) var(--vult-ease-settle),
+    border-color var(--vult-motion-state) var(--vult-ease-settle);
+}
+
+.vult-slider__thumb::after {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-brand-500);
+  content: "";
+}
+
+.vult-slider__thumb::before {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border-radius: inherit;
+  content: "";
+}
+
+.vult-slider__thumb.is-dragging {
+  cursor: grabbing;
+  transform: scale(1.08);
+  box-shadow: var(--vult-instrument-shadow), var(--vult-instrument-glow);
+  transition-duration: var(--vult-motion-press);
+}
+
+.vult-slider__value {
+  position: absolute;
+  top: -31px;
+  left: 50%;
+  padding: 4px 7px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: 7px;
+  background: var(--color-bg-primary);
+  box-shadow: var(--vult-control-shadow);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  opacity: 0;
+  transform: translate(-50%, 3px) scale(0.98);
+  transform-origin: 50% 100%;
+  transition:
+    opacity var(--vult-motion-state) var(--vult-ease-settle),
+    transform var(--vult-motion-state) var(--vult-ease-settle);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.vult-slider__thumb.is-dragging .vult-slider__value,
+.vult-slider__thumb.is-focus-visible .vult-slider__value {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.vult-segmented {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  padding: 3px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--color-bg-secondary) 88%, transparent);
+  box-shadow: var(--vult-recessed-shadow-soft);
+}
+
+.vult-segmented__indicator-lane {
+  position: absolute;
+  inset: 3px;
+  pointer-events: none;
+}
+
+.vult-segmented__indicator {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border: 1px solid
+    color-mix(in srgb, var(--color-border-primary) 72%, transparent);
+  border-radius: 9px;
+  background: var(--color-bg-primary);
+  box-shadow: var(--vult-control-shadow);
+  opacity: 0;
+  transition:
+    transform var(--vult-motion-spatial) var(--vult-ease-spatial),
+    opacity var(--vult-motion-state) var(--vult-ease-settle);
+}
+
+.vult-segmented__indicator[data-visible="true"] {
+  opacity: 1;
+}
+
+.vult-segmented__item {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  min-height: 44px;
+  min-width: 44px;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--color-text-tertiary);
+  padding: 7px 12px;
+  font-size: var(--text-xs);
+  font-weight: 650;
+  cursor: pointer;
+  outline: none;
+  transform: translateY(0) scale(1);
+  transition:
+    transform var(--vult-motion-press) var(--vult-ease-settle),
+    color var(--vult-motion-state) var(--vult-ease-settle);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.vult-segmented__item[data-selected] {
+  color: var(--color-text-primary);
+}
+
+.vult-segmented__item[data-pressed]:not([data-focus-visible]) {
+  transform: translateY(var(--vult-press-offset)) scale(var(--vult-press-scale));
+}
+
+.vult-segmented:has(.vult-segmented__item[data-focus-visible])
+  .vult-segmented__indicator {
+  transition-duration: 1ms, var(--vult-motion-state);
+}
+
+.vult-segmented__item[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.vult-segmented--compact {
+  padding: 2px;
+  border-radius: 9px;
+}
+
+.vult-segmented--compact .vult-segmented__indicator-lane {
+  inset: 2px;
+}
+
+.vult-segmented--compact .vult-segmented__indicator,
+.vult-segmented--compact .vult-segmented__item {
+  border-radius: var(--radius-md);
+}
+
+.vult-segmented--compact .vult-segmented__item {
+  min-height: 28px;
+  min-width: 0;
+  padding: 2px 8px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .vult-action-fill:not([aria-current="page"]):not([aria-pressed="true"]):not(
+      [aria-expanded="true"]
+    ):not([data-selected]):not([data-disabled]):not(:disabled):hover,
+  .vult-row-state:not([data-selected]):hover {
+    background: var(--vult-interaction-hover);
+    color: var(--color-text-primary);
+  }
+
+  .vult-action-fill:is(
+      [aria-current="page"],
+      [aria-pressed="true"],
+      [aria-expanded="true"],
+      [data-selected]
+    ):hover {
+    background: var(--vult-interaction-selected-hover);
+  }
+
+  .vult-calendar-cell__value:not([data-selected]):not([data-disabled]):hover {
+    background: var(--vult-interaction-hover);
+    color: var(--color-text-secondary-hover);
+  }
+
+  .vult-calendar-cell__value[data-selected]:not(
+      .vult-range-calendar__date
+    ):hover {
+    background: var(--color-bg-brand-solid_hover);
+    color: var(--color-text-white);
+  }
+
+  .vult-calendar-cell__value[data-today]:not([data-selected]):hover {
+    background: var(--vult-interaction-selected-hover);
+  }
+
+  .vult-slider__thumb:hover .vult-slider__value {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+
+  .vult-pressable:not([data-disabled]):not(:disabled):hover {
+    filter: saturate(1.025);
+  }
+
+  .vult-segmented__item:not([data-selected]):not([data-disabled]):hover {
+    background: color-mix(in srgb, var(--color-bg-primary) 58%, transparent);
+    color: var(--color-text-secondary);
+  }
+}
+
+@media (pointer: coarse) {
+  .vult-pressable {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  [data-vult-physics] {
+    --vult-motion-press: 1ms;
+    --vult-motion-state: 100ms;
+    --vult-motion-spatial: 1ms;
+    --vult-motion-overlay-enter: 100ms;
+    --vult-motion-overlay-exit: 80ms;
+    --vult-press-scale: 1;
+    --vult-press-offset: 0px;
+  }
+
+  .vult-slider__thumb.is-dragging,
+  .vult-toggle[data-pressed] .vult-toggle__track,
+  .vult-segmented__item[data-pressed],
+  .vult-pressable[data-pressed] {
+    transform: none;
+  }
+}

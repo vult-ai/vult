@@ -1,0 +1,18 @@
+/* Selection uses neutral contrast, independently of the blue logo palette. */
+:root {
+  --vult-selection-background: #d4d4d4;
+  --vult-selection-foreground: #171717;
+}
+
+.dark-mode {
+  --vult-selection-background: #5c5c5c;
+  --vult-selection-foreground: #fff;
+}
+
+::selection,
+.vult-studio::selection,
+.vult-studio ::selection {
+  background-color: var(--vult-selection-background);
+  color: var(--vult-selection-foreground);
+  text-shadow: none;
+}

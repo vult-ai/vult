@@ -1,0 +1,382 @@
+.records {
+  --records-band-height: 40px;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  padding: var(--records-top-inset, 1px) 12px
+    var(--vult-shell-panel-inset, 12px);
+  container-type: inline-size;
+  overflow: hidden;
+}
+.flushTop {
+  --records-top-inset: 0px;
+}
+/* Toolbar standard v1 (docs/design/toolbars.md): the band grows a row
+   rather than scrolling or cutting anything off. The Columns menu stays last. */
+.toolbar {
+  display: flex;
+  /* The Columns menu sits on the last row, after the other actions. */
+  align-items: flex-end;
+  gap: 8px;
+  min-height: var(--records-band-height);
+  flex-shrink: 0;
+  background: var(--vult-workbench-surface-base);
+  margin: 0 0 8px;
+}
+.toolbar > :last-child:not(:only-child) {
+  margin-block: 4px;
+}
+.filterSummary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+.shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--vult-shell-panel-radius);
+  background: var(--vult-workbench-surface-base);
+  box-shadow: var(--vult-shell-panel-shadow);
+}
+.table {
+  --records-leading-inset: 6px;
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--color-text-primary);
+  /* Grid parking focus must not frame the canvas; rows and cells own its indicator. */
+  outline: none;
+}
+.withoutSelection {
+  --records-leading-inset: 12px;
+}
+.bodyScrollContainer {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.table.bodyScrollTable {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* React Aria's native table sizing must stay inside the body viewport. */
+  width: 100% !important;
+}
+.fixedHeader,
+.scrollingBody {
+  display: block;
+  scrollbar-gutter: stable;
+}
+.fixedHeader {
+  flex-shrink: 0;
+  height: var(--records-band-height);
+  overflow: hidden;
+  border-bottom: 1px solid var(--vult-workbench-border);
+}
+.scrollingBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: none;
+}
+.scrollingBody:has(> .summaryRow) {
+  display: flex;
+  flex-direction: column;
+}
+.scrollingBody:has(> .summaryRow) > .row {
+  flex-shrink: 0;
+}
+.fixedHeader > tr,
+.scrollingBody > tr {
+  display: grid;
+  grid-template-columns: var(--records-columns);
+  width: var(--records-width);
+}
+.fixedHeader .head {
+  height: calc(var(--records-band-height) - 1px);
+  border-bottom: 0;
+  /* Match the grid tracks: React Aria's rounded inline widths can cover a divider. */
+  width: auto !important;
+  min-width: 0;
+}
+.scrollingBody .cell {
+  display: flex;
+  align-items: center;
+}
+.scrollingBody[data-empty] > tr > td {
+  grid-column: 1 / -1;
+}
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: var(--records-band-height);
+  padding: 0 8px;
+  text-align: left;
+  color: var(--color-text-secondary);
+  background: var(--vult-workbench-surface-base);
+  border-bottom: 1px solid var(--vult-workbench-border);
+  border-right: 1px solid var(--vult-workbench-border);
+}
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: calc(var(--records-band-height) - 1px);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sortable {
+  cursor: pointer;
+}
+.sortArrow {
+  margin-left: auto;
+  opacity: 0;
+}
+.sortable[data-hovered] .sortArrow,
+.sortable:focus-within .sortArrow,
+.sortArrow.activeSort {
+  opacity: 1;
+}
+.cell {
+  height: 35px;
+  padding: 0 8px;
+  background-color: var(--vult-workbench-surface-base);
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--vult-workbench-border) 78%, transparent);
+  border-right: 1px solid
+    color-mix(in srgb, var(--vult-workbench-border) 78%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.head:first-child,
+.cell:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--vult-workbench-surface-base);
+  z-index: 1;
+  padding-left: var(--records-leading-inset);
+}
+.head:first-child {
+  z-index: 3;
+}
+.fixedHeader .pinnedEnd,
+.scrollingBody .pinnedEnd {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--vult-workbench-surface-base);
+  box-shadow: -1px 0 var(--vult-workbench-border);
+}
+.fixedHeader .pinnedEnd {
+  z-index: 4;
+}
+.table[data-pinned-end-utility] .pinnedEnd {
+  grid-column: -2 / -1;
+}
+/* Remaining canvas is part of each row, never another visible column. */
+.table[data-pinned-end-utility] .head:nth-last-child(2),
+.table[data-pinned-end-utility] .cell:nth-last-child(2) {
+  border-right-color: transparent;
+}
+.row {
+  background-color: var(--vult-workbench-surface-base);
+  background-image: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--vult-workbench-border) 78%, transparent) 1px,
+    transparent 1px
+  );
+}
+.head:last-child,
+.cell:last-child {
+  border-right: 0;
+}
+.row:last-child .cell {
+  border-bottom-color: transparent;
+  /* The viewport clips this outer line when the row meets its bottom edge. */
+  box-shadow: 0 1px 0
+    color-mix(in srgb, var(--vult-workbench-border) 78%, transparent);
+}
+.row[data-hovered] .cell {
+  background: var(--vult-workbench-surface-control);
+}
+.row[data-hovered] {
+  background-color: var(--vult-workbench-surface-control);
+}
+.row[data-selected] .cell {
+  background: color-mix(
+    in srgb,
+    var(--color-text-primary) 7%,
+    var(--vult-workbench-surface-base)
+  );
+}
+.row[data-selected] {
+  background-color: color-mix(
+    in srgb,
+    var(--color-text-primary) 7%,
+    var(--vult-workbench-surface-base)
+  );
+}
+.summaryRow {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-top: auto;
+  background-image: linear-gradient(
+    to bottom,
+    var(--vult-workbench-border) 1px,
+    transparent 1px
+  );
+}
+.summaryRow,
+.summaryRow[data-hovered] {
+  background-color: var(
+    --vult-workbench-surface-summary,
+    var(--vult-workbench-surface-control)
+  );
+}
+.summaryRow .cell,
+.summaryRow[data-hovered] .cell {
+  background: var(
+    --vult-workbench-surface-summary,
+    var(--vult-workbench-surface-control)
+  );
+  border-top: 1px solid var(--vult-workbench-border);
+  font-weight: var(--font-weight-semibold);
+}
+.row:has(+ .summaryRow) .cell {
+  border-bottom-width: 0;
+}
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 35px;
+}
+.selection {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  flex-shrink: 0;
+}
+.rowSelection {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 100%;
+  flex-shrink: 0;
+}
+.rowCheckbox {
+  grid-area: 1 / 1;
+}
+.monogram {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  background: var(--vult-workbench-surface-control);
+}
+.contact {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+.contact:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.footer {
+  display: flex;
+  flex-shrink: 0;
+  height: var(--records-band-height);
+  padding: 0 var(--records-footer-end-inset, 8px) 0 8px;
+  border-top: 1px solid var(--vult-workbench-border);
+  background: var(--vult-navigation-surface);
+}
+.footer > [data-vult-region="table-pagination"] {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  flex-wrap: nowrap;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow-x: auto;
+  overscroll-behavior: none;
+  scrollbar-width: none;
+}
+.footer > [data-vult-region="table-pagination"] > * {
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+.footer [aria-label="Contact totals"] {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+@media (pointer: coarse) {
+  .cell,
+  .identity {
+    height: 44px;
+  }
+}
+
+/* Table standard v1 (docs/design/tables.md). Cell text stays on one line and
+   ends with an ellipsis instead of being cut at the column edge. */
+.cellContent {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cellContent :where(:not(svg, svg *)) {
+  min-width: 0;
+}
+.cellContent :where(span, a, p, strong, em):not(:has(*)) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cell[data-kind="money"] .cellContent {
+  display: flex;
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+.head[data-kind="money"] .heading {
+  justify-content: flex-end;
+}
+.cell[data-kind="control"] .cellContent {
+  display: flex;
+  justify-content: center;
+}
+/* Columns beyond the visible edge fade out rather than end abruptly. */
+.table[data-overflow-end] .scrollingBody,
+.table[data-overflow-end] .fixedHeader {
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
+/* The frozen first column keeps a visible edge while columns pass beneath it. */
+.table[data-scrolled-start] .head:first-child,
+.table[data-scrolled-start] .cell:first-child {
+  box-shadow: 1px 0 var(--vult-workbench-border);
+}

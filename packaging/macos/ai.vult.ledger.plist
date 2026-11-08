@@ -7,6 +7,7 @@
   <array><string>/Library/PrivilegedHelperTools/ai.vult.ledger/vult</string><string>_serve</string></array>
   <key>UserName</key><string>_vultledger</string>
   <key>GroupName</key><string>_vultledger</string>
+  <key>InitGroups</key><true/>
   <key>WorkingDirectory</key><string>/Library/Application Support/ai.vult.ledger/data</string>
   <key>EnvironmentVariables</key>
   <dict><key>PATH</key><string>/usr/bin:/bin:/usr/sbin:/sbin</string><key>LANG</key><string>C</string></dict>

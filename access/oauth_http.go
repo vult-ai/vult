@@ -15,6 +15,9 @@ import (
 
 const pendingCookie = "__Host-vult-oauth-request"
 
+// PendingCookie holds an agent authorization waiting for the owner's consent.
+const PendingCookie = pendingCookie
+
 type OAuthHTTP struct{ s *Service }
 
 func NewOAuthHTTP(s *Service) *OAuthHTTP { return &OAuthHTTP{s} }
@@ -44,9 +47,9 @@ func (h *OAuthHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case (r.URL.Path == "/.well-known/oauth-protected-resource" || r.URL.Path == "/.well-known/oauth-protected-resource/mcp") && r.Method == "GET" && r.URL.RawQuery == "":
-		oauthJSON(w, 200, map[string]any{"resource": h.s.Resource(), "authorization_servers": []string{h.s.origin}, "scopes_supported": []string{"ledger:read", "ledger:write"}, "bearer_methods_supported": []string{"header"}})
+		oauthJSON(w, 200, map[string]any{"resource": h.s.Resource(), "authorization_servers": []string{h.s.Issuer()}, "scopes_supported": []string{"ledger:read", "ledger:write"}, "bearer_methods_supported": []string{"header"}})
 	case r.URL.Path == "/.well-known/oauth-authorization-server" && r.Method == "GET" && r.URL.RawQuery == "":
-		oauthJSON(w, 200, map[string]any{"issuer": h.s.origin, "authorization_endpoint": h.s.origin + "/oauth/authorize", "token_endpoint": h.s.origin + "/oauth/token", "registration_endpoint": h.s.origin + "/oauth/register", "authorization_response_iss_parameter_supported": true, "response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code", "refresh_token"}, "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "scopes_supported": []string{"ledger:read", "ledger:write"}})
+		oauthJSON(w, 200, map[string]any{"issuer": h.s.Issuer(), "authorization_endpoint": h.s.AuthorizationEndpoint(), "token_endpoint": h.s.Issuer() + "/oauth/token", "registration_endpoint": h.s.Issuer() + "/oauth/register", "authorization_response_iss_parameter_supported": true, "response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code", "refresh_token"}, "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "scopes_supported": []string{"ledger:read", "ledger:write"}})
 	case r.URL.Path == "/oauth/register" && r.Method == "POST" && r.URL.RawQuery == "":
 		h.register(w, r)
 	case r.URL.Path == "/oauth/token" && r.Method == "POST" && r.URL.RawQuery == "":
@@ -134,7 +137,7 @@ func (h *OAuthHTTP) register(w http.ResponseWriter, r *http.Request) {
 type bookChoice struct{ ID, Name string }
 type connectionChoice struct{ ID, Name string }
 
-var consentPage = template.Must(template.New("consent").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect an agent · Vult</title><link rel="stylesheet" href="/auth/style.css"></head><body><main><h1>Connect {{.Client}}</h1><p>Choose one Book and the access this app may use. Write access allows journal posting and account changes. It does not allow owner administration.</p><p>Callback: {{.Redirect}}</p><form method="post" action="/oauth/authorize"><input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="request" value="{{.Request}}"><label>Book<select name="book">{{range .Books}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label><label>Access<select name="access"><option value="read">Read</option>{{if .Write}}<option value="write">Write</option>{{end}}</select></label><label>Connection<select name="connection"><option value="">New connection, or reuse this app's connection</option>{{range .Connections}}<option value="{{.ID}}">Reconnect {{.Name}}</option>{{end}}</select></label><p>Reconnect only an app you recognize. The selected connection must belong to this Book. Its recorded actions remain attributed to the same actor.</p><button name="decision" value="allow" type="submit">Connect</button><button name="decision" value="deny" type="submit">Cancel</button></form></main></body></html>`))
+var consentPage = template.Must(template.New("consent").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect an agent · Vult</title><link rel="stylesheet" href="/auth/style.css"></head><body><main>{{if or .App.Verified .App.Local}}<h1>Connect {{.App.Name}}</h1>{{else}}<h1>Connect an unverified app</h1>{{end}}{{if .App.Verified}}<p><strong>Verified app.</strong> Vult recognizes this as {{.App.Name}}. Access is sent to {{.App.Destination}}.</p>{{else if .App.Local}}<p><strong>App on this computer.</strong> It calls itself “{{.App.Name}}”. Vult can't verify apps on your computer, so connect only if you just started this from an app you trust.</p>{{else}}<p><strong>Unverified app.</strong> It calls itself “{{.App.Name}}”, but Vult can't confirm that. Access is sent to {{.App.Destination}}. Connect only if you recognize that address.</p>{{end}}<p>Choose one Book and the access this app may use. Write access allows journal posting and account changes. It does not allow owner administration.</p><form method="post" action="/oauth/authorize"><input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="request" value="{{.Request}}"><label>Book<select name="book">{{range .Books}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label><label>Access<select name="access"><option value="read">Read</option>{{if .Write}}<option value="write">Write</option>{{end}}</select></label><label>Connection<select name="connection"><option value="">New connection, or reuse this app's connection</option>{{range .Connections}}<option value="{{.ID}}">Reconnect {{.Name}}</option>{{end}}</select></label><p>Reconnect only an app you recognize. The selected connection must belong to this Book. Its recorded actions remain attributed to the same actor.</p><button name="decision" value="allow" type="submit">Connect</button><button name="decision" value="deny" type="submit">Cancel</button></form></main></body></html>`))
 
 func (h *OAuthHTTP) authorize(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -170,12 +173,12 @@ func (h *OAuthHTTP) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	session, e := r.Cookie(SessionCookie)
 	if e != nil {
-		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+		http.Redirect(w, r, h.s.SignInPath(), http.StatusSeeOther)
 		return
 	}
 	_, e = h.s.Identity(r.Context(), session.Value)
 	if e != nil {
-		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+		http.Redirect(w, r, h.s.SignInPath(), http.StatusSeeOther)
 		return
 	}
 	books := []bookChoice{}
@@ -227,11 +230,12 @@ func (h *OAuthHTTP) authorize(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'")
 	_ = consentPage.Execute(w, struct {
-		Client, Redirect, CSRF, Request string
-		Write                           bool
-		Books                           []bookChoice
-		Connections                     []connectionChoice
-	}{info.ClientName, info.RedirectURI, csrf(session.Value), request, info.Access == "write", books, connections})
+		App           appIdentity
+		CSRF, Request string
+		Write         bool
+		Books         []bookChoice
+		Connections   []connectionChoice
+	}{identifyApp(info.ClientName, info.RedirectURI), csrf(session.Value), request, info.Access == "write", books, connections})
 }
 
 func (h *OAuthHTTP) consent(w http.ResponseWriter, r *http.Request) {

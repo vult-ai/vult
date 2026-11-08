@@ -1,0 +1,8 @@
+.vult-search-filter {
+  max-width: 200px;
+}
+.vult-search-filter > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
