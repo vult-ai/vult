@@ -38,6 +38,19 @@
   text-overflow: ellipsis;
   color: var(--color-text-tertiary);
 }
+/* An original amount in another currency sits under the recorded one, so
+   both stay whole in the shared money width. */
+.transaction-money:not(.transaction-money-compact):has(> .transaction-native) {
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0;
+}
+.transaction-money:not(.transaction-money-compact):has(> .transaction-native) > .transaction-native {
+  order: 1;
+  max-width: 100%;
+  line-height: 1.2;
+}
 .transaction-ledger {
   flex: none;
   color: var(--color-text-primary);

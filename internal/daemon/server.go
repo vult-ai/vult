@@ -19,7 +19,7 @@ import (
 	"github.com/vult-ai/vult/ledger"
 )
 
-const Version = "0.4.0"
+const Version = "0.5.0"
 
 type grant struct {
 	Action, Digest string

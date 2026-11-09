@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { DisplayAmount } from "../components/ui/display-amount";
+import { HiddenFigure } from "../components/ui/amount-privacy-toggle";
+import { hiddenAmount } from "../lib/amount-privacy";
 import "./styles/chart-palette.css";
 import "./headline.css";
 
@@ -24,7 +26,7 @@ export function Headline({
   return (
     <div className={`vult-headline ${className}`} data-stacked={stacked || undefined}>
       <p>
-        <strong className="vult-headline-figure">{typeof value === "string" ? <DisplayAmount value={value} /> : value}</strong>
+        <strong className="vult-headline-figure">{value === hiddenAmount ? <HiddenFigure>{hiddenAmount}</HiddenFigure> : typeof value === "string" ? <DisplayAmount value={value} /> : value}</strong>
         {caption && <span className="vult-headline-caption">{caption}</span>}
       </p>
       {aside && <p className="vult-headline-aside">{aside}</p>}

@@ -26,14 +26,22 @@ type browserConnection struct {
 	CreatedAt  time.Time         `json:"created_at"`
 	ExpiresAt  *time.Time        `json:"expires_at"`
 	BookGrants []connectionGrant `json:"book_grants"`
+	// Access is read or write; LastRecordedAt is the agent's latest recorded
+	// change; RevokedAt is set only on disconnected agents.
+	Access         string     `json:"access,omitempty"`
+	LastRecordedAt *time.Time `json:"last_recorded_at,omitempty"`
+	RevokedAt      *time.Time `json:"revoked_at,omitempty"`
 }
 
 func browserGrant(c ledger.Connection) connectionGrant {
 	grant := connectionGrant{BookID: c.BookID, Role: "none", Rights: []string{}}
 	if c.RevokedAt == nil {
 		grant.Role, grant.Rights = "view", []string{"read"}
-		if c.Access == "write" {
+		switch c.Access {
+		case "write":
 			grant.Role, grant.Rights = "manage", append(grant.Rights, "write")
+		case "propose":
+			grant.Role, grant.Rights = "propose", append(grant.Rights, "propose")
 		}
 	}
 	return grant
@@ -46,13 +54,24 @@ func (a *webAPI) listConnections(w http.ResponseWriter, r *http.Request, session
 		return
 	}
 	tokens := []browserConnection{}
+	disconnected := []browserConnection{}
 	for _, tenant := range tenants {
 		err = a.sessions.WithOwner(r.Context(), session, tenant, false, func(owner ledger.TenantAdmin) error {
-			list, err := owner.ActiveConnectionsBounded(r.Context(), max(1, webBookLimit-len(tokens)))
+			list, err := owner.ConnectionsWithActivity(r.Context(), max(1, webBookLimit-len(tokens)), false)
+			if err != nil {
+				return err
+			}
 			for _, c := range list {
 				tokens = append(tokens, browserConnection{
 					ID: c.ID, Name: c.Name, Connection: true, CreatedAt: c.CreatedAt,
-					BookGrants: []connectionGrant{browserGrant(c)},
+					BookGrants: []connectionGrant{browserGrant(c.Connection)}, Access: c.Access, LastRecordedAt: c.LastRecordedAt,
+				})
+			}
+			gone, err := owner.ConnectionsWithActivity(r.Context(), 50, true)
+			for _, c := range gone {
+				disconnected = append(disconnected, browserConnection{
+					ID: c.ID, Name: c.Name, Connection: true, CreatedAt: c.CreatedAt,
+					BookGrants: []connectionGrant{{BookID: c.BookID, Role: "none", Rights: []string{}}}, Access: c.Access, LastRecordedAt: c.LastRecordedAt, RevokedAt: c.RevokedAt,
 				})
 			}
 			return err
@@ -65,7 +84,7 @@ func (a *webAPI) listConnections(w http.ResponseWriter, r *http.Request, session
 			return
 		}
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"schema_version": 1, "tokens": tokens})
+	_ = json.NewEncoder(w).Encode(map[string]any{"schema_version": 1, "tokens": tokens, "disconnected": disconnected})
 }
 
 type connectionBook struct {
@@ -144,6 +163,29 @@ func (a *webAPI) ownerConnections(w http.ResponseWriter, r *http.Request, sessio
 	switch {
 	case action == "books" && r.Method == http.MethodGet:
 		a.readConnectionBooks(w, r, session, id)
+	case action == "access" && r.Method == http.MethodPost:
+		data, err := readOwnerBody(w, r, 1024)
+		var q struct {
+			Access string `json:"access"`
+		}
+		if err == nil && (r.Header.Get("Content-Type") != "application/json" || strictjson.DecodeNonNull(data, &q, "") != nil || !ledger.ValidAccess(q.Access)) {
+			err = ledger.ErrInvalid
+		}
+		if err != nil {
+			apiFailure(w, err)
+			return
+		}
+		tenant, err := a.sessions.ConnectionTenant(r.Context(), session, id)
+		if err == nil {
+			err = a.sessions.WithOwner(r.Context(), session, tenant, true, func(owner ledger.TenantAdmin) error {
+				return owner.ChangeAccess(r.Context(), id, q.Access)
+			})
+		}
+		if err != nil {
+			apiFailure(w, err)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"schema_version": 1, "access": q.Access})
 	case action == "revoke" && r.Method == http.MethodPost:
 		if err := emptyConnectionPatch(w, r); err != nil {
 			apiFailure(w, err)

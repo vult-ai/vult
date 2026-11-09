@@ -90,6 +90,9 @@ type ActivityEntry struct {
 	MeasurementStatus string    `json:"measurement_status"`
 	ReversalOf        string    `json:"reversal_of,omitempty"`
 	ReversedBy        string    `json:"reversed_by,omitempty"`
+	// OriginalAmount is the amount in another currency the entry records:
+	// the charged amount a statement shows, or a foreign account's movement.
+	OriginalAmount *CurrencyAmount `json:"original_amount,omitempty"`
 }
 
 type ActivityAccount struct {
@@ -114,6 +117,9 @@ type ActivityPage struct {
 	Coverage       ActivityCoverage  `json:"coverage"`
 	Revision       string            `json:"revision"`
 	SourceCoverage string            `json:"source_coverage"`
+	// Counts are the entries each Activity tab would show under the same
+	// dates, search and account, keyed "" (all), "income" and "expense".
+	Counts map[string]int `json:"transaction_counts"`
 }
 
 type ActivityTotals struct {
@@ -277,6 +283,20 @@ func (a TenantAdmin) Activity(ctx context.Context, book string, q ActivityPageQu
 		}
 		out = ActivityPage{RecordedState: selected.state.RecordedState, Version: 1, ReadView: "transactions", Book: header, Currencies: Currencies(), Accounts: []ActivityAccount{}, Transactions: []ActivityEntry{}, Summary: ActivityTotals{Income: selected.income, Expenses: selected.expenses, Net: net}, Revision: selected.revision, SourceCoverage: "unknown",
 			Coverage: ActivityCoverage{Count: selected.count, Offset: q.Offset, Limit: q.Limit, HasMore: q.Offset+len(selected.ids) < selected.count, NextOffset: q.Offset + len(selected.ids), Complete: q.Offset == 0 && len(selected.ids) == selected.count, Basis: "filtered_recorded_journal_entries"}}
+		out.Counts = map[string]int{}
+		for _, kind := range []string{"", "income", "expense"} {
+			if kind == q.Kind {
+				out.Counts[kind] = selected.count
+				continue
+			}
+			other := q.ActivityFilters
+			other.Kind = kind
+			tab, err := activitySelect(ctx, tx, scope, header, other, 1, 0, false)
+			if err != nil {
+				return err
+			}
+			out.Counts[kind] = tab.count
+		}
 		accounts, err := readScopedCatalog(ctx, tx, scope)
 		if err != nil {
 			return err
@@ -288,20 +308,33 @@ func (a TenantAdmin) Activity(ctx context.Context, book string, q ActivityPageQu
 			return nil
 		}
 		rows, err := tx.Query(ctx, `SELECT e.id::text,e.sequence,e.economic_date::text,e.accounting_date::text,e.recorded_at,e.description,
- coalesce(e.reversal_of::text,''),coalesce(r.id::text,''),m.amount,m.native
+ coalesce(e.reversal_of::text,''),coalesce(r.id::text,''),m.amount,m.native,
+ coalesce((SELECT c->'amount' FROM public.lines l, jsonb_array_elements(coalesce(l.contexts,'[]'::jsonb)) c
+   WHERE l.tenant_id=e.tenant_id AND l.book_id=e.book_id AND l.entry_id=e.id AND c->>'role'='transaction_amount' AND c->'amount'->>'currency'<>$5
+   ORDER BY l.id LIMIT 1),
+  (SELECT jsonb_build_object('currency',l.native_currency,'scale',l.native_scale,'amount_minor',l.native_amount_minor::text) FROM public.lines l
+   WHERE l.tenant_id=e.tenant_id AND l.book_id=e.book_id AND l.entry_id=e.id AND l.native_currency IS NOT NULL AND l.native_currency<>$5
+   ORDER BY l.id LIMIT 1))
  FROM public.entries e LEFT JOIN public.entries r ON r.tenant_id=e.tenant_id AND r.book_id=e.book_id AND r.reversal_of=e.id AND r.recorded_at<=$4::timestamptz
  CROSS JOIN LATERAL(SELECT coalesce(sum(l.amount_minor::numeric) FILTER(WHERE l.side='debit'),0)::text amount,
    coalesce(bool_or(l.native_amount_minor IS NOT NULL),false) native FROM public.lines l
    WHERE l.tenant_id=e.tenant_id AND l.book_id=e.book_id AND l.entry_id=e.id) m
- WHERE e.tenant_id=$1 AND e.book_id=$2 AND e.id=ANY($3::uuid[]) ORDER BY e.accounting_date DESC,e.sequence DESC`, scope.TenantID, scope.BookID, selected.ids, selected.cutoff)
+ WHERE e.tenant_id=$1 AND e.book_id=$2 AND e.id=ANY($3::uuid[]) ORDER BY e.accounting_date DESC,e.sequence DESC`, scope.TenantID, scope.BookID, selected.ids, selected.cutoff, header.Currency)
 		if err != nil {
 			return dbError(err)
 		}
 		defer rows.Close()
 		for rows.Next() {
 			entry := ActivityEntry{BookID: book, Currency: header.Currency, Scale: header.Scale, Kind: "journal", AmountRole: "book_debit_total", MeasurementStatus: "entry_lines"}
-			if err := rows.Scan(&entry.ID, &entry.Sequence, &entry.EconomicDate, &entry.AccountingDate, &entry.RecordedAt, &entry.Description, &entry.ReversalOf, &entry.ReversedBy, &entry.AmountMinor, &entry.HasNative); err != nil {
+			var original []byte
+			if err := rows.Scan(&entry.ID, &entry.Sequence, &entry.EconomicDate, &entry.AccountingDate, &entry.RecordedAt, &entry.Description, &entry.ReversalOf, &entry.ReversedBy, &entry.AmountMinor, &entry.HasNative, &original); err != nil {
 				return dbError(err)
+			}
+			if len(original) > 0 {
+				var amount CurrencyAmount
+				if json.Unmarshal(original, &amount) == nil && amount.Currency != "" && amount.Scale != nil {
+					entry.OriginalAmount = &CurrencyAmount{Currency: amount.Currency, Scale: amount.Scale, AmountMinor: amount.AmountMinor}
+				}
 			}
 			entry.Date = entry.AccountingDate
 			if entry.ReversalOf != "" {

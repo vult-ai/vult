@@ -16,7 +16,7 @@ import (
 )
 
 func TestProposalCatalogPreservesLegacyAndOwnerBoundaries(t *testing.T) {
-	read := []string{"get_book", "list_accounts", "get_journal", "list_journals", "get_balance", "get_trial_balance", "get_request_outcome", "get_operation_proposal", "search_book"}
+	read := []string{"get_book", "list_accounts", "get_journal", "list_journals", "get_balance", "get_trial_balance", "get_request_outcome", "get_operation_proposal", "search_book", "list_closed_periods", "get_exchange_rate"}
 	write := []string{"create_account", "revise_account", "post_journal", "reverse_journal", "prepare_operation", "execute_proposal", "set_book_logo"}
 	docRead := []string{"get_document", "list_documents", "get_entry_documents", "get_source_usage", "list_entries_missing_evidence"}
 	docWrite := []string{"add_document", "correct_source_citation", "attach_evidence", "detach_evidence"}

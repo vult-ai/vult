@@ -122,7 +122,7 @@ func TestIntermediateBalanceOverflowCannotBeHiddenByLaterEntry(t *testing.T) {
 func TestHistoricalBalanceValidationRequiresLiveScopedWriteAccess(t *testing.T) {
 	db, _, scope, debit, credit := setup(t)
 	var receipts []string
-	if err := db.Admin.QueryRow(db.Context, "SELECT array_agg(filename ORDER BY filename) FROM public.schema_receipts").Scan(&receipts); err != nil || strings.Join(receipts, ",") != "0001_ledger.sql,0002_server_access.sql,0003_documents.sql,0004_recorded_book.sql" {
+	if err := db.Admin.QueryRow(db.Context, "SELECT array_agg(filename ORDER BY filename) FROM public.schema_receipts").Scan(&receipts); err != nil || strings.Join(receipts, ",") != "0001_ledger.sql,0002_server_access.sql,0003_documents.sql,0004_recorded_book.sql,0005_proposing_agents.sql" {
 		t.Fatal("fresh installation has an unexpected migration sequence", err)
 	}
 	var definer, trustedOwner, runtimeAccess, directValidator, directLine, directRestore, directHistory bool

@@ -131,6 +131,9 @@
     overflow: clip;
     white-space: nowrap;
     text-overflow: clip;
+    /* Labels and the wordmark fade out in the first part of collapsing and in
+       at the end of opening, so no letter shows past the collapsed rail. */
+    opacity: clamp(0, 1 - var(--vult-sidebar-collapse) * 2.5, 1);
   }
   .vult-shell-rail .vult-navigation-item .vult-rail-label {
     font-size: 0.875rem;

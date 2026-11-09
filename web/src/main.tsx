@@ -1,5 +1,5 @@
 import { ColumnLayoutScope } from "./design-system/use-column-layout";
-import { hydrateBookCatalog, resolveBookRoute, bookPath, readBookRoute, bookLocator, canonicalBookURL } from "./lib/book-routing";
+import { hydrateBookCatalog, missingBookLink, resolveBookRoute, bookPath, readBookRoute, bookLocator, canonicalBookURL } from "./lib/book-routing";
 import { rememberDashboardSelection, rememberedDashboardSelection, readDashboardLocation, resolveDashboardLocationBook } from "./lib/dashboard-location";
 import { dashboardRange, type DashboardPeriod } from "./lib/dashboard-period";
 import { DashboardPeriodPicker } from "./components/workspaces/dashboard-period-picker";
@@ -40,6 +40,7 @@ import {
 } from "./lib/startup";
 import { lazy, Suspense } from "react";
 import { AppShell } from "./components/shell/app-shell";
+import { OnboardingCard } from "./components/shell/onboarding-card";
 import { BookFinder } from "./components/shell/book-finder";
 import { PersonalSettingsHost } from "./components/shell/personal-settings-host";
 import { FocusVisibility } from "./design-system/focus-visibility";
@@ -87,7 +88,7 @@ import { ErrorMessage, message } from "./components/form";
 import { FailureState } from "./components/ui/failure-state";
 import { EmptyState } from "./components/ui/empty-state";
 import { LoadingState } from "./components/ui/loading-state";
-import { Notice } from "./components/ui/notice";
+import { Toaster, toast } from "./components/ui/toaster";
 
 const loadTransactionsTable = () =>
   import("./components/book/transactions-table");
@@ -135,7 +136,6 @@ function BookWorkspace({
   }, [selectedBook.id]);
   const [error, setError] = useState<unknown>("");
   const [loading, setLoading] = useState(!initialState);
-  const [notice, setNotice] = useState("");
   const [detailPending, setDetailPending] = useState(false);
   const [detailEditing, setDetailEditing] = useState(false);
   const { detail, show: setDetail } = useEntryPreview(
@@ -306,8 +306,10 @@ function BookWorkspace({
   function saved() {
     setSaveRevision((value) => value + 1);
     if (workspace === "settings") onBooksChanged();
-    setDetail("", "replace");
-    setNotice("Saved to your Book.");
+    // Only pages that show an entry carry it in the address; elsewhere a
+    // save must not move the address to Activity.
+    setDetail("", ["transactions", "statements", "accounts"].includes(workspace) ? "replace" : "none");
+    toast.success("Saved to your Book.");
     void load();
   }
   const book = state?.book;
@@ -548,6 +550,20 @@ function BookWorkspace({
         />
       ) : undefined,
     ready: !!book,
+    sidebarCard: book ? (
+      <OnboardingCard
+        bookId={book.id}
+        onConnectAgent={() => {
+          // Settings opens the tab its address names.
+          const url = new URL(window.location.href);
+          url.searchParams.set("tab", "account");
+          window.history.replaceState(window.history.state, "", url);
+          navigate("settings");
+        }}
+        onAddStatement={() => navigate("documents")}
+        onReview={() => navigate("approvals")}
+      />
+    ) : undefined,
     collection,
     active: workspace,
     currentPage: workspace === "documents" ? documentWorkspace : workspace === "books" ? booksWorkspace : undefined,
@@ -855,11 +871,6 @@ function BookWorkspace({
               setDetail("", "replace");
             }}
           >{id => <EntryDetail key={id} id={id} book={book} currencies={state.currencies} state={state} onSaved={saved} onNavigate={next => { if (!detailPending && !detailEditing) setDetail(next, "replace"); }} onPendingChange={setDetailPending} onEditingChange={setDetailEditing} />}</ContextualEntryPreview>
-          {notice && (
-            <Notice placement="floating" onDismiss={() => setNotice("")}>
-              {notice}
-            </Notice>
-          )}
           </ColumnLayoutScope>
         </AppShell>
       </div>
@@ -980,10 +991,21 @@ function App({
         ) : (
           <FailureState
             scope="page"
-            error={error}
+            error={error === missingBookLink ? new APIError("Check the address, or open the Book from your list.", 404) : error}
             resource="app"
             onRetry={catalogRetry.retry}
             pending={catalogRetry.running}
+            {...(error === missingBookLink
+              ? {
+                  // A Book address that matches no Book: retrying never helps.
+                  title: "No Book at this address",
+                  secondaryAction: (
+                    <Button color="primary" onClick={() => window.location.assign("/")}>
+                      Open your Books
+                    </Button>
+                  ),
+                }
+              : {})}
           />
         )}
       </AppStateScreen>
@@ -1119,6 +1141,7 @@ export function mount(initial: InitialBook) {
     <PersonalSettingsHost>
       <FocusVisibility />
       <App initial={initial} Table={preparedTable} />
+      <Toaster />
     </PersonalSettingsHost>,
   );
 }

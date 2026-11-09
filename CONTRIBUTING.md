@@ -58,6 +58,22 @@ VULT_TEST_ISOLATED=1 VULT_TEST_DSN_FILE=/path/to/synthetic-dsn go test -race -co
 Missing database configuration is a failure, not a skipped test. Never use an
 existing personal, development or production database as the test server.
 
+While you work, check only what your change touches:
+
+```sh
+VULT_TEST_ISOLATED=1 VULT_TEST_DSN_FILE=/path/to/synthetic-dsn scripts/check-changes.sh
+```
+
+It reads the files changed since `HEAD` (or `--base REF`, or `--files ...`). A
+style change runs the design checks; a web source change adds the typecheck,
+the unit tests that load that file and the tests that load the whole app; a Go
+change runs vet and the changed packages' tests without the race detector. A
+typical edit takes seconds. Before committing, run every check once:
+
+```sh
+VULT_TEST_ISOLATED=1 VULT_TEST_DSN_FILE=/path/to/synthetic-dsn scripts/check-changes.sh --full
+```
+
 Browser components follow the [typography standard](docs/design/typography.md).
 
 The browser sign-in script has dependency-free tests using Node's test runner:
@@ -65,6 +81,35 @@ The browser sign-in script has dependency-free tests using Node's test runner:
 ```sh
 node --test access/passkeys.test.mjs
 ```
+
+To review the interface in a browser, build it and start the preview server.
+It serves the real server and interface on `127.0.0.1:8080` with synthetic
+Books, using the same disposable PostgreSQL configuration as the tests:
+
+```sh
+(cd web && npm run build)
+VULT_TEST_ISOLATED=1 VULT_TEST_DSN_FILE=/path/to/synthetic-dsn \
+  VULT_PREVIEW_WEB="$PWD/web/dist" \
+  go test -tags browserpreview -count=1 -timeout 0 -run TestBrowserPreview ./server/
+```
+
+Open `http://127.0.0.1:8080/__preview/sign-in` to sign in as the synthetic
+owner. After `npm run build` in `web`, reload the page to see the new build;
+the preview needs a restart only for Go changes.
+
+Each start gets a fresh database by default. To keep your changes across
+restarts, add `VULT_PREVIEW_STATE=/path/to/a/private/folder` and point
+`VULT_TEST_DSN_FILE` at a PostgreSQL 18 server you keep for the preview. The
+preview then reuses one database, its owner and its sources, and seeds the
+synthetic Books only the first time. Delete that database and folder to start
+over. With the preview running, the browser journey test creates a Book,
+closes a period, reads a source and the Dashboard, and signs out:
+
+```sh
+cd web && VULT_E2E_CHANNEL=chrome npx playwright test
+```
+
+`VULT_E2E_CHANNEL=chrome` uses an installed Chrome with a temporary profile.
 
 The installer generator and synthetic shell-control tests use Python 3.11 or later:
 

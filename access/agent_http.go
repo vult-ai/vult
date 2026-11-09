@@ -34,22 +34,23 @@ func validAgentRequest(s string) bool {
 	return true
 }
 
-var agentPage = template.Must(template.New("agent").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect {{.Client}} · Vult</title><link rel="stylesheet" href="/auth/style.css"></head><body><main>
+var agentPage = template.Must(template.New("agent").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect {{.Client}} · Vult</title><link rel="stylesheet" href="/auth/style.css"><script src="/auth/particles.js" defer></script></head><body><main>` + vultLockup + `
 <h1>Connect {{.Client}}</h1>
 <p><strong>An app on this computer</strong> calls itself “{{.Client}}” and asked to use Vult. Allow it only if you just asked your agent to use Vult.</p>
 <form method="post" action="/auth/agent">
 <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="request" value="{{.Request}}">
 <label>Book<select name="book">{{range .Books}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
 <fieldset><legend>It may</legend>
-<label><input type="radio" name="access" value="write" checked> Record entries and propose changes for your approval</label>
-<label><input type="radio" name="access" value="read"> Only read the Book</label>
+<label><input type="radio" name="access" value="write" checked> Record: post entries directly</label>
+<label><input type="radio" name="access" value="propose"> Propose: draft entries for your approval</label>
+<label><input type="radio" name="access" value="read"> Read: view only</label>
 </fieldset>
 <p>It can't manage your Books, your sign-in or other agents. Access lasts 8 hours; your agent asks again after that.</p>
 <button name="decision" value="allow" type="submit">Allow</button>
 <button name="decision" value="deny" type="submit">Don't allow</button>
 </form></main></body></html>`))
 
-var agentMessage = template.Must(template.New("agent-message").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Title}} · Vult</title><link rel="stylesheet" href="/auth/style.css"></head><body><main><h1>{{.Title}}</h1><p>{{.Body}}</p>{{if .Link}}<p><a href="{{.Link}}">{{.LinkText}}</a></p>{{end}}</main></body></html>`))
+var agentMessage = template.Must(template.New("agent-message").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Title}} · Vult</title><link rel="stylesheet" href="/auth/style.css"><script src="/auth/particles.js" defer></script></head><body><main>` + vultLockup + `<h1>{{.Title}}</h1><p>{{.Body}}</p>{{if .Link}}<p><a href="{{.Link}}">{{.LinkText}}</a></p>{{end}}</main></body></html>`))
 
 func agentNotice(w http.ResponseWriter, status int, title, body, link, linkText string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -72,7 +73,7 @@ func (h *HTTP) freshSession(r *http.Request) (string, bool) {
 
 func (h *HTTP) agentRoute(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Referrer-Policy", "no-referrer")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 	if len(r.Header.Values("Authorization")) != 0 {
 		fail(w, http.StatusForbidden)
 		return

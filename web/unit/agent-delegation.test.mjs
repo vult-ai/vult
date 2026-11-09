@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { React, loadComponent, withDOM } from "./helpers/dom.mjs";
 
-/* Settings → Access in v0.4: the owner sees each connected agent and the Books it
-   reaches, and can disconnect it. Connecting an agent and changing its Books are
-   done in the terminal, so the browser offers neither. */
+/* Settings → Connections: the owner sees each connected agent, its status, the
+   Books it reaches and what it can do there, and can disconnect it. Connecting
+   an agent and changing its Books happen outside this screen, so the browser
+   offers neither. */
 const book = { id: "11111111-1111-4111-8111-111111111111", name: "Selected Business", profile: "business", currency: "USD", scale: 2, start_date: "2026-01-01" };
 const other = { ...book, id: "22222222-2222-4222-8222-222222222222", name: "Example Studio" };
 const response = (data, ok = true, status = 200) => ({ ok, status, json: async () => data });
@@ -39,11 +40,12 @@ test("connected agents show their Books read-only and no browser setup", async (
     globalThis.fetch = server(entries).fetch;
     try {
       await render(React.createElement(AccessSettings, { book }));
+      await click(document.querySelector(".agent-summary"));
       const text = document.body.textContent;
       assert.match(text, /Bookkeeping agent/);
-      assert.match(text, /Selected Business.*Manage records/);
-      assert.match(text, /Example Studio.*View only/);
-      assert.match(text, /vult connection create/, "the terminal is named as the way to connect");
+      assert.match(text, /2 Books/);
+      assert.match(text, /Selected Business.*Posts entries directly\./);
+      assert.match(text, /Example Studio.*View only\./);
       assert.equal(button("Connect an app"), undefined);
       assert.equal(document.querySelectorAll("select").length, 0, "Book access can't be edited here");
     } finally {
@@ -62,7 +64,7 @@ test("disconnect revokes exactly the chosen connection, and a failure keeps the 
     globalThis.fetch = failing.fetch;
     try {
       await render(React.createElement(AccessSettings, { book }));
-      await click(button("2 connections"));
+      await click(document.querySelector(".agent-summary"));
       await click(document.querySelector('button[aria-label^="Disconnect Bookkeeping agent connection a-2"]'));
       await click(button("Disconnect", dialog()));
       assert.match(failing.sent[0], /\/access\/tokens\/a-2\/revoke$/);

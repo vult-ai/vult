@@ -486,7 +486,11 @@ export function presentFailureState(
       : context.retained === "view"
         ? "refresh"
         : "load";
-  const title = `Couldn’t ${verb} ${context.resource ? stateNouns[context.resource] : "this"}`;
+  // Being signed out is a state, not a failure: say so and offer sign-in.
+  const signedOut = failure.recovery === "sign-in";
+  const title = signedOut
+    ? "You’re signed out"
+    : `Couldn’t ${verb} ${context.resource ? stateNouns[context.resource] : "this"}`;
   const detail =
     failure.severity === "critical"
       ? failureStateCopy.recordsUnverified
@@ -497,7 +501,7 @@ export function presentFailureState(
           : failure.kind === "missing"
             ? failureStateCopy.missing
             : failure.recovery === "sign-in"
-              ? failureStateCopy.signIn
+              ? failureStateCopy.signedOut
               : failure.kind === "access"
                 ? failureStateCopy.access
                 : failure.message === errorCopy.busy

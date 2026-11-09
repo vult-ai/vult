@@ -3,6 +3,7 @@ import { Menu01 as Menu, Settings01 as Settings } from "../../design-system/icon
 import { ShellHeaderFrame } from "../../design-system/shell-header-frame";
 import { SidebarToggleControl } from "../../design-system/sidebar-toggle";
 import { VultBrand } from "../ui/vult-brand";
+import { SidebarContext } from "./sidebar-context";
 import { Dialog } from "../ui/dialog";
 import { Navigation, type NavigationItem } from "./navigation";
 import { ProfileMenu } from "./profile-menu";
@@ -30,6 +31,7 @@ export function AppShell({
   onSettings,
   onSettingsPage,
   userScope,
+  sidebarCard,
   children,
 }: {
   bookName?: string;
@@ -48,6 +50,8 @@ export function AppShell({
   onSettings: (trigger: HTMLElement) => void;
   onSettingsPage?: () => void;
   userScope?: PreferenceScope;
+  /** Shown above Settings in the open sidebar and the phone drawer. */
+  sidebarCard?: ReactNode;
   children: ReactNode;
 }) {
   const [expanded, setExpanded] = useState(() => {
@@ -164,6 +168,9 @@ export function AppShell({
             </div>
           </div>
           <div className="vult-shell-rail-footer">
+            <SidebarContext.Provider value={{ open: () => { if (!expanded) toggle(true); } }}>
+              {sidebarCard}
+            </SidebarContext.Provider>
             <div className="vult-navigation-item">{settings()}</div>
           </div>
         </div>
@@ -249,7 +256,10 @@ export function AppShell({
       >
         <div className="mobile-navigation" id="mobile-navigation">
           {nav(true)}
-          <div className="mobile-navigation-footer">{settings(true)}</div>
+          <div className="mobile-navigation-footer">
+            {sidebarCard}
+            {settings(true)}
+          </div>
         </div>
       </Dialog>
     </div>

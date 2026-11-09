@@ -28,11 +28,13 @@ export async function loadComponent(path) {
   return module.exports;
 }
 
-export async function withDOM(run) {
+export async function withDOM(run, { amountsHidden = false } = {}) {
   const dom = new JSDOM('<div id="root"></div>', {
     url: "http://localhost:3100",
     pretendToBeVisual: true,
   });
+  // Tests read the Dashboard's figures; hiding them has its own test.
+  if (!amountsHidden) dom.window.localStorage.setItem("vult:amounts-hidden", "shown");
   const saved = new Map();
   const values = {
     window: dom.window,

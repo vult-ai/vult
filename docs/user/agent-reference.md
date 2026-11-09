@@ -8,6 +8,7 @@ Read connections can use:
 
 - `get_book`, `list_accounts`, `get_journal`, `list_journals`
 - `get_balance`, `get_trial_balance`, `get_request_outcome`
+- `list_closed_periods`, `get_exchange_rate`
 - `get_operation_proposal`, `get_document`, `list_documents`
 - `get_entry_documents`, `get_source_usage`, `list_entries_missing_evidence`
 

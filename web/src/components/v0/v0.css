@@ -416,3 +416,13 @@
     transition: none;
   }
 }
+
+/* The Create Book form inside its dialog, inset like the dialog heading. */
+.create-book-dialog {
+  padding: 20px 24px 24px;
+}
+@media (max-width: 640px) {
+  .create-book-dialog {
+    padding: 16px;
+  }
+}

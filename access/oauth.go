@@ -146,7 +146,7 @@ func (s *Service) ResumeAuthorization(ctx context.Context, request string) (stri
 	return "/oauth/authorize?request=" + request, true
 }
 func (s *Service) ConsentAuthorization(ctx context.Context, session, request, tenant, book, permission, connection string, deny bool) (string, error) {
-	if !validToken(session) || !validToken(request) || !ledger.ValidID(tenant) || !deny && (!ledger.ValidID(book) || (permission != "read" && permission != "write")) || connection != "" && !ledger.ValidID(connection) {
+	if !validToken(session) || !validToken(request) || !ledger.ValidID(tenant) || !deny && (!ledger.ValidID(book) || !ledger.ValidAccess(permission)) || connection != "" && !ledger.ValidID(connection) {
 		return "", ErrDenied
 	}
 	var existing any
@@ -216,7 +216,7 @@ func (s *Service) Exchange(ctx context.Context, v url.Values) (Tokens, error) {
 	out := Tokens{Access: Random(), Refresh: Random(), Type: "Bearer", Expires: 900}
 	var permission *string
 	e := s.auth.QueryRow(ctx, "SELECT access.exchange_oauth($1,$2,$3,$4,$5,$6,$7,$8,$9)", kind, Hash(secret), v.Get("client_id"), s.realmResource(), v.Get("redirect_uri"), proof, Hash(out.Access), Hash(out.Refresh), s.origin).Scan(&permission)
-	if e != nil || permission == nil || (*permission != "read" && *permission != "write") {
+	if e != nil || permission == nil || !ledger.ValidAccess(*permission) {
 		return Tokens{}, ErrDenied
 	}
 	out.Scope = "ledger:" + *permission

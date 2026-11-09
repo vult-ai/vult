@@ -4,7 +4,7 @@ A double-entry ledger for agents. Your agent keeps your Book; you see it, check
 it and trust it. Agents supply debits and credits; Vult records a balanced,
 immutable journal, and you review it in your browser.
 
-Vult 0.4.0 targets local use on **macOS 26 on Apple Silicon** and
+Vult 0.5.0 targets local use on **macOS 26 on Apple Silicon** and
 **Ubuntu 24.04 LTS on x86-64 with GNOME and Chrome**, plus a separate
 **Linux server** behind HTTPS. The native installers include PostgreSQL; agents
 use its protected local socket and the browser uses local HTTPS, with no Docker

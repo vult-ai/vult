@@ -59,6 +59,12 @@ import {
   Moon as PhMoon,
   Paperclip as PhPaperclip,
   Plus as PhPlus,
+  SignOut as PhSignOut,
+  PlugsConnected as PhPlugsConnected,
+  ImageSquare as PhImageSquare,
+  LinkSimple as PhLinkSimple,
+  IdentificationCard as PhIdentificationCard,
+  TextAa as PhTextAa,
   Printer as PhPrinter,
   PushPin as PhPushPin,
   PushPinSimple as PhPushPinSimple,
@@ -149,6 +155,12 @@ export const PieChart03 = icon(PhChartPieSlice, "PieChart03");
 export const Pin01 = icon(PhPushPinSimple, "Pin01");
 export const Pin02 = icon(PhPushPin, "Pin02");
 export const Plus = icon(PhPlus, "Plus");
+export const SignOut = icon(PhSignOut, "SignOut");
+export const PlugsConnected = icon(PhPlugsConnected, "PlugsConnected");
+export const ImageSquare = icon(PhImageSquare, "ImageSquare");
+export const LinkSimple = icon(PhLinkSimple, "LinkSimple");
+export const IdentificationCard = icon(PhIdentificationCard, "IdentificationCard");
+export const TextAa = icon(PhTextAa, "TextAa");
 export const Printer = icon(PhPrinter, "Printer");
 export const Receipt = icon(PhReceipt, "Receipt");
 export const Scales02 = icon(PhScales, "Scales02");

@@ -126,7 +126,7 @@ func (a TenantAdmin) CreateConnection(ctx context.Context, book, name, access st
 	if !a.valid() {
 		return Connection{}, ErrDenied
 	}
-	if !ValidID(book) || len(strings.TrimSpace(name)) < 1 || len(name) > 80 || (access != "read" && access != "write") {
+	if !ValidID(book) || len(strings.TrimSpace(name)) < 1 || len(name) > 80 || !ValidAccess(access) {
 		return Connection{}, ErrInvalid
 	}
 	c := Connection{ID: ID(), ActorID: ID(), BookID: book, Name: name, Access: access}
@@ -235,6 +235,31 @@ func (a TenantAdmin) Revoke(ctx context.Context, id string) error {
 			return dbError(e)
 		}
 		if !exists {
+			return ErrNotFound
+		}
+	}
+	return nil
+}
+
+// ChangeAccess sets a live connection's access level. The agent keeps its
+// actor and history, and its next request uses the new level.
+func (a TenantAdmin) ChangeAccess(ctx context.Context, id, access string) error {
+	if !a.valid() {
+		return ErrDenied
+	}
+	if !ValidID(id) || !ValidAccess(access) {
+		return ErrInvalid
+	}
+	tag, e := a.db.Exec(ctx, "UPDATE public.connections SET access=$3 WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND access<>$3", a.tenantID, id, access)
+	if e != nil {
+		return dbError(e)
+	}
+	if tag.RowsAffected() == 0 {
+		var live bool
+		if e = a.db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM public.connections WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL)", a.tenantID, id).Scan(&live); e != nil {
+			return dbError(e)
+		}
+		if !live {
 			return ErrNotFound
 		}
 	}

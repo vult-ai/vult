@@ -127,7 +127,7 @@ func (o Operator) ConfigureRoles(ctx context.Context, runtimeRole, authRole, own
 		"GRANT EXECUTE ON FUNCTION public.operation_dependencies(uuid,uuid,text,jsonb,uuid),public.operation_dependencies_settled(jsonb) TO " + r,
 		"GRANT INSERT ON public.books,public.connections,public.closed_periods TO " + r,
 		"GRANT UPDATE(write_epoch) ON public.books TO " + r,
-		"GRANT UPDATE(revoked_at) ON public.connections TO " + r,
+		"GRANT UPDATE(revoked_at,access) ON public.connections TO " + r,
 		"GRANT EXECUTE ON FUNCTION public.ledger_lock(uuid,uuid),public.ledger_context(uuid,uuid),public.ledger_import_owner(),public.ledger_allowed(uuid,uuid,boolean) TO " + r,
 		"GRANT INSERT ON public.requests,public.entries,public.lines,public.source_citations,public.operation_consumptions,public.documents,public.document_uploads TO " + r,
 		"GRANT UPDATE(state,storage_id,key_id,ready_at,expires_at,used_at) ON public.documents TO " + r,

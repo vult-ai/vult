@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Check, Copy01 } from "../../design-system/icons";
+import { Check, Copy01, LinkSimple } from "../../design-system/icons";
 import { get, type Book, type BookList } from "../../lib/api";
 import { settingsPost as post } from "../../lib/settings-requests";
 import {
@@ -15,7 +15,7 @@ import { Button } from "../ui/button";
 import { SettingsRow, SettingsSection } from "../ui/settings-section";
 import { BookURLInput } from "../ui/book-url-input";
 import "./book-address-settings.css";
-import { Notice } from "../ui/notice";
+import { toast } from "../ui/toaster";
 import { announce } from "../../lib/announce";
 
 export function BookAddressSettings({ book }: { book: Book }) {
@@ -37,7 +37,6 @@ function BookAddressEditor({
   const [slug, setSlug] = useState(address?.slug || "");
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<unknown>();
-  const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyFallback, setCopyFallback] = useState(false);
   const slugId = useId();
@@ -91,8 +90,8 @@ function BookAddressEditor({
   const changed = slug !== address.slug;
   return (
     <SettingsSection
-      title="Address"
-      description="Where this Book opens. Earlier addresses keep working."
+      title="Address" icon={LinkSimple}
+      description="Old links keep working."
       actions={
         <Button
           type="submit"
@@ -119,7 +118,6 @@ function BookAddressEditor({
           };
           setPending(true);
           setFailure(undefined);
-          setSaved(false);
           void post<BookAddress>(
             `book-address?book_id=${encodeURIComponent(book.id)}`,
             request,
@@ -128,7 +126,7 @@ function BookAddressEditor({
               if (seq !== generation.current) return;
               setAddress(next);
               setSlug(next.slug);
-              setSaved(true);
+              toast.success("Address saved. Earlier links still work.");
               // The confirmed response updates navigation without a second save or read.
               updateBookAddress(next);
               const url = canonicalBookURL(
@@ -155,7 +153,6 @@ function BookAddressEditor({
             placeholder={address.code}
             onChange={(event) => {
               setSlug(event.currentTarget.value);
-              setSaved(false);
             }}
             disabled={pending}
           />
@@ -175,19 +172,16 @@ function BookAddressEditor({
                 if (latest.slug === slug.trim().toLowerCase()) {
                   setFailure(undefined);
                   setSlug(latest.slug);
-                  setSaved(true);
+                  toast.success("Address saved. Earlier links still work.");
                 }
               }
             }}
           />
-          {saved ? (
-            <Notice>Address saved. Earlier links still work.</Notice>
-          ) : null}
         </SettingsRow>
       </form>
       <SettingsRow
         label="Book ID"
-        description="Generated when the Book was created. It can’t be changed."
+        description="Can’t be changed."
         hint={
           copyFallback
             ? "The Book ID is selected. Copy it to continue."

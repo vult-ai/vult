@@ -10,3 +10,61 @@
   gap: 8px;
   min-width: 0;
 }
+
+/* Source details follow the entry inspector: a label/value grid, then the
+   entries that use the source as compact two-line links. */
+.source-detail {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.source-detail-facts {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px 16px;
+  margin: 0;
+}
+.source-detail-facts > div {
+  display: contents;
+}
+.source-detail-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-primary);
+}
+.source-detail > .vult-button,
+.source-detail > a {
+  justify-self: start;
+}
+.source-detail-uses {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-secondary);
+}
+.source-detail-uses h3 {
+  margin: 0;
+}
+.source-uses {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.source-use {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.source-use .entry-link {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-align: start;
+}
+.source-use-meta {
+  display: block;
+}

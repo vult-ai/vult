@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
+import { workspacePath } from "../../lib/workspace";
 import { BarChart07, ChevronDown, ChevronRight, Coins01, CreditCard02, Receipt, Scales02, Wallet02, PieChart03 } from "../../design-system/icons";
 import { money as baseMoney, type Book, type CashAccount } from "../../lib/api";
 import { useUserPreferences } from "../../lib/user-preferences-context";
@@ -12,10 +13,12 @@ import type { OverviewComparison } from "../../lib/overview-history";
 import { BalanceTrend, type BalanceTrendPoint } from "./balance-trend";
 import { RollingNumber } from "../ui/rolling-number";
 import { DisplayAmount } from "../ui/display-amount";
+import { AmountPrivacyToggle, HiddenFigure } from "../ui/amount-privacy-toggle";
 import { Tooltip, TooltipTrigger } from "../../design-system/catalog/components/base/tooltip/tooltip";
 import { Select } from "../ui/select";
 import { Headline, SeriesKey } from "../../design-system/headline";
 import { compactMoney } from "../../lib/compact-money";
+import { hiddenAmount, hiddenCompact, useAmountsHidden } from "../../lib/amount-privacy";
 import { DATA_PALETTE } from "../../design-system/data-palette";
 import "../../design-system/styles/chart-palette.css";
 import "./dashboard-panels.css";
@@ -95,13 +98,17 @@ function usePreferenceValue() {
 }
 function useFormat(book: Book) {
   const prefs = usePreferenceValue();
+  // Hidden amounts mask every figure, axis label, tooltip and spoken label;
+  // bar heights and shares still come from the real values.
+  const hidden = useAmountsHidden();
   const locale = prefs?.regional_format || "en-US";
   // Words (month names) follow the interface language; numbers follow the region.
   const words = wordsLocale(locale);
   return {
     locale: words,
-    money: (minor: string) => baseMoney(minor, book, prefs),
-    compact: (minor: number) => compactMoney(minor, book, locale),
+    hidden,
+    money: (minor: string) => (hidden ? hiddenAmount : baseMoney(minor, book, prefs)),
+    compact: (minor: number) => (hidden ? hiddenCompact : compactMoney(minor, book, locale)),
     date: (value: string, format: DateFormat = "compact") => baseDate(value, format, new Date(), prefs),
     range: (from: string, to: string, format: DateFormat = "compact") => baseRange(from, to, format, new Date(), prefs),
     month: (value: string, style: "short" | "long" = "short") => monthName(value, style, words),
@@ -174,14 +181,14 @@ export function SummaryPanel({ book, snapshot }: { book: Book; snapshot: Dashboa
     return (
       <div className="dash-stat" data-series={key}>
         <span className="dash-stat-label vult-type-metadata">{label}</span>
-        <strong className="dash-figure"><DisplayAmount value={value} /></strong>
+        <strong className="dash-figure">{value === hiddenAmount ? <HiddenFigure>{value}</HiddenFigure> : <DisplayAmount value={value} />}</strong>
         <span className="dash-stat-foot vult-type-metadata">{foot}</span>
         {current.length > 1 && <BalanceTrend name={label} book={book} current={current} range={range} previous={trendAmounts(trends.previous, amount)} previousRange={comparison} />}
       </div>
     );
   };
   return (
-    <DashboardPanel icon={PieChart03} title="Summary" className="dash-summary">
+    <DashboardPanel icon={PieChart03} title="Summary" className="dash-summary" action={<AmountPrivacyToggle />}>
       <div className="dash-stats">
         {stat("Cash", cash === undefined && cashStatus === "unavailable" ? nativeUnavailable : show(cash), `${cashStatus === "partial" ? "Partial · " : ""}On ${f.date(range.to, "compact")}`, "cash", "cash_minor")}
         {stat("Income", show(revenue), <Change now={revenue} before={prior?.income} book={book} against={vs} label={vsShort} percent />, "income", "income")}
@@ -197,8 +204,28 @@ const share = (part: bigint, whole: bigint) => (whole > 0n ? Number((part * 1000
 /** Why amounts could not be placed in calendar periods, in plain words. */
 const unavailableText = (reason: string) =>
   reason === "book_timezone_not_set"
-    ? "Set the Book's timezone to see amounts by period."
+    ? "Amounts appear by period once the Book has a timezone."
     : "Amounts by period are not available for this Book.";
+const unavailableAction = (reason: string | undefined) =>
+  reason === "book_timezone_not_set" ? timezoneAction() : undefined;
+
+/* ---------- Empty panels ---------- */
+
+/** An empty panel says, quietly, that there is nothing to show and why, with
+ * the one next step when there is one. */
+function PanelEmpty({ children, action }: { children: ReactNode; action?: { href: string; label: string } }) {
+  return (
+    <p className="dash-empty vult-type-metadata">
+      <span>
+        {children}
+        {action && <> <a className="dash-empty-action" href={action.href}>{action.label}</a></>}
+      </span>
+    </p>
+  );
+}
+
+/** Where to set what a panel is missing: this Book's Accounting settings. */
+const timezoneAction = () => ({ href: `${workspacePath("settings")}?tab=accounting`, label: "Set timezone" });
 
 /* ---------- Income and expenses chart ---------- */
 
@@ -499,7 +526,11 @@ export function IncomeExpensesPanel({
         )}
       />
       {groups.length === 0 ? (
-        <div className="dash-empty vult-type-metadata">{performance?.unavailable ? unavailableText(performance.unavailable) : performance ? "No income or expenses in these dates." : "Loading…"}</div>
+        performance ? (
+          <PanelEmpty action={unavailableAction(performance.unavailable)}>
+            {performance.unavailable ? unavailableText(performance.unavailable) : "No income or expenses in these dates."}
+          </PanelEmpty>
+        ) : <div className="dash-empty vult-type-metadata">Loading…</div>
       ) : asTable ? (
         <div className="dash-table-wrap">
           <table className="dash-table vult-type-ui">
@@ -675,7 +706,11 @@ export function SpendingPanel({ book, performance, range, onOpen, onViewStatemen
           <Headline value={performance && !performance.unavailable ? f.money(performance[side].total) : "—"} caption={out ? "spent" : "earned"} aside={named.length ? `${f.percent(share(named.reduce((s, c) => s + c.amount, 0n), whole), 0)} in ${named.length} accounts` : undefined} />
         );
       })()}
-      {listed.length === 0 ? <div className="dash-empty vult-type-metadata">{performance?.unavailable ? unavailableText(performance.unavailable) : performance ? (out ? `No ${w.expensesLower} in these dates.` : "No income in these dates.") : "Loading…"}</div> : (
+      {listed.length === 0 ? (performance ? (
+        <PanelEmpty action={unavailableAction(performance.unavailable)}>
+          {performance.unavailable ? unavailableText(performance.unavailable) : out ? `No ${w.expensesLower} in these dates.` : "No income in these dates."}
+        </PanelEmpty>
+      ) : <div className="dash-empty vult-type-metadata">Loading…</div>) : (
         <>
           {shown.length > 0 && <div className="dash-share" data-focus={pinnedId ? "" : undefined} role="img" aria-label={`Share of ${out ? w.expensesLower : "income"}${credits.length ? " before refunds" : ""}: ${shown.map((c) => `${c.code ? c.name : other} ${f.percent(share(c.amount, whole), 1)}`).join(", ")}`}>
             {shown.map((c) => (
@@ -715,7 +750,7 @@ export function CashPanel({ book, accounts, total: cash, status, range, onOpen, 
   return (
     <DashboardPanel icon={Wallet02} title="Cash by account" action={<ViewAll label="All accounts" onOpen={onViewAccounts} />}>
       <Headline value={cash !== undefined ? f.money(cash) : status === "unavailable" ? nativeUnavailable : "—"} caption={`${status === "partial" ? "cash · partial" : "cash"} on ${f.date(range.to, "compact")}`} aside={accounts ? `${accounts.length} account${accounts.length === 1 ? "" : "s"}` : undefined} />
-      {status === "unavailable" ? <div className="dash-empty vult-type-metadata">Cash can’t be totalled until an account is marked as cash.</div> : !top ? <div className="dash-empty vult-type-metadata">Loading…</div> : top.length === 0 ? <div className="dash-empty vult-type-metadata">No cash accounts yet.</div> : (
+      {status === "unavailable" ? <PanelEmpty>Cash can’t be totalled until an account is marked as cash.</PanelEmpty> : !top ? <div className="dash-empty vult-type-metadata">Loading…</div> : top.length === 0 ? <PanelEmpty>No cash accounts yet.</PanelEmpty> : (
         <ol className="dash-rows">
           {top.map((a) => (
             <li key={a.code}>
@@ -767,7 +802,7 @@ export function OwedPanel({ book, position, range, onOpen, onViewAccounts }: {
         <ViewAll label="All accounts" onOpen={onViewAccounts} />
       </>}>
       <Headline value={balances === undefined ? "—" : f.money(owed.toString())} caption={`${owe ? "owed" : "owed to you"} on ${f.date(range.to, "compact")}`} aside={balances ? `${rows.length} account${rows.length === 1 ? "" : "s"}` : undefined} />
-      {balances === undefined ? <div className="dash-empty vult-type-metadata">Loading…</div> : rows.length === 0 ? <div className="dash-empty vult-type-metadata">{owe ? "Nothing owed in this Book." : "Nothing owed to you on this date."}</div> : (
+      {balances === undefined ? <div className="dash-empty vult-type-metadata">Loading…</div> : rows.length === 0 ? <PanelEmpty>{owe ? "Nothing owed in this Book." : "Nothing owed to you on this date."}</PanelEmpty> : (
         <ol className="dash-rows">
           {top.map((r) => (
             <li key={r.code}>

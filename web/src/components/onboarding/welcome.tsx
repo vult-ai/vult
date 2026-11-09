@@ -14,6 +14,8 @@ import { currencyTerritories } from "./currency-territories";
 import { normalizeCurrencySearch } from "./currency-search";
 import { OnboardingChoice } from "./onboarding-choice";
 import { OnboardingLayout } from "./onboarding-layout";
+import { openCreatedBook } from "../../lib/open-created-book";
+import { withRecentSignIn } from "../../lib/recent-sign-in";
 import "./welcome.css";
 
 type Connection = { id: string; name: string; connection?: boolean; revoked_at?: string };
@@ -294,7 +296,9 @@ export function PurposeChoice({ value, onChange }: { value: string; onChange: (v
 
 /** Creates the Vult's first Book with its currency, then records what it is
  * for and its timezone. */
-function CreateBook({ tenant, onCreated }: { tenant: string; onCreated: (book: Book) => void }) {
+/** Names a new Book and sets its purpose, currency and timezone. Works on this
+ * computer and on a server; the currency is fixed once the Book exists. */
+export function CreateBook({ onCreated }: { tenant?: string; onCreated: (book: Book) => void }) {
   const [name, setName] = useState("");
   const [profile, setProfile] = useState("");
   const [currency, setCurrency] = useState(() => browserBookCurrency());
@@ -313,11 +317,13 @@ function CreateBook({ tenant, onCreated }: { tenant: string; onCreated: (book: B
     setBusy(true);
     setError("");
     try {
-      const created = await fetchJSON<Book>(`/owner/tenants/${encodeURIComponent(tenant)}/books`, {
-        method: "POST",
-        headers: await writeHeaders(),
-        body: JSON.stringify({ request_key: createKey.current, name: name.trim(), currency, scale: currencyScale(currency) }),
-      });
+      const created = await withRecentSignIn(async () =>
+        fetchJSON<Book>("/api/v1/books", {
+          method: "POST",
+          headers: await writeHeaders(),
+          body: JSON.stringify({ request_key: createKey.current, name: name.trim(), currency, scale: currencyScale(currency) }),
+        }),
+      );
       let book = created;
       try {
         book = await settingsPost<Book>("settings", {
@@ -383,6 +389,22 @@ function CreateBook({ tenant, onCreated }: { tenant: string; onCreated: (book: B
 }
 
 function BookSetup({ book, onSaved }: { book: Book; onSaved: (book: Book) => void }) {
+  const [otherCurrency, setOtherCurrency] = useState(false);
+  if (otherCurrency)
+    return (
+      <>
+        <CreateBook onCreated={(created) => void openCreatedBook(created)} />
+        <div className="welcome-actions">
+          <Button type="button" color="tertiary" onClick={() => setOtherCurrency(false)}>
+            Keep {currencyLabel(book.currency)}
+          </Button>
+        </div>
+      </>
+    );
+  return <BookSetupForm book={book} onSaved={onSaved} onOtherCurrency={() => setOtherCurrency(true)} />;
+}
+
+function BookSetupForm({ book, onSaved, onOtherCurrency }: { book: Book; onSaved: (book: Book) => void; onOtherCurrency: () => void }) {
   const [name, setName] = useState(placeholderNames.has(book.name.trim().toLowerCase()) ? "" : book.name);
   const [profile, setProfile] = useState(book.profile === "personal" ? "personal" : book.profile === "business" ? "business" : "");
   const [zone, setZone] = useState(book.accounting_timezone || browserTimeZone());
@@ -438,7 +460,10 @@ function BookSetup({ book, onSaved }: { book: Book; onSaved: (book: Book) => voi
       </Field>
       <AccountingTimezone value={zone} onChange={setZone} />
       <p className="welcome-fact">
-        Amounts are kept in {currencyLabel(book.currency)}. A Book’s currency can’t change.
+        Amounts are kept in {currencyLabel(book.currency)}. A Book’s currency can’t change.{" "}
+        <button type="button" className="welcome-link" onClick={onOtherCurrency}>
+          Use another currency
+        </button>
       </p>
       {error && (
         <p className="welcome-error" role="alert">

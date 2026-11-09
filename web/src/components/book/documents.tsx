@@ -224,7 +224,7 @@ function DocumentDetail({ doc, book, onOpenEntry }: { doc: BookDocument; book: B
   }, [doc.id, book.id]);
   return (
     <div className="source-detail">
-      <dl className="source-detail-facts vult-type-metadata">
+      <dl className="source-detail-facts vult-type-ui">
         <div><dt className="text-tertiary">Type</dt><dd>{mediaLabel(doc.media_type)}</dd></div>
         <div><dt className="text-tertiary">Size</dt><dd>{formatSize(doc.size)}</dd></div>
         <div><dt className="text-tertiary">Added</dt><dd><RecordDate value={doc.created_at.slice(0, 10)} format="full" /></dd></div>
@@ -232,19 +232,19 @@ function DocumentDetail({ doc, book, onOpenEntry }: { doc: BookDocument; book: B
       </dl>
       <Button color="secondary" size="sm" href={documentContentURL(doc.id, book.id)} iconLeading={Download01}>Download original</Button>
       {!unsupported && (
-        <section aria-label="Used by">
-          <h3 className="vult-type-label">Used by</h3>
+        <section className="source-detail-uses" aria-label="Used by">
+          <h3 className="vult-type-label text-primary">Used by</h3>
           <ErrorMessage message={error} intent="read" resource="sources" />
           {uses === null && !error ? <LoadingState scope="inline" label="Loading entries…" />
             : uses && !uses.length ? <p className="vult-type-metadata text-tertiary">No entry uses this source yet.</p>
             : uses && (
               <ul className="source-uses">
                 {uses.map((u) => (
-                  <li key={u.entry_id}>
+                  <li key={u.entry_id} className="source-use vult-type-ui">
                     <NameLink type="button" className="entry-link vult-focus-target" onClick={() => onOpenEntry?.(u.entry_id)}
                       name={u.description || `Entry ${u.entry_id.slice(0, 8)}`} />
-                    <span className="vult-type-metadata text-tertiary">
-                      {" "}<RecordDate value={u.accounting_date} />
+                    <span className="source-use-meta vult-type-metadata text-tertiary">
+                      <RecordDate value={u.accounting_date} />
                       {u.evidence && ` · ${u.evidence.role}`}
                       {u.citation && " · cited"}
                       {u.reversed && " · reversed"}

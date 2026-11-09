@@ -1,3 +1,4 @@
+import { TextAa, BookOpen01 } from "../../design-system/icons";
 import { RecordDate } from "../ui/record-date";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { AccessSettings } from "../access-settings";
@@ -21,6 +22,8 @@ import { SettingsSection, SettingsRow } from "../ui/settings-section";
 import { SettingsLayout } from "../ui/settings-layout";
 import { formatAnnualDate } from "../../lib/date-format";
 import { BookDataSettings } from "../book/book-data-settings";
+import { BookPeriodSettings } from "../book/book-period-settings";
+import { BookProfileSetting, BookTimezoneSetting } from "../book/book-setup-settings";
 import { BookLogoSettings } from "../book/book-logo-settings";
 
 const currencyNames = new Intl.DisplayNames(["en"], { type: "currency" });
@@ -113,8 +116,7 @@ export function Settings({
             <>
               <BookLogoSettings book={book} onSaved={onSaved} />
               <SettingsSection
-                title="Name"
-                description="The name shown across this Book."
+                title="Name" icon={TextAa}
                 actions={
                   <Button
                     type="submit"
@@ -207,17 +209,15 @@ export function Settings({
           content: (tabActive) => (
             <>
               <SettingsSection
-                title="Book setup"
-                description="Recorded when this Book was created."
+                title="Book setup" icon={BookOpen01}
+                description="Set once."
               >
                 <SettingsRow label="Book type">
-                  <span>
-                    {displayBook.profile === "personal"
-                      ? "Personal"
-                      : displayBook.profile === "business"
-                        ? "Business"
-                        : "Legacy · not classified"}
-                  </span>
+                  {displayBook.profile === "personal" || displayBook.profile === "business" ? (
+                    <span>{displayBook.profile === "personal" ? "Personal" : "Business"}</span>
+                  ) : (
+                    <BookProfileSetting book={book} onSaved={saved} />
+                  )}
                 </SettingsRow>
                 <SettingsRow label="Accounting currency">
                   <span>
@@ -237,11 +237,14 @@ export function Settings({
                   </span>
                 </SettingsRow>
                 <SettingsRow label="Accounting timezone">
-                  <span>
-                    {displayBook.accounting_timezone || "Not recorded"}
-                  </span>
+                  {displayBook.accounting_timezone ? (
+                    <span>{displayBook.accounting_timezone}</span>
+                  ) : (
+                    <BookTimezoneSetting book={book} onSaved={saved} />
+                  )}
                 </SettingsRow>
               </SettingsSection>
+              <BookPeriodSettings key={book.id} book={book} />
             </>
           ),
         },

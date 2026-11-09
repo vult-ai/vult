@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Book } from "../../lib/api";
 import { APIError, fetchJSON } from "../../lib/errors";
-import { writeHeaders } from "../../lib/session";
+import { readSession, writeHeaders } from "../../lib/session";
 import { Button } from "../ui/button";
 import { readActivity, withRecentSignIn } from "./local-entrance";
 import "./agent-request-bar.css";
@@ -36,7 +36,11 @@ export function AgentRequestBar({ book }: { book: Book }) {
       }
       if (live) timer = window.setTimeout(() => void check(), POLL_MS);
     };
-    void check();
+    // Only a Vult on this computer has agents asking at its door.
+    readSession().then(
+      (s) => { if (live && s.mode === "local") void check(); },
+      () => { /* Signed out or unreachable: nothing to show. */ },
+    );
     return () => {
       live = false;
       window.clearTimeout(timer);

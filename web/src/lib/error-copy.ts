@@ -50,6 +50,7 @@ export const failureStateCopy = {
   missing: "Check the address, or open it again from Vult.",
   access: "Your account doesn’t have access to this.",
   signIn: "You’re signed out.",
+  signedOut: "Sign in to open your Books.",
   recordsUnverified:
     "We couldn’t verify these records. Review them before relying on these figures.",
 } as const;

@@ -1,0 +1,140 @@
+/* Getting started, at the foot of the open sidebar. As the rail collapses the
+   card keeps its width (so nothing rewraps), fades and folds away, and one
+   icon takes its place; opening the rail reverses it. */
+.onboarding-card {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 10px 6px 6px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-primary);
+}
+.onboarding-mini-row {
+  display: none;
+}
+@media (min-width: 48rem) {
+  .vult-shell-rail .onboarding-slot {
+    display: grid;
+    grid-template-rows: 1fr 0fr;
+    transition: grid-template-rows 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .vult-shell-rail[data-expanded="false"] .onboarding-slot {
+    grid-template-rows: 0fr 1fr;
+  }
+  .vult-shell-rail .onboarding-slot > * {
+    min-height: 0;
+    overflow: hidden;
+  }
+  .vult-shell-rail .onboarding-card {
+    width: calc(var(--vult-shell-rail-width) - 2 * var(--vult-shell-panel-inset) - 1rem);
+    opacity: clamp(0, 1 - var(--vult-sidebar-collapse) * 2.5, 1);
+  }
+  .vult-shell-rail[data-expanded="false"] .onboarding-card {
+    border-color: transparent;
+    visibility: hidden;
+  }
+  .vult-shell-rail .onboarding-mini-row {
+    display: block;
+    opacity: clamp(0, var(--vult-sidebar-collapse) * 2.5 - 1.5, 1);
+  }
+  .vult-shell-rail[data-expanded="true"] .onboarding-mini-row {
+    visibility: hidden;
+  }
+}
+.onboarding-mini {
+  display: grid;
+  width: var(--vult-shell-row-height);
+  height: var(--vult-shell-row-height);
+  margin-bottom: 4px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.onboarding-mini svg {
+  width: 16px;
+  height: 16px;
+}
+.onboarding-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-inline: 6px;
+}
+.onboarding-card-header h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+}
+.onboarding-card-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+.onboarding-card-close svg {
+  width: 14px;
+  height: 14px;
+}
+.onboarding-card-steps {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.onboarding-card-step {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.onboarding-card-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+}
+.onboarding-card-text {
+  display: grid;
+  min-width: 0;
+}
+.onboarding-card-text > span:first-child {
+  color: var(--color-text-primary);
+}
+.onboarding-card-text > span:last-child {
+  color: var(--color-text-tertiary);
+}
+.onboarding-card-chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--color-text-tertiary);
+}
+@media (hover: hover) and (pointer: fine) {
+  .onboarding-card-step:hover,
+  .onboarding-card-close:hover,
+  .onboarding-mini:hover {
+    background: var(--vult-interaction-hover);
+  }
+}

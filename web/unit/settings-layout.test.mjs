@@ -111,6 +111,7 @@ async function fixture(
         mode,
         csrf: "synthetic-csrf",
       });
+    if (path === "/api/v1/periods") return result({ book_id: book.id, periods: [] });
     if (path === "/api/v1/legal-identity-catalog")
       return result({
         catalog: {
@@ -304,13 +305,14 @@ test("every Book field stays in the settings row layout, including fiscal year a
       assert.equal(generalPanel.contains(section("Legal identity")), false);
       assert.match(
         accounting.querySelector(".vult-settings-description").textContent,
-        /Recorded when this Book was created/,
+        /Set once\./,
       );
+      // A recorded type and timezone are fixed: nothing here edits them.
       assert.equal(accounting.querySelector("input,select,button"), null);
       assert.equal(row("Book ID", identifier).querySelector("input,select"), null);
       assert.match(
         row("Book ID", identifier).querySelector(".vult-settings-description").textContent,
-        /Generated when the Book was created.*can’t be changed/,
+        /Can’t be changed\./,
       );
       assert.equal(row("Book ID", details), undefined);
       assert.equal(section("Opening balances"), undefined, "agents record opening entries");
@@ -535,8 +537,13 @@ test("Settings follows the heading/subtitle/tab layout with keyboard navigation 
       await selectTab("General");
       assert.equal(
         f.reads.length,
-        reads + 2,
-        "identity loads once on first visit; revisiting tabs does not reread or reset mounted forms",
+        reads + 3,
+        "identity and closed periods load once on first visit; revisiting tabs does not reread or reset mounted forms",
+      );
+      assert.equal(
+        f.reads.filter((read) => read.path === "/api/v1/periods").length,
+        1,
+        "closed periods load once, on the Accounting tab's first visit",
       );
       assert.deepEqual(f.changes, []);
     } finally {
@@ -653,10 +660,13 @@ test("legacy defaults, absent import actions and selected Book exports stay trut
       };
       await f.mount({ book: changed, displayBook: changed });
       await selectTab("Accounting");
-      assert.match(row("Book type").textContent, /Legacy · not classified/);
+      // An unrecorded type is offered as a choice, never shown as a type.
+      assert.match(row("Book type").textContent, /What is it for\?[\s\S]*Set Book type/);
+      assert.doesNotMatch(row("Book type").textContent, /Legacy/);
       // An unrecorded calendar is not January 1, and an unrecorded zone is not UTC.
       assert.match(row("Fiscal year starts").textContent, /Not recorded/);
-      assert.match(row("Accounting timezone").textContent, /Not recorded/);
+      // An unrecorded zone is offered as a choice, not shown as a recorded UTC.
+      assert.match(row("Accounting timezone").textContent, /Set timezone/);
       await selectTab("General");
       assert.equal(
         row("Book name").querySelector("input").value,
@@ -678,8 +688,11 @@ for (const mode of ["local", "server"]) {
       const f = await fixture(render, { mode });
       try {
         await selectTab("Connections");
-        const list = section("Connected apps");
-        assert.match(list.textContent, /Existing agent[\s\S]*View only/);
+        const list = document.querySelector('section[aria-labelledby="agents-title"]');
+        assert.equal(list.querySelector("h2").textContent, "Agents");
+        await click(list.querySelector(".agent-summary"));
+        assert.match(list.textContent, /Existing agent[\s\S]*View only\./);
+        assert.equal(list.querySelector('[role="radio"][aria-checked="true"]').textContent, "Read");
         assert.equal(list.querySelector("form"), null);
         await click(list.querySelector('button[aria-label^="Disconnect Existing agent"]'));
         const dialog = document.querySelector('[role="alertdialog"], [role="dialog"]');

@@ -243,3 +243,33 @@ func (p *exampleIdentityPages) LoginPage(w http.ResponseWriter, r *http.Request,
 func (p *exampleIdentityPages) IdentityHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { p.calls++; w.WriteHeader(204) })
 }
+
+// A browser that reaches a failed sign-in step sees a page with the way back;
+// other callers keep the API error.
+func TestSignInFailuresShowAPageToBrowsers(t *testing.T) {
+	f, s := browserServer(t)
+	_ = f
+	start := func(navigate bool) *httptest.ResponseRecorder {
+		r := request()
+		r.Method = http.MethodPost
+		r.URL, _ = r.URL.Parse("/auth/start")
+		r.Header.Set("Origin", configuration().Origin)
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if navigate {
+			r.Header.Set("Sec-Fetch-Mode", "navigate")
+			r.Header.Set("Accept", "text/html")
+		}
+		w := httptest.NewRecorder()
+		s.Handler.ServeHTTP(w, r)
+		return w
+	}
+	page := start(true)
+	if page.Code != http.StatusForbidden || !strings.HasPrefix(page.Header().Get("Content-Type"), "text/html") ||
+		!strings.Contains(page.Body.String(), "This sign-in page expired") || !strings.Contains(page.Body.String(), `href="/auth/login"`) {
+		t.Fatalf("browser got %d %q %s", page.Code, page.Header().Get("Content-Type"), page.Body.String())
+	}
+	api := start(false)
+	if api.Code != http.StatusForbidden || !strings.Contains(api.Body.String(), `"error"`) {
+		t.Fatalf("API caller got %d %s", api.Code, api.Body.String())
+	}
+}

@@ -22,6 +22,20 @@ export function measured(value: CurrencyAmount) {
 }
 
 const words = (code: string) => code.replace(/[_-]+/g, " ").replace(/^./, (c) => c.toUpperCase());
+// Plain names for the measurements agents record most often.
+const contextNames: Record<string, string> = { transaction_amount: "Charged", invoice_amount: "Invoiced" };
+const basisNames: Record<string, string> = {
+  manual: "Entered amount",
+  actual_source: "Actual amount",
+  applied_quote: "Converted",
+  historical_carrying: "Carrying value",
+  authoritative_allocation: "Allocated",
+};
+
+/** An entered amount that only repeats the line's own value says nothing new. */
+function restatesLine(v: NonNullable<JournalLine["valuation"]>, line: JournalLine, book: Book) {
+  return v.basis === "manual" && !v.source && (!v.input || (v.input.currency === book.currency && v.input.amount_minor === line.amount_minor));
+}
 
 function Measurements({ line, book }: { line: JournalLine; book: Book }) {
   const native = line.native;
@@ -37,14 +51,14 @@ function Measurements({ line, book }: { line: JournalLine; book: Book }) {
       )}
       {line.contexts?.map((c, i) => (
         <small key={`${c.role}:${i}`}>
-          {words(c.role)} <span className="vult-money">{measured(c.amount)}</span>
+          {contextNames[c.role] ?? words(c.role)} <span className="vult-money">{measured(c.amount)}</span>
           {c.source && ` · ${c.source}`}
         </small>
       ))}
-      {v && (
+      {v && !restatesLine(v, line, book) && (
         <small>
-          {words(v.basis)}
-          {v.input && <> from <span className="vult-money">{measured(v.input)}</span></>}
+          {basisNames[v.basis] ?? words(v.basis)}
+          {v.input && !(v.input.currency === book.currency && v.input.amount_minor === line.amount_minor) && <> from <span className="vult-money">{measured(v.input)}</span></>}
           {v.rate && <> at {rateDisplay(v.rate.rate)} {v.rate.quote} per {v.rate.base}{v.rate.observation_date && <>, observed <RecordDate value={v.rate.observation_date} format="full" /></>}</>}
           {v.carrying && <> · carrying value of <span className="vult-money">{measured(v.carrying.consumed_native)}</span> = <span className="vult-money">{measured(v.carrying.consumed_book)}</span></>}
           {v.source && ` · ${v.source}`}

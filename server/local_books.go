@@ -121,7 +121,7 @@ func (a *webAPI) localDecision(w http.ResponseWriter, r *http.Request, session s
 		Access  string `json:"access,omitempty"`
 		Deny    bool   `json:"deny,omitempty"`
 	}
-	if err != nil || strictjson.Decode(body, &q) != nil || (!q.Deny && (!ledger.ValidID(q.BookID) || (q.Access != "write" && q.Access != "read"))) {
+	if err != nil || strictjson.Decode(body, &q) != nil || (!q.Deny && (!ledger.ValidID(q.BookID) || !ledger.ValidAccess(q.Access))) {
 		apiFailure(w, ledger.ErrInvalid)
 		return
 	}

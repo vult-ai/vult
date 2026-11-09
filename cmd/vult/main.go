@@ -36,7 +36,7 @@ const help = `Vult ` + daemon.Version + ` — local general ledger
   vult browser reset
   vult book create --name NAME --currency CODE --scale N
   vult book list
-  vult connection create --name NAME --book ID --access read|write
+  vult connection create --name NAME --book ID --access read|propose|write
   vult connection list
   vult connection revoke ID
   vult mcp install
@@ -262,8 +262,8 @@ func run(args []string, out, errout io.Writer) error {
 			f := flags("connection create")
 			name := f.String("name", "", "connection label")
 			book := f.String("book", "", "Book ID")
-			access := f.String("access", "", "read or write")
-			if parse(f, args[2:]) != nil || strings.TrimSpace(*name) == "" || !ledger.ValidID(*book) || (*access != "read" && *access != "write") {
+			access := f.String("access", "", "read, propose or write")
+			if parse(f, args[2:]) != nil || strings.TrimSpace(*name) == "" || !ledger.ValidID(*book) || !ledger.ValidAccess(*access) {
 				return ledger.ErrInvalid
 			}
 			method = "connection_create"

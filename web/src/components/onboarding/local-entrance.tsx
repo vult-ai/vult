@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Book } from "../../lib/api";
 import { currencyScale } from "../../lib/book-currency";
 import { readDocuments, uploadDocument } from "../../lib/documents";
-import { APIError, fetchJSON } from "../../lib/errors";
-import { signInWithPasskey } from "../../lib/passkey-signin";
+import { fetchJSON } from "../../lib/errors";
 import { writeHeaders } from "../../lib/session";
 import { settingsPost } from "../../lib/settings-requests";
+import { withRecentSignIn } from "../../lib/recent-sign-in";
 import { Entrance, type AgentEvent, type EntranceDraft, type Journey } from "./entrance";
 
 /** Where the vult command lives once Vult is installed on this Mac. */
@@ -74,23 +74,7 @@ export function readActivity(bookId: string, after = 0) {
   return fetchJSON<ActivityPage>(`/api/v1/local/agent-activity?book_id=${encodeURIComponent(bookId)}${after ? `&after=${after}` : ""}`, { cache: "no-store" });
 }
 
-/** Writes that need a recent sign-in ask for the passkey once, then retry. */
-export async function withRecentSignIn<T>(write: () => Promise<T>): Promise<T> {
-  try {
-    return await write();
-  } catch (e) {
-    if (!(e instanceof APIError) || e.status !== 403) throw e;
-  }
-  try {
-    await signInWithPasskey();
-  } catch {
-    // A cancelled prompt, or an owner who uses an authenticator app: Vult's
-    // sign-in page offers both, then returns here to continue.
-    window.location.assign("/auth/login");
-    throw new Error("Opening sign-in…");
-  }
-  return write();
-}
+export { withRecentSignIn };
 
 function toEvent(a: Activity): AgentEvent | null {
   switch (a.kind) {

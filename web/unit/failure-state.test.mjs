@@ -65,7 +65,10 @@ test("recovery picks the action: none, sign-in, and no retry for writes", async 
       }),
     );
     assert.deepEqual(buttons(), ["Sign in"]);
-    assert.equal(document.querySelector("p").textContent, "You’re signed out.");
+    // Signed out is a state, not a failure to load.
+    assert.match(document.body.textContent, /You’re signed out/);
+    assert.doesNotMatch(document.body.textContent, /Couldn’t/);
+    assert.equal(document.querySelector("p").textContent, "Sign in to open your Books.");
     await render(
       React.createElement(FailureState, {
         scope: "region",

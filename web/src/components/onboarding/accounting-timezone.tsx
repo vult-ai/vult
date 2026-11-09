@@ -41,14 +41,16 @@ export function timezoneOptions(current: string) {
 export function AccountingTimezone({
   value,
   onChange,
+  label = "Accounting timezone",
 }: {
   value: string;
   onChange: (zone: string) => void;
+  label?: string;
 }) {
   const items = useMemo(() => timezoneOptions(value), [value]);
   return (
     <OnboardingChoice
-      label="Accounting timezone"
+      label={label}
       name="accounting_timezone"
       value={value}
       items={items}

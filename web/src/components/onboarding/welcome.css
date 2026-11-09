@@ -333,3 +333,12 @@ li[data-state="active"] .welcome-dot {
   .welcome-step-body { animation: none; }
   .welcome-step-row { transition: none; }
 }
+.welcome-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-brand-secondary, inherit);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

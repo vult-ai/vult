@@ -135,6 +135,8 @@ export type Transaction = {
     };
   };
   fx?: Valuation;
+  /** The amount in another currency this entry records, such as a statement's charged amount. */
+  original_amount?: { currency: string; scale: number; amount_minor: string };
   id: string;
   book_id: string;
   kind: string;

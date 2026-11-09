@@ -34,10 +34,10 @@ Renaming an account or changing its code never changes the entries that use it.
 
 ## Close a period {#close-a-period}
 
-On your own computer, you can lock a finished period so nothing more is posted into it:
+When a period's entries are complete and checked against your statements, lock it so nothing more is posted into it. In Vult, open the Book's **Settings**, then **Accounting**, choose the first and last day under **Closed periods**, and select **Close period**. On your own computer you can also use the terminal:
 
 ```sh
 vult period close --book BOOK_ID --from 2026-01-01 --through 2026-01-31
 ```
 
-Closing a period is permanent. Only the owner can do it, never an agent.
+Closing a period is permanent. Only the owner can do it, never an agent. Agents can see which periods are closed, and any correction afterwards goes into a later, open period.

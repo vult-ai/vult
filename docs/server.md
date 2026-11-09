@@ -262,8 +262,9 @@ requests. Pending requests and the code-replay retention window are preserved;
 clients with grants remain registered, including after revocation. A client
 whose unused registration expired must register again before authorization.
 
-Sign in, select one owned Book and Read or Write access, then confirm. Write
-includes account revisions and journal posting, never owner administration.
+Sign in, select one owned Book and Read, Propose or Record access, then confirm.
+Propose prepares entries for the owner's approval; Record also includes account
+revisions and journal posting. No level includes owner administration.
 Access credentials last 15 minutes; refresh credentials rotate on use and expire
 after 90 days. Replaying a consumed credential revokes that grant's active
 generation. A selected reconnect retains the same actor and request outcomes;

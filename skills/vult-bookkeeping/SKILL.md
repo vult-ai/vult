@@ -38,6 +38,23 @@ structured native/context/valuation fields, not descriptions, and the supported
 rounding policy. Before foreign currency, carrying-value consumption or
 allocations, read [currency measurements](../../docs/currency-measurements.md).
 
+Where a value comes from, in order: the actual amount the statement or receipt
+shows in the Book currency (`actual_source`); otherwise a reference rate from
+`get_exchange_rate`, passed unchanged as the line's valuation `rate` with basis
+`applied_quote`; otherwise a manual rate the owner confirms (`manual`). A
+reference rate is not what a bank charged. If `get_exchange_rate` finds no
+qualified rate, do not guess or reuse a rate from another date; ask the owner.
+When a card or bank statement shows a charge in another currency and the
+amount billed in the account's currency ("charged 12.99 PLN, billed $3.58"),
+the billed amount is the Book amount: give both lines the `actual_source`
+valuation, and add the original amount to the expense (or income) line as a
+context with role `transaction_amount`. Keep it in the description too, but
+never only there; a description cannot be totalled, searched by amount or
+checked.
+With an applied rate, the line's Book amount must equal the native amount
+times the rate, rounded half to even to the Book's minor unit; for example
+EUR 100.00 at 1.1205 is USD 112.05. Vult refuses any other amount.
+
 ## Classify by account type, not by name
 
 Whether a transaction is income, an expense or a transfer follows from the
@@ -68,7 +85,9 @@ change without changing posted identities.
 Keep economic date, accounting date and the service's recorded time distinct.
 Use supported dates; skip pending lines until settled values are available. An
 open accounting date for an event in a closed period needs the owner's accounting
-instruction, while the original economic date remains intact.
+instruction, while the original economic date remains intact. `list_closed_periods`
+shows which dates are closed. Only the owner closes a period, in Book settings;
+never ask to reopen one, because closing is permanent.
 
 An opening position needs an explicit cutoff, evidence, covered period and an
 account of history already present. Do not add an opening balance on top of
@@ -204,7 +223,9 @@ tax/legal conclusion or an automatic rule prohibiting posting.
 ## Process a statement
 
 1. Confirm the selected Book, account IDs and the owner's accounting instructions.
-   With read access, inspect and report only.
+   With read access, inspect and report only. With propose access, prepare
+   every entry with `prepare_operation` for the owner to approve; you can't
+   post, reverse or change accounts yourself.
 2. Statements the owner uploaded in Vult are already stored: find them with
    `list_documents`, or `wait_for_document` while the owner is uploading. To
    read one, call `get_document` with a new `output` filename and open the copy

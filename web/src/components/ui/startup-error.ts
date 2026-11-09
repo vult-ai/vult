@@ -6,7 +6,11 @@ import "./state.css";
  * Native page failure state: still works when the application/React chunk
  * cannot load. Same anatomy and classes as FailureState at page scope.
  */
-export function showStartupError(root: HTMLElement, error: unknown) {
+export function showStartupError(
+  root: HTMLElement,
+  error: unknown,
+  copyOverride?: { title: string; detail: string },
+) {
   const state = presentFailureState(error, { intent: "read", resource: "app" });
   const frame = document.createElement("main");
   frame.dataset.severity = state.severity;
@@ -58,11 +62,11 @@ export function showStartupError(root: HTMLElement, error: unknown) {
   const title = document.createElement("h1");
   title.id = "startup-error-title";
   title.className = "vult-state-title vult-type-section-title";
-  title.textContent = state.title;
+  title.textContent = copyOverride?.title ?? state.title;
   title.tabIndex = -1;
   const detail = document.createElement("p");
   detail.className = "vult-state-detail vult-type-ui";
-  detail.textContent = state.detail ?? "";
+  detail.textContent = copyOverride?.detail ?? state.detail ?? "";
   copy.append(title, detail);
   const actions = document.createElement("div");
   actions.className = "vult-state-actions";

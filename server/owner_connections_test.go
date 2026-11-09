@@ -107,3 +107,30 @@ func TestOwnerRoutesRejectMissingSessionAndBearer(t *testing.T) {
 		}
 	}
 }
+
+// The owner changes an agent's access level in place: the agent keeps its
+// connection, and its next request uses the new level.
+func TestOwnerChangesAgentAccessLevel(t *testing.T) {
+	f, s := browserServer(t)
+	ctx := f.db.Context
+	token := f.token(t, "write")
+	scope, err := f.sessions.ResolveAgent(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := connectionPath + "/" + scope.ConnectionID + "/access"
+	for _, body := range []string{`{"access":"admin"}`, `{}`, `{"access":"read","extra":1}`} {
+		ownerAPIStatus(t, ownerAPICall(s, f.session, http.MethodPost, path, body, true), 400)
+	}
+	ownerAPIStatus(t, ownerAPICall(s, f.session, http.MethodPost, path, `{"access":"propose"}`, false), 403)
+	ownerAPIStatus(t, ownerAPICall(s, f.session, http.MethodPost, path, `{"access":"propose"}`, true), 200)
+	changed, err := f.sessions.ResolveAgent(ctx, token)
+	if err != nil || changed.Access != "propose" || changed.ConnectionID != scope.ConnectionID || changed.ActorID != scope.ActorID {
+		t.Fatal("the agent did not keep its connection at the new level", changed, err)
+	}
+	list := decodeOwnerResult[struct{ Tokens []browserConnection }](t, ownerAPICall(s, f.session, http.MethodGet, connectionPath, "", false))
+	if len(list.Tokens) != 1 || list.Tokens[0].Access != "propose" || list.Tokens[0].BookGrants[0].Role != "propose" {
+		t.Fatal("the connection list did not show the new level", list)
+	}
+	ownerAPIStatus(t, ownerAPICall(s, f.session, http.MethodPost, path, `{"access":"write"}`, true), 200)
+}

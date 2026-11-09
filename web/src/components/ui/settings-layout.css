@@ -11,6 +11,19 @@
   box-shadow: none;
 }
 
+/* Every Settings section uses the dashboard's panel surfaces: a light shell
+   holding its title, and one card holding its rows. */
+.book-settings-page.settings-canvas {
+  --settings-shell: color-mix(in srgb, var(--color-text-primary) 7%, var(--color-bg-primary));
+  --settings-card: var(--color-bg-primary);
+  --settings-fill: color-mix(in srgb, var(--color-text-primary) 4%, transparent);
+  --settings-line: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+}
+:root:not(.dark-mode) .book-settings-page.settings-canvas {
+  --settings-shell: color-mix(in srgb, var(--color-text-primary) 3.5%, var(--color-bg-primary));
+  --settings-fill: color-mix(in srgb, var(--color-text-primary) 3%, transparent);
+}
+
 /* One reading column, centred in the canvas: tabs and sections share it. */
 .book-settings-page.settings-canvas .book-settings-tabs {
   max-width: 720px;
@@ -23,41 +36,27 @@
 }
 
 .book-settings-page.settings-canvas .settings-identity-summary {
-  border: 1px solid var(--color-border-secondary);
-  border-radius: var(--radius-2xl);
-  background: var(--color-bg-primary);
+  border: 0;
+  border-radius: calc(var(--radius-2xl) - 6px);
+  background: var(--settings-card);
   box-shadow: var(--shadow-xs);
 }
 .settings-identity-editor .identity-edit-fields[hidden],
 .settings-identity-editor .identity-review-fields[hidden] {
   display: none;
 }
-.settings-identity-details > summary,
-.settings-identity-history > summary {
-  cursor: pointer;
-  color: var(--color-text-secondary);
-  min-height: 36px;
-  align-content: center;
-}
-.settings-identity-details > summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  list-style: none;
-}
-.settings-identity-details > summary::-webkit-details-marker {
-  display: none;
-}
-.settings-identity-details[open] > summary svg {
-  transform: rotate(180deg);
-}
-.settings-identity-details[open] > summary,
-.settings-identity-history[open] > summary {
-  margin-bottom: 16px;
-}
 .settings-identity-history {
-  margin-top: 24px;
+  margin-top: 12px;
+}
+/* A disclosure is a block card even where groups are flex columns. */
+.book-settings-page.settings-canvas details.vult-settings-disclosure {
+  display: block;
+}
+/* Inside a disclosure the card is the disclosure itself. */
+.book-settings-page.settings-canvas .vult-settings-disclosure .book-settings-identity-group-fields,
+.book-settings-page.settings-canvas .vult-settings-disclosure .identity-history {
+  border-radius: 0;
+  box-shadow: none;
 }
 .settings-identity-review {
   margin-bottom: 24px;
@@ -103,10 +102,10 @@
 }
 
 .book-settings-page.settings-canvas .vult-settings-section {
-  padding: 0;
+  padding: 0 6px 6px;
   border: 0;
-  border-radius: 0;
-  background: transparent;
+  border-radius: var(--radius-2xl);
+  background: var(--settings-shell);
   box-shadow: none;
 }
 
@@ -119,7 +118,9 @@
 }
 
 .book-settings-page.settings-canvas .vult-settings-section-header {
-  padding: 0 0 16px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 6px;
   border: 0;
 }
 
@@ -128,9 +129,9 @@
 .book-settings-page.settings-canvas .book-settings-identity .identity-history {
   min-width: 0;
   padding: 0;
-  border: 1px solid var(--color-border-secondary);
-  border-radius: var(--radius-2xl);
-  background: var(--color-bg-primary);
+  border: 0;
+  border-radius: calc(var(--radius-2xl) - 6px);
+  background: var(--settings-card);
   box-shadow: var(--shadow-xs);
 }
 
@@ -178,7 +179,7 @@
   .book-settings-identity
   .book-settings-identity-group-fields
   .field {
-  border-top: 1px solid var(--color-border-secondary);
+  border-top: 1px solid var(--settings-line);
 }
 
 .book-settings-page.settings-canvas
@@ -232,15 +233,35 @@
 
 .book-settings-page.settings-canvas .book-settings-identity-group > h3 {
   margin: 0;
-}
-
-.book-settings-page.settings-canvas
-  .book-settings-identity-group.settings-identity-details {
-  display: block;
+  padding-inline: 10px;
+  color: var(--color-text-secondary);
 }
 
 .book-settings-page.settings-canvas
   .book-settings-identity-group-fields
   > .form-grid {
   display: contents;
+}
+
+/* A section-level message (a failed read, say) gets the same breathing room
+   as a row: inside a card it is the card's first row; on a section's shell
+   it is a card of its own. Every Settings section shows errors this way. */
+.book-settings-page.settings-canvas .vult-settings-rows > .error-notice:not([data-severity="critical"]) {
+  width: 100%;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--settings-line);
+}
+.book-settings-page.settings-canvas .book-settings-identity > .error-notice:not([data-severity="critical"]) {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 14px 24px;
+  border-radius: calc(var(--radius-2xl) - 6px);
+  background: var(--settings-card);
+  box-shadow: var(--shadow-xs);
+}
+@media (width < 768px) {
+  .book-settings-page.settings-canvas .vult-settings-rows > .error-notice:not([data-severity="critical"]),
+  .book-settings-page.settings-canvas .book-settings-identity > .error-notice:not([data-severity="critical"]) {
+    padding-inline: 16px;
+  }
 }

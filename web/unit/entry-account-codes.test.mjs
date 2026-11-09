@@ -409,7 +409,7 @@ test("Assigned codes render without a preference provider or browser storage", (
       "0634 · Software",
     ]);
     assert.equal(window.localStorage.length, 0);
-  }));
+  }, { amountsHidden: true }));
 
 test("GL code is visible and directly editable without opening a transaction or changing its classification", () =>
   withDOM(async ({ render, window }) => {

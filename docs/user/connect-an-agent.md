@@ -1,13 +1,16 @@
 ---
-{"id":"connect-an-agent","title":"Connect your agent","description":"Give Claude, Codex or another MCP client access to one Book, with read or write access you control.","group":"Start here","order":2,"keywords":["agent","mcp","claude","claude code","claude desktop","codex","connection","oauth","connector","read","write","revoke"]}
+{"id":"connect-an-agent","title":"Connect your agent","description":"Give Claude, Codex or another MCP client access to one Book, with read, propose or record access you control.","group":"Start here","order":2,"keywords":["agent","mcp","claude","claude code","claude desktop","codex","connection","oauth","connector","read","propose","write","revoke"]}
 ---
 
 ## How a connection works {#how-connections-work}
 
-Agents use Vult through MCP, the open protocol that Claude, Codex and many other assistants support. Each connection reaches **one Book** with either **read** or **write** access:
+Agents use Vult through MCP, the open protocol that Claude, Codex and many other assistants support. Each connection reaches **one Book** at one of three levels:
 
-- **Read** lets the agent look up accounts, entries, balances and reports.
-- **Write** also lets it create accounts, record entries, reverse entries, add original documents and prepare entries for you to approve.
+- **Read** lets the agent look up accounts, entries, balances, sources and reports. It records nothing.
+- **Propose** also lets it prepare entries for you to approve in **Approvals**. Nothing reaches your Book until you approve it, and the agent can't post, reverse or change accounts itself.
+- **Record** (`write`) also lets it create accounts, record and reverse entries, and add and link sources.
+
+You choose the level when you connect the agent, and you can change it any time in **Settings → Connections**. The change applies to the agent's next request; it keeps its connection and history.
 
 No agent can create Books, grant itself access, close periods, run backups or change your owner settings. Grant even read access only to agents you trust with those records.
 

@@ -60,7 +60,7 @@ export default function BookScreens(props: Props) {
     if (props.page === "approvals") setApprovalsReady(true);
   }, [props.page]);
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<LoadingState scope="page" label="Loading…" />}>
       <div className="workspace-pane" hidden={props.page !== "approvals"} inert={props.page !== "approvals"}>
         {approvalsReady && (
           <Approvals book={props.book} state={props.state.bootstrap ? financialState : props.state} active={props.page === "approvals"} refreshKey={props.saveRevision}
@@ -120,7 +120,7 @@ export default function BookScreens(props: Props) {
           </div>
         )}
       </div>
-      {props.page === "books" && <V0Books books={props.books || [props.book]} selected={props.book.id} onSelect={props.onSelectBook || (()=>{})} onCreate={props.onSettings}/>}
+      {props.page === "books" && <V0Books books={props.books || [props.book]} selected={props.book.id} onSelect={props.onSelectBook || (()=>{})}/>}
       <div className="workspace-pane" hidden={props.page !== "settings"} inert={props.page !== "settings"}>
       {settingsReady && (
         <Settings

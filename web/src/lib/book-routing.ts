@@ -162,12 +162,15 @@ export function bookPath(book: RoutableBook, page = "dashboard") {
     ? `/${encodeURIComponent(locator)}${tail === "dashboard" ? "" : `/${tail}`}`
     : `/${tail}`;
 }
+/** Shown when an address names no Book the owner can open. */
+export const missingBookLink = "This Book link isn’t available.";
+
 export function resolveBookRoute<T extends RoutableBook>(
   books: readonly T[],
   pathname = window.location.pathname,
 ) {
   const route = readBookRoute(pathname);
-  if (route.invalid) throw new Error("This Book link isn’t available.");
+  if (route.invalid) throw new Error(missingBookLink);
   if (!route.locator) return undefined;
   const key = route.locator.toLowerCase();
   const matches = books.filter((book) => {
@@ -179,7 +182,7 @@ export function resolveBookRoute<T extends RoutableBook>(
       )
     );
   });
-  if (matches.length !== 1) throw new Error("This Book link isn’t available.");
+  if (matches.length !== 1) throw new Error(missingBookLink);
   return matches[0];
 }
 

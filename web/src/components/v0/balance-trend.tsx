@@ -1,7 +1,8 @@
 import { formatDateRange } from "../../lib/date-format";
 import { useId } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { money, type Book } from "../../lib/api";
+import { money as baseMoney, type Book } from "../../lib/api";
+import { hiddenAmount, useAmountsHidden } from "../../lib/amount-privacy";
 import "./balance-trend.css";
 
 export type BalanceTrendPoint = { date: string; amount: string };
@@ -66,6 +67,8 @@ export function BalanceTrend({
   const path = curve(now),
     previousPath = curve(prior);
   const last = now.at(-1);
+  const hidden = useAmountsHidden();
+  const money = (minor: string, b: Book) => (hidden ? hiddenAmount : baseMoney(minor, b));
   const title = current.length
     ? `${name}: ${formatDateRange(current[0].date, current.at(-1)!.date, "full")}, ending ${money(current.at(-1)!.amount, book)}. ${previous.length ? `Previous period: ${formatDateRange(previous[0].date, previous.at(-1)!.date, "full")}, ending ${money(previous.at(-1)!.amount, book)}.` : "Previous-period history unavailable."}`
     : `${name}: recorded trend unavailable.`;

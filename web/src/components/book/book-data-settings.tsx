@@ -9,12 +9,12 @@ import { SettingsRow, SettingsSection } from "../ui/settings-section";
 export function BookDataSettings({ book }: { book: Book }) {
   return (
     <SettingsSection
-      title="Download your data"
-      description="Everything in this Book, in open formats, whenever you want it. Your data is never locked in."
+      title="Download your data" icon={Download01}
+      description="Open formats, anytime."
     >
       <SettingsRow
         label="Whole Book"
-        description="Every entry and account, with the original documents. The same file as vult export --documents."
+        description="Entries, accounts and originals."
       >
         <ActionButton href={`/api/v1/${bookURL("exports/book.tar", book.id)}`} size="md" iconLeading={Download01}>
           Download Book
@@ -22,7 +22,7 @@ export function BookDataSettings({ book }: { book: Book }) {
       </SettingsRow>
       <SettingsRow
         label="Entries and accounts"
-        description="For spreadsheets and other software."
+        description="For spreadsheets."
       >
         <Dropdown.Root>
           <ActionButton color="secondary" size="md" iconTrailing={ChevronDown}>

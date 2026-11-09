@@ -52,10 +52,12 @@ A separately configured Linux server exposes Streamable HTTP MCP at
 configured, such as `https://mcp.ledger.example.com`. Use that URL in your
 client's remote MCP configuration. The client must support OAuth discovery, public-client
 registration, S256 PKCE and the exact MCP resource. Sign in through the server's
-HTTPS login, select an owned Book and choose Read or Write before consenting.
-Ledger and proposal tools use the selected Book and permission. Configuring
-document storage adds original-file and evidence tools; Write never includes
-owner administration.
+HTTPS login, select an owned Book and choose what the app may do (read, propose or record) before consenting.
+Ledger and proposal tools use the selected Book and permission. A proposing
+connection gets the reading tools and `prepare_operation`, so every change waits
+for the owner's approval. Configuring document storage adds original-file and
+evidence tools; no level includes owner administration. The owner can change a
+connection's level in Settings → Connections without reconnecting it.
 
 Do not put access credentials in a URL or copy browser cookies into an agent.
 Access credentials expire after 15 minutes; refresh credentials rotate on use.
@@ -117,6 +119,8 @@ authority. A URL alone does not mean a client has transferred a file.
 | `list_journals` | read | Sequence-ordered pages: up to 100 locally, 20 remotely |
 | `get_balance` | read | Signed debit-positive minor-unit balance |
 | `get_trial_balance` | read | All balances, optionally through an accounting date |
+| `list_closed_periods` | read | Date ranges the owner closed; nothing can be posted inside them |
+| `get_exchange_rate` | read | A historical reference rate for one currency pair and date, ready to use as a line valuation |
 | `get_request_outcome` | read | This connection actor's retained request result |
 | `create_account` | write | Create an account and its first display revision |
 | `revise_account` | write | Change labels or accounting role using an expected revision |

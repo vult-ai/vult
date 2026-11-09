@@ -36,7 +36,28 @@
   border-bottom: 1px solid var(--color-border-secondary);
 }
 
-.vult-settings-section-intro h2,
+.vult-settings-section-icon {
+  display: grid;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: var(--radius-lg);
+  background: var(--settings-fill, var(--color-bg-secondary));
+  color: var(--color-text-secondary);
+}
+
+.vult-settings-section-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.vult-settings-section-intro h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
 .vult-settings-row-intro p,
 .vult-settings-row-content p {
   margin: 0;
@@ -47,7 +68,10 @@
   color: var(--color-text-tertiary);
 }
 
-.vult-settings-section-intro .vult-settings-description,
+.vult-settings-section-intro .vult-settings-description {
+  margin-top: 1px;
+}
+
 .vult-settings-row-intro .vult-settings-description {
   margin-top: 4px;
 }
@@ -273,4 +297,57 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* Collapsible groups: one card, a row-height summary, the body below it. */
+.vult-settings-disclosure {
+  overflow: hidden;
+  border-radius: calc(var(--radius-2xl) - 6px);
+  background: var(--settings-card, var(--color-bg-primary));
+  box-shadow: var(--shadow-xs);
+}
+.vult-settings-disclosure-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 14px 24px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  list-style: none;
+}
+.vult-settings-disclosure-summary::-webkit-details-marker {
+  display: none;
+}
+.vult-settings-disclosure-meta {
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.vult-settings-disclosure-chevron {
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  color: var(--color-text-tertiary);
+  transition: transform 140ms ease;
+}
+.vult-settings-disclosure[open] > .vult-settings-disclosure-summary .vult-settings-disclosure-chevron {
+  transform: rotate(180deg);
+}
+.vult-settings-disclosure[open] > .vult-settings-disclosure-body {
+  border-top: 1px solid var(--settings-line, var(--color-border-secondary));
+}
+@media (hover: hover) and (pointer: fine) {
+  .vult-settings-disclosure-summary:hover {
+    background: var(--settings-fill, var(--color-bg-secondary));
+  }
+}
+@media (width < 768px) {
+  .vult-settings-disclosure-summary {
+    padding-inline: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vult-settings-disclosure-chevron {
+    transition: none;
+  }
 }

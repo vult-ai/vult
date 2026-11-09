@@ -18,7 +18,7 @@ import urllib.request
 from go_notices import check as check_go_notices
 from make_installer import render
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 GO_VERSION = "go1.27.3"
 PG_VERSION = "18.6"
 PG_SHA256 = "555610c24d53e4316da5b7d3fc25c279d96856d5e0e23ee308c328c5fa881d9f"

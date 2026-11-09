@@ -49,7 +49,7 @@ func (o *OwnerDocumentReader) CreateBook(ctx context.Context, session, name, cur
 // it, so its recorded work stays with the same actor.
 func (o *OwnerDocumentReader) ConnectAgent(ctx context.Context, session, book, name, access string) (ledger.Connection, error) {
 	name = strings.TrimSpace(name)
-	if !ledger.ValidID(book) || name == "" || len(name) > 80 || (access != "read" && access != "write") {
+	if !ledger.ValidID(book) || name == "" || len(name) > 80 || !ledger.ValidAccess(access) {
 		return ledger.Connection{}, ledger.ErrInvalid
 	}
 	tenant, err := ownerResourceTenant(ctx, o.db, session, o.origin, "book", book)

@@ -1,3 +1,4 @@
+import { ImageSquare } from "../../design-system/icons";
 import { useRef, useState } from "react";
 import type { Book } from "../../lib/api";
 import { bookLogo, removeBookLogo, saveBookLogo } from "../../lib/book-logo";
@@ -26,7 +27,7 @@ export function BookLogoSettings({ book, onSaved }: { book: Book; onSaved: () =>
     }
   };
   return (
-    <SettingsSection title={personal ? "Photo" : "Logo"} description={personal ? "Shown beside this Book’s name." : "Shown beside this Book’s name, wherever you switch Books."}>
+    <SettingsSection title={personal ? "Photo" : "Logo"} icon={ImageSquare} description="Shown beside the Book’s name.">
       <div className="book-logo-settings">
         <BookMark book={book} size={64} />
         <div className="book-logo-settings-controls">

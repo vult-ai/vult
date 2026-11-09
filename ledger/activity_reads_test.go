@@ -3,10 +3,12 @@ package ledger_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/vult-ai/vult/internal/reporting"
+	"github.com/vult-ai/vult/internal/testutil"
 	"github.com/vult-ai/vult/ledger"
 )
 
@@ -133,6 +135,72 @@ func TestOwnerActivityRejectsStaleMalformedAndForeignScopes(t *testing.T) {
 	for _, revision := range []string{"short", strings.Repeat("z", 64)} {
 		if got, err := owner.ActivitySummary(db.Context, book.ID, q, revision); !errors.Is(err, ledger.ErrInvalid) || got.BookID != "" {
 			t.Fatal("malformed revision was accepted", err)
+		}
+	}
+}
+
+// A Book kept from card statements has no bank account; its charges are still
+// expenses and its cash back still income, and each tab counts them.
+func TestActivityTabsCountCardOnlyIncomeAndExpenses(t *testing.T) {
+	db := testutil.New(t)
+	book, s := db.Book(t, "Example card Book")
+	card := db.Account(t, s, "2100", "liability")
+	food := db.Account(t, s, "6100", "expense")
+	reward := db.Account(t, s, "4100", "income")
+	opening := db.Account(t, s, "3000", "equity")
+	line := func(account ledger.Account, side, minor string) ledger.PostLine {
+		return ledger.PostLine{AccountID: account.ID, Side: side, AmountMinor: minor}
+	}
+	for i, p := range []struct {
+		date  string
+		lines []ledger.PostLine
+	}{
+		{"2026-01-01", []ledger.PostLine{line(opening, "debit", "1000"), line(card, "credit", "1000")}},
+		{"2026-01-02", []ledger.PostLine{line(food, "debit", "500"), line(card, "credit", "500")}},
+		{"2026-01-03", []ledger.PostLine{line(food, "debit", "700"), line(card, "credit", "700")}},
+		{"2026-01-04", []ledger.PostLine{line(card, "debit", "40"), line(reward, "credit", "40")}},
+	} {
+		db.Call(t, s, "post_journal", ledger.PostJournal{RequestKey: fmt.Sprintf("card-%d", i), EconomicDate: p.date, AccountingDate: p.date, Description: "Example card entry", Lines: p.lines})
+	}
+	// A charge in zloty billed in dollars keeps its original amount.
+	two := 2
+	charged := ledger.CurrencyAmount{Currency: "PLN", Scale: &two, AmountMinor: "21430"}
+	foreign := line(food, "debit", "5382")
+	foreign.Contexts = []ledger.ContextMeasurement{{Role: "transaction_amount", Amount: charged}}
+	db.Call(t, s, "post_journal", ledger.PostJournal{RequestKey: "card-foreign", EconomicDate: "2026-01-05", AccountingDate: "2026-01-05", Description: "Example grocer", Lines: []ledger.PostLine{foreign, line(card, "credit", "5382")}})
+	owner, err := db.Owner.ForTenant(db.Context, book.TenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	all, err := owner.Activity(db.Context, book.ID, ledger.ActivityPageQuery{Limit: 25})
+	if err != nil {
+		t.Fatal(err)
+	}
+	originals := 0
+	for _, e := range all.Transactions {
+		if e.OriginalAmount != nil {
+			originals++
+			if e.OriginalAmount.Currency != "PLN" || e.OriginalAmount.AmountMinor != "21430" || *e.OriginalAmount.Scale != 2 {
+				t.Fatalf("original amount %+v", *e.OriginalAmount)
+			}
+		}
+	}
+	if originals != 1 {
+		t.Fatalf("%d entries carried an original amount, want 1", originals)
+	}
+	want := map[string]int{"": 5, "income": 1, "expense": 3}
+	for _, kind := range []string{"", "income", "expense"} {
+		page, err := owner.Activity(db.Context, book.ID, ledger.ActivityPageQuery{ActivityFilters: ledger.ActivityFilters{Kind: kind}, Limit: 25})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(page.Transactions) != want[kind] {
+			t.Fatalf("tab %q shows %d entries, want %d", kind, len(page.Transactions), want[kind])
+		}
+		for k, n := range want {
+			if page.Counts[k] != n {
+				t.Fatalf("on tab %q, count %q is %d, want %d", kind, k, page.Counts[k], n)
+			}
 		}
 	}
 }

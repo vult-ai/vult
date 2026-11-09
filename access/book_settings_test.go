@@ -74,12 +74,19 @@ func TestBookSettingsKeepOriginalHeaderAndShareAcceptedNames(t *testing.T) {
 	if err != nil || json.Unmarshal(data, &updated) != nil || updated.Profile != want.Profile || updated.AccountingTimezone != want.AccountingTimezone || updated.StartDate != want.StartDate || updated.Founder != "" || updated.CreatedAt != want.CreatedAt {
 		t.Fatal("omission erased accepted facts or changed the original date", err)
 	}
+	// The Book type and timezone are chosen once; clearing them is refused.
+	locked := second
+	locked.RequestKey, locked.Revision = "clear-chosen", 2
+	locked.Profile, locked.AccountingTimezone = setting(""), setting("")
+	if _, err = f.service.ReviseBookSettings(ctx, session, tenant, locked, nil); err == nil {
+		t.Fatal("a chosen Book type and timezone were cleared")
+	}
 	second.RequestKey, second.Revision = "clear-optional", 2
-	second.Profile, second.StartDate, second.AccountingTimezone = setting(""), setting(""), setting("")
+	second.StartDate = setting("")
 	second.FiscalYearStartMonth, second.FiscalYearStartDay = setting(0), setting(0)
 	data, err = f.service.ReviseBookSettings(ctx, session, tenant, second, nil)
 	updated = ledger.Book{}
-	if err != nil || json.Unmarshal(data, &updated) != nil || updated.AccountingTimezone != "" || updated.StartDate != "" || updated.Profile != "" || updated.FiscalYearStartMonth != nil || updated.FiscalYearStartDay != nil {
+	if err != nil || json.Unmarshal(data, &updated) != nil || updated.AccountingTimezone != want.AccountingTimezone || updated.StartDate != "" || updated.Profile != want.Profile || updated.FiscalYearStartMonth != nil || updated.FiscalYearStartDay != nil {
 		t.Fatal("explicit clearing invented replacement defaults", err)
 	}
 	var financialRows int

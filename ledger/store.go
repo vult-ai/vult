@@ -75,7 +75,7 @@ func Supported(method string) bool {
 		return true
 	}
 	switch method {
-	case "get_book", "list_accounts", "create_account", "revise_account", "post_journal", "get_journal", "list_journals", "reverse_journal", "get_balance", "get_trial_balance", "get_request_outcome", "search_book":
+	case "get_book", "list_accounts", "create_account", "revise_account", "post_journal", "get_journal", "list_journals", "reverse_journal", "get_balance", "get_trial_balance", "get_request_outcome", "search_book", "list_closed_periods":
 		return true
 	}
 	return false
@@ -117,7 +117,8 @@ func (s Store) transact(ctx context.Context, scope Scope, method string, input j
 	if s.Runtime == nil || !ValidID(scope.TenantID) || !ValidID(scope.BookID) || !ValidID(scope.ActorID) || !ValidID(scope.ConnectionID) {
 		return nil, ErrDenied
 	}
-	if Writing(method) && scope.Access != "write" {
+	// A proposing agent writes only to prepare a proposal for the owner.
+	if Writing(method) && scope.Access != "write" && (method != "prepare_operation" || scope.Access != "propose") {
 		return nil, ErrDenied
 	}
 	tx, e := s.Runtime.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
@@ -127,6 +128,11 @@ func (s Store) transact(ctx context.Context, scope Scope, method string, input j
 	defer tx.Rollback(context.Background())
 	if e = setScope(ctx, tx, scope); e != nil {
 		return nil, dbError(e)
+	}
+	if phase := proposingPhase(ctx); scope.Access == "propose" && phase != "" {
+		if _, e = tx.Exec(ctx, "SELECT set_config('vult.proposing',$1,true)", phase); e != nil {
+			return nil, dbError(e)
+		}
 	}
 	if s.Authorize != nil {
 		if e = s.Authorize(ctx, tx, scope, method, input); e != nil {
@@ -181,6 +187,14 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 		}
 		b, e := readBook(ctx, tx, s)
 		return raw(b), dbError(e)
+	case "list_closed_periods":
+		if e := decode(&struct{}{}); e != nil {
+			return nil, e
+		}
+		p, e := readClosedPeriods(ctx, tx, s)
+		return raw(struct {
+			Periods []ClosedPeriod `json:"periods"`
+		}{p}), e
 	case "list_accounts":
 		if e := decode(&struct{}{}); e != nil {
 			return nil, e

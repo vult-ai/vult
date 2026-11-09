@@ -144,6 +144,13 @@ func (a TenantAdmin) ReviseBook(ctx context.Context, actor string, q ReviseBookS
 	if err != nil {
 		return nil, err
 	}
+	// A Book's type and accounting timezone are chosen once. The type decides
+	// how the Book is kept; the timezone decides which day each entry falls on,
+	// so every report and closed period uses one calendar.
+	if before.Profile != "" && after.Profile != before.Profile ||
+		before.AccountingTimezone != "" && after.AccountingTimezone != before.AccountingTimezone {
+		return nil, ErrConflict
+	}
 	if admit != nil {
 		if err = admit(ctx, tx); err != nil {
 			return nil, ErrDenied

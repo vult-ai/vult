@@ -1,0 +1,35 @@
+@import "sonner/dist/styles.css";
+
+/* Sonner's toast, in Vult's surfaces and type: the card colour, the soft
+   border, the shared control shadow, and only the icon carries tone. */
+[data-sonner-toaster] {
+  --width: 360px;
+  --border-radius: var(--radius-xl);
+  font-family: inherit;
+}
+[data-sonner-toaster] [data-sonner-toast].vult-toast {
+  --normal-bg: var(--color-bg-primary);
+  --normal-border: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+  --normal-text: var(--color-text-primary);
+  gap: 10px;
+  padding: 12px 14px;
+  box-shadow: var(--vult-control-shadow, var(--shadow-lg));
+  font-size: var(--text-vult-ui);
+  line-height: var(--text-vult-ui--line-height);
+}
+[data-sonner-toast].vult-toast [data-title] {
+  font-weight: 500;
+}
+[data-sonner-toast].vult-toast [data-icon] svg {
+  width: 16px;
+  height: 16px;
+}
+[data-sonner-toast].vult-toast[data-type="success"] [data-icon] {
+  color: var(--color-fg-success-primary);
+}
+[data-sonner-toast].vult-toast[data-type="warning"] [data-icon] {
+  color: var(--color-fg-warning-primary);
+}
+[data-sonner-toast].vult-toast[data-type="info"] [data-icon] {
+  color: var(--color-text-tertiary);
+}

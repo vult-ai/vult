@@ -54,8 +54,23 @@ test("changing a filter invalidates the previous response during the debounce wi
       React.act(async () =>
         pending.get(key)({ ok: true, json: async () => state(name) }),
       );
+    // The search debounce runs on a clock this test controls, so a busy
+    // machine can't fire it early or late.
+    const due = new Map();
+    let next = 0;
+    const realSet = globalThis.setTimeout, realClear = globalThis.clearTimeout;
+    globalThis.setTimeout = (fn, ms, ...args) => {
+      if (ms !== 180) return realSet(fn, ms, ...args);
+      due.set(++next, () => fn(...args));
+      return next;
+    };
+    globalThis.clearTimeout = (id) => (due.has(id) ? due.delete(id) : realClear(id));
     const debounce = async () =>
-      React.act(async () => new Promise((done) => setTimeout(done, 200)));
+      React.act(async () => {
+        const fire = [...due.values()];
+        due.clear();
+        for (const run of fire) run();
+      });
     const search = (query) => React.act(async () => {
       window.history.pushState(null, "", `${window.location.pathname}?q=${encodeURIComponent(query)}`);
       window.dispatchEvent(new window.PopStateEvent("popstate"));
@@ -101,6 +116,8 @@ test("changing a filter invalidates the previous response during the debounce wi
       assert.equal(document.querySelector("table"), table);
     } finally {
       globalThis.fetch = savedFetch;
+      globalThis.setTimeout = realSet;
+      globalThis.clearTimeout = realClear;
     }
   });
 });

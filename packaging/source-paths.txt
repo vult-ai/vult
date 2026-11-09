@@ -43,6 +43,7 @@ access/owner.go
 access/owner_http.go
 access/owner_resources.go
 access/owner_test.go
+access/particles.go
 access/passkey_http.go
 access/passkey_http_test.go
 access/passkey_operator.go
@@ -121,6 +122,7 @@ docs/owner-settings.md
 docs/packaging.md
 docs/passkeys.md
 docs/releases/0.4.0.md
+docs/releases/0.5.0.md
 docs/reports.md
 docs/search.md
 docs/server.md
@@ -191,6 +193,8 @@ internal/fssecurity/acl_darwin.go
 internal/fssecurity/acl_linux.go
 internal/fssecurity/acl_linux_test.go
 internal/fssecurity/acl_other.go
+internal/fxrates/fxrates.go
+internal/fxrates/fxrates_test.go
 internal/importarchive/inspect.go
 internal/importarchive/inspect_test.go
 internal/local/agents.go
@@ -222,12 +226,16 @@ internal/local/protocol.go
 internal/loopback/certificate.go
 internal/loopback/certificate_test.go
 internal/mcpserver/account_codes_test.go
+internal/mcpserver/exchange_rate.go
+internal/mcpserver/exchange_rate_test.go
 internal/mcpserver/measurements.go
 internal/mcpserver/measurements_test.go
 internal/mcpserver/proposals.go
 internal/mcpserver/proposals_test.go
 internal/mcpserver/server.go
 internal/mcpserver/server_test.go
+internal/mcpserver/titles.go
+internal/mcpserver/titles_test.go
 internal/operationref/reference.go
 internal/operationref/reference_test.go
 internal/reporting/calendar_projection.go
@@ -278,6 +286,9 @@ ledger/browser_state.go
 ledger/browser_state_test.go
 ledger/citations.go
 ledger/citations_test.go
+ledger/closed_periods.go
+ledger/connection_activity.go
+ledger/connection_activity_test.go
 ledger/currencies.go
 ledger/currencies.json
 ledger/currency_invariants_test.go
@@ -307,6 +318,7 @@ ledger/migrations/0001_ledger.sql
 ledger/migrations/0002_server_access.sql
 ledger/migrations/0003_documents.sql
 ledger/migrations/0004_recorded_book.sql
+ledger/migrations/0005_proposing_agents.sql
 ledger/postings.go
 ledger/postings_test.go
 ledger/proposal_decisions.go
@@ -314,6 +326,7 @@ ledger/proposal_invariants_test.go
 ledger/proposal_reads.go
 ledger/proposals.go
 ledger/proposals_test.go
+ledger/proposing_access_test.go
 ledger/read_state.go
 ledger/read_state_test.go
 ledger/reads_test.go
@@ -354,6 +367,7 @@ packaging/ubuntu/README.md
 packaging/ubuntu/ai.vult.browser.service
 packaging/ubuntu/ai.vult.ledger.service
 packaging/ubuntu/install.py
+scripts/check-changes.sh
 scripts/go_notices.py
 scripts/legal-identity/generate-reference.py
 scripts/make_installer.py
@@ -382,6 +396,8 @@ server/book_settings.go
 server/book_settings_test.go
 server/book_view_preferences.go
 server/book_view_preferences_test.go
+server/browser_preview_state_test.go
+server/browser_preview_test.go
 server/browser_state.go
 server/browser_state_test.go
 server/config.go
@@ -410,6 +426,8 @@ server/local_browser.go
 server/local_browser_test.go
 server/mcp.go
 server/mcp_origin_test.go
+server/owner_books.go
+server/owner_books_test.go
 server/owner_connections.go
 server/owner_connections_test.go
 server/owner_requests.go
@@ -487,6 +505,9 @@ web/src/components/book/book-address-settings.tsx
 web/src/components/book/book-data-settings.tsx
 web/src/components/book/book-logo-settings.tsx
 web/src/components/book/book-navigation.ts
+web/src/components/book/book-period-settings.css
+web/src/components/book/book-period-settings.tsx
+web/src/components/book/book-setup-settings.tsx
 web/src/components/book/book-switcher.tsx
 web/src/components/book/copy-current-view.tsx
 web/src/components/book/document-upload.css
@@ -548,10 +569,13 @@ web/src/components/shell/book-finder.css
 web/src/components/shell/book-finder.tsx
 web/src/components/shell/header-actions.tsx
 web/src/components/shell/navigation.tsx
+web/src/components/shell/onboarding-card.css
+web/src/components/shell/onboarding-card.tsx
 web/src/components/shell/personal-settings-host.tsx
 web/src/components/shell/personal-settings.css
 web/src/components/shell/personal-settings.tsx
 web/src/components/shell/profile-menu.tsx
+web/src/components/shell/sidebar-context.ts
 web/src/components/shell/use-rail-tooltip.tsx
 web/src/components/statements/financial-grid-layout.tsx
 web/src/components/statements/financial-grid-widths.ts
@@ -569,6 +593,8 @@ web/src/components/statements/statements-workspace.tsx
 web/src/components/statements/statements.css
 web/src/components/ui/account-avatar.css
 web/src/components/ui/account-avatar.tsx
+web/src/components/ui/amount-privacy-toggle.css
+web/src/components/ui/amount-privacy-toggle.tsx
 web/src/components/ui/app-state-screen.tsx
 web/src/components/ui/book-mark.css
 web/src/components/ui/book-mark.tsx
@@ -611,6 +637,8 @@ web/src/components/ui/state-layout.tsx
 web/src/components/ui/state.css
 web/src/components/ui/tab-strip.css
 web/src/components/ui/tab-strip.tsx
+web/src/components/ui/toaster.css
+web/src/components/ui/toaster.tsx
 web/src/components/ui/use-row-order.ts
 web/src/components/ui/vult-brand.css
 web/src/components/ui/vult-brand.tsx
@@ -757,6 +785,7 @@ web/src/lib/account-presentation.ts
 web/src/lib/account-settings.ts
 web/src/lib/activity-brands.ts
 web/src/lib/amount-fraction.ts
+web/src/lib/amount-privacy.ts
 web/src/lib/announce.ts
 web/src/lib/api.ts
 web/src/lib/book-currency.ts
@@ -789,11 +818,13 @@ web/src/lib/legacy-personal-data.ts
 web/src/lib/legal-identity.ts
 web/src/lib/movement-categories.ts
 web/src/lib/native-money.ts
+web/src/lib/open-created-book.ts
 web/src/lib/overview-history.ts
 web/src/lib/passkey-signin.ts
 web/src/lib/performance-series.ts
 web/src/lib/period-step.ts
 web/src/lib/proposals.ts
+web/src/lib/recent-sign-in.ts
 web/src/lib/report-period.ts
 web/src/lib/resource-links.ts
 web/src/lib/session.ts
@@ -860,6 +891,7 @@ web/unit/activity-summary.test.mjs
 web/unit/agent-delegation.test.mjs
 web/unit/agreement-book.test.mjs
 web/unit/amount-fraction.test.mjs
+web/unit/amount-privacy.test.mjs
 web/unit/approvals.test.mjs
 web/unit/avatar-loading.test.mjs
 web/unit/book-copy-entry.test.mjs
@@ -931,6 +963,7 @@ web/unit/helpers/activity-account-codes.tsx
 web/unit/helpers/activity-summary.tsx
 web/unit/helpers/activity.mjs
 web/unit/helpers/agreement-oracle.mjs
+web/unit/helpers/amount-privacy.tsx
 web/unit/helpers/application.mjs
 web/unit/helpers/book-controls.mjs
 web/unit/helpers/cash-status.tsx

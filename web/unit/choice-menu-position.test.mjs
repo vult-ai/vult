@@ -39,3 +39,14 @@ test("short and partly obscured viewports cap the options to the reachable space
     { placement: "top start", maxHeight: 66 },
   );
 });
+
+test("a list with usable room below opens downward instead of covering its label", async () => {
+  const { choiceMenuPosition } = await loadComponent(
+    "src/components/ui/choice-menu-position.ts",
+  );
+  // A field low in a tall dialog: 180px below, 300px above.
+  assert.deepEqual(
+    choiceMenuPosition({ top: 404, bottom: 444 }, { top: 100, bottom: 638 }, { top: 0, bottom: 900 }),
+    { placement: "bottom start", maxHeight: 180 },
+  );
+});

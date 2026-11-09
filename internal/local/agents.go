@@ -81,7 +81,7 @@ func (a AgentApproval) Valid() bool {
 	if a.Deny {
 		return a.BookID == "" && a.Access == ""
 	}
-	return ledger.ValidID(a.BookID) && (a.Access == "read" || a.Access == "write")
+	return ledger.ValidID(a.BookID) && ledger.ValidAccess(a.Access)
 }
 
 func validRequestID(s string) bool {

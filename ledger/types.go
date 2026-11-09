@@ -59,6 +59,13 @@ func raw(v any) json.RawMessage {
 }
 
 type Scope struct{ TenantID, BookID, ActorID, ConnectionID, Access string }
+
+// ValidAccess reports whether access is a connection's access level: read,
+// propose (read and prepare entries for the owner's approval) or write.
+func ValidAccess(access string) bool {
+	return access == "read" || access == "propose" || access == "write"
+}
+
 type Book struct {
 	TenantID             string    `json:"tenant_id"`
 	ID                   string    `json:"id"`

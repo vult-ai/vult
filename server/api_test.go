@@ -149,6 +149,7 @@ func TestBrowserAPIRejectsCredentialsAndUnprovedWrites(t *testing.T) {
 		}, http.StatusForbidden},
 		{"unsupported-proved-write", func(r *http.Request) {
 			r.Method = http.MethodPost
+			r.URL.Path = "/api/v1/dashboard"
 			r.Header.Set("Origin", configuration().Origin)
 			r.Header.Set("X-CSRF-Token", access.Hash("csrf:"+f.session))
 		}, http.StatusNotFound},

@@ -102,7 +102,7 @@ configuration, a missing initialized database, or a missing ledger schema stops
 startup and requires recovery. Installing over these conditions does not create
 an empty replacement or generate replacement keys.
 
-Version 0.4.0 upgrades recognized v0.1.0, v0.2.0 and v0.3.0 ledgers through
+Version 0.5.0 upgrades recognized v0.1.0, v0.2.0, v0.3.0 and v0.4.0 ledgers through
 checksum-verified forward migrations. It preserves Books, journal rows, request
 outcomes, connections, originals and local keys. Missing, altered, gapped or
 unknown migration receipts stop startup

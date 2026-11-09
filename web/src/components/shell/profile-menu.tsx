@@ -11,7 +11,9 @@ import {
   Settings01,
   Sun,
   HelpCircle,
+  SignOut,
 } from "../../design-system/icons";
+import { writeHeaders } from "../../lib/session";
 import { Button as AriaButton, SubmenuTrigger } from "react-aria-components";
 import { Avatar } from "../../design-system/catalog/components/vult-ui/avatar";
 import { Dropdown } from "../../design-system/catalog/components/vult-ui/dropdown";
@@ -38,6 +40,19 @@ const appearances = [
   { id: "light", label: "Light", icon: Sun },
   { id: "dark", label: "Dark", icon: Moon01 },
 ] as const;
+/** Ends this browser's session and reloads into the signed-out screen. */
+async function signOut() {
+  try {
+    await fetch("/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: await writeHeaders(false),
+    });
+  } finally {
+    window.location.assign("/");
+  }
+}
+
 function localStorageIfAvailable() {
   try {
     return window.localStorage;
@@ -220,6 +235,14 @@ export function ProfileMenu({
                 </Dropdown.Menu>
               </Dropdown.Popover>
             </SubmenuTrigger>
+            <Dropdown.Item
+              id="sign-out"
+              icon={SignOut}
+              selectionIndicator="none"
+              onAction={() => void signOut()}
+            >
+              Sign out
+            </Dropdown.Item>
           </Dropdown.Menu>
         </Dropdown.Popover>
       </Dropdown.Root>

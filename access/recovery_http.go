@@ -15,7 +15,7 @@ type LocalRecovery interface {
 	TakeRecovery(ctx context.Context, session string) (codes []string, backupKey string, err error)
 }
 
-var recoveryPage = template.Must(template.New("recovery").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Save your recovery codes · Vult</title><link rel="stylesheet" href="/auth/style.css"><script src="/auth/recovery.js" defer></script></head><body><main>
+var recoveryPage = template.Must(template.New("recovery").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Save your recovery codes · Vult</title><link rel="stylesheet" href="/auth/style.css"><script src="/auth/particles.js" defer></script><script src="/auth/recovery.js" defer></script></head><body><main>` + vultLockup + `
 <h1>Save your recovery codes</h1>
 <p>If you lose your passkey, one of these lets you back in. Each code works once. Keep them somewhere safe and offline, like a password manager. Never give them to an agent.</p>
 <ol class="codes" id="recovery-codes">{{range .Codes}}<li><code>{{.}}</code></li>{{end}}</ol>

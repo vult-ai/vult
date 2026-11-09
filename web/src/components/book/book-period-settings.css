@@ -1,0 +1,36 @@
+.book-period-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 0;
+}
+.book-period-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.book-setup-form {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  width: 100%;
+  margin: 0;
+}
+.book-setup-form .welcome-purpose {
+  justify-self: stretch;
+}
+.book-setup-value {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.book-setup-change {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  width: 100%;
+}

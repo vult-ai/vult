@@ -150,9 +150,11 @@ export default function TransactionsTable({
     const fact = facts.get(t.id)!;
     const recorded = money(t.amount_minor, book);
     const fx = t.fx;
-    const original = fx && (fx.original_currency !== book.currency || fx.original_amount_minor !== t.amount_minor)
-      ? currencyMoney(fx.original_amount_minor, fx.original_currency, state.currencies)
-      : null;
+    const original = t.original_amount && t.original_amount.currency !== book.currency
+      ? money(t.original_amount.amount_minor, { currency: t.original_amount.currency, scale: t.original_amount.scale })
+      : fx && (fx.original_currency !== book.currency || fx.original_amount_minor !== t.amount_minor)
+        ? currencyMoney(fx.original_amount_minor, fx.original_currency, state.currencies)
+        : null;
     const originalDetail = original === null ? "" : ` recorded; ${original} original`;
     // Money in carries a plus; money out, transfers and reversals none.
     const shown = fact.direction === "in" ? `+${recorded}` : recorded;

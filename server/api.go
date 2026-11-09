@@ -104,8 +104,14 @@ func (a *webAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.localActivity(w, r, session.Value)
 	case r.URL.Path == localDecisionPath && r.Method == http.MethodPost:
 		a.localDecision(w, r, session.Value)
-	case r.URL.Path == "/api/v1/books" && r.Method == http.MethodGet && r.URL.RawQuery == "":
+	case r.URL.Path == booksPath && r.Method == http.MethodGet && r.URL.RawQuery == "":
 		a.books(w, r, session.Value)
+	case r.URL.Path == booksPath && r.Method == http.MethodPost:
+		a.createBook(w, r, session.Value)
+	case r.URL.Path == periodsPath && r.Method == http.MethodGet:
+		a.readClosedPeriods(w, r, session.Value)
+	case r.URL.Path == periodsClosePath && r.Method == http.MethodPost:
+		a.closePeriod(w, r, session.Value)
 	case r.URL.Path == bookViewPreferencePath && r.Method == http.MethodPost:
 		a.saveBookViewPreference(w, r, session.Value)
 	case r.URL.Path == "/api/v1/settings" && r.Method == http.MethodGet:

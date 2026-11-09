@@ -176,14 +176,20 @@ select {
   max-width: var(--vult-shell-switcher-max-width);
 }
 .book-switcher-trigger {
+  display: inline-flex;
   max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 /* The current Book's mark sits before its name. */
 .book-switcher-current {
-  display: inline-flex;
+  display: flex;
+  max-width: 100%;
+  flex: 1 1 auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  overflow: hidden;
 }
 .vult-shell-header .vult-shell-workspace-control {
   max-width: var(--vult-shell-switcher-max-width);
@@ -288,34 +294,60 @@ select {
   }
 }
 
-/* Wrap date actions when the available header width cannot fit both groups. */
+/* The header stays one row at every width. As it narrows, the Book name
+   shortens first, then the period label becomes compact, then the step
+   arrows give way; the period picker itself always remains. */
 .vult-shell-header:has(.shell-header-page-actions .dashboard-period) {
-  height: auto;
-  min-height: 56px;
-  flex-wrap: wrap;
-  row-gap: 8px;
-  padding-block: 12px;
-}
-.vult-shell-header:has(.shell-header-page-actions .dashboard-period)
-  > :first-child {
-  flex-basis: 17rem;
-  min-width: min(100%, 17rem);
+  container: shell-header / inline-size;
 }
 .vult-shell-header:has(.shell-header-page-actions .dashboard-period)
   .vult-shell-actions {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 100%;
-  margin-inline-start: auto;
 }
 .vult-shell-header .shell-header-page-actions:has(.dashboard-period) {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
 }
 .shell-header-page-actions:has(.dashboard-period)
   > .react-aria-DateRangePicker {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+}
+@container shell-header (width < 920px) {
+  .shell-header-page-actions .dashboard-period-full {
+    display: none;
+  }
+  .shell-header-page-actions .dashboard-period-short {
+    display: inline;
+  }
+}
+/* The Book switcher never collapses to nothing. */
+.vult-shell-header:has(.shell-header-page-actions .dashboard-period)
+  .vult-shell-workspace-control {
+  min-width: 7.5rem;
+}
+@container shell-header (width < 760px) {
+  .shell-header-page-actions .period-step,
+  .vult-shell-header .shell-current-page,
+  .vult-shell-header .vult-shell-search > [data-text] {
+    display: none;
+  }
+  .vult-shell-header .vult-shell-search {
+    width: var(--vult-control-height-sm);
+    justify-content: center;
+    padding-inline: 0;
+  }
+}
+@container shell-header (width < 560px) {
+  .shell-header-page-actions .dashboard-period > [data-text] {
+    display: none;
+  }
+  .shell-header-page-actions .dashboard-period {
+    width: var(--vult-control-height-sm);
+    justify-content: center;
+    padding-inline: 0;
+  }
 }
 .shell-header-page-actions .dashboard-period {
   max-width: 100%;

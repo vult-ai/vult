@@ -1,0 +1,40 @@
+/* A quiet text action in a panel header, like the other header links. */
+.amount-privacy-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.amount-privacy-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+.amount-privacy-toggle:hover {
+  background: var(--dash-fill, var(--color-bg-secondary));
+  color: var(--color-text-primary);
+}
+/* A hidden figure reads as the figure it covers, and shows amounts when chosen. */
+.hidden-figure {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.hidden-figure:hover {
+  color: var(--color-text-secondary);
+}
+@media (prefers-reduced-motion: reduce) {
+  .amount-privacy-toggle {
+    transition: none;
+  }
+}

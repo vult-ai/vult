@@ -382,3 +382,7 @@ li[data-active] > .dash-row { background: var(--dash-fill); }
 .vult-headline-aside .dash-link { margin-block: -4px; line-height: var(--text-vult-ui--line-height); }
 /* A headline keeps one height whatever its figure, caption or aside holds. */
 .dash-panel .vult-headline:not([data-stacked]) { min-height: 28px; align-items: center; }
+
+/* An empty panel's one line and its next step. */
+.dash-empty { margin: 0; text-align: center; }
+.dash-empty-action { color: var(--color-text-secondary); text-decoration: underline; text-underline-offset: 2px; }

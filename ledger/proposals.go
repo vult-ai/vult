@@ -345,7 +345,7 @@ func (s Store) prepareOperation(ctx context.Context, scope Scope, input []byte) 
 		q.OpenQuestions = []string{}
 	}
 	var payload operationPayload
-	result, err := s.transact(ctx, scope, "prepare_operation", input, func(tx pgx.Tx) (json.RawMessage, error) {
+	result, err := s.transact(withProposingPhase(ctx, "preview"), scope, "prepare_operation", input, func(tx pgx.Tx) (json.RawMessage, error) {
 		prior, found, err := retainedPreparation(ctx, tx, scope, q)
 		if err != nil || found {
 			return raw(prior), err
@@ -391,7 +391,7 @@ func (s Store) prepareOperation(ctx context.Context, scope Scope, input []byte) 
 	if len(data) > 262144 {
 		return nil, ErrLimit
 	}
-	return s.transact(ctx, scope, "prepare_operation", input, func(tx pgx.Tx) (json.RawMessage, error) {
+	return s.transact(withProposingPhase(ctx, "record"), scope, "prepare_operation", input, func(tx pgx.Tx) (json.RawMessage, error) {
 		prior, found, err := retainedPreparation(ctx, tx, scope, q)
 		if err != nil || found {
 			return raw(prior), err
@@ -452,4 +452,17 @@ func (s Store) proposalCall(ctx context.Context, tx pgx.Tx, scope Scope, method 
 		return s.executeProposal(ctx, tx, scope, q)
 	}
 	return nil, ErrInvalid
+}
+
+type proposingKey struct{}
+
+// withProposingPhase marks the two transactions that prepare a proposal: the
+// preview, which is always rolled back, and the one that records it.
+func withProposingPhase(ctx context.Context, phase string) context.Context {
+	return context.WithValue(ctx, proposingKey{}, phase)
+}
+
+func proposingPhase(ctx context.Context) string {
+	phase, _ := ctx.Value(proposingKey{}).(string)
+	return phase
 }

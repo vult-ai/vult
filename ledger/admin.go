@@ -75,7 +75,7 @@ func (a Admin) Books(ctx context.Context) ([]Book, error) {
 	return out, rows.Err()
 }
 func (a Admin) CreateConnection(ctx context.Context, book, name, access string) (Connection, error) {
-	if !ValidID(book) || len(strings.TrimSpace(name)) < 1 || len(name) > 80 || (access != "read" && access != "write") {
+	if !ValidID(book) || len(strings.TrimSpace(name)) < 1 || len(name) > 80 || !ValidAccess(access) {
 		return Connection{}, ErrInvalid
 	}
 	var c Connection

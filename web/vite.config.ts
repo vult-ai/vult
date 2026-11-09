@@ -53,6 +53,17 @@ export default defineConfig(({ command }) => ({
         return html.replace("__VULT_SHARED_ASSET_ORIGIN__", sharedAssetOrigin);
       },
     },
+    {
+      // Sonner adds its stylesheet as an inline <style> element, which the
+      // app's content security policy refuses. Its own stylesheet file is
+      // bundled instead (src/components/ui/toaster.css).
+      name: "vult-sonner-styles",
+      enforce: "pre",
+      transform(code, id) {
+        if (!/node_modules\/sonner\/dist\/index\.m?js$/.test(id)) return;
+        return code.replace(/^__insertCSS\(".*"\);?$/m, "");
+      },
+    },
     react(),
     tailwindcss(),
     {

@@ -1,4 +1,4 @@
-import { ChevronDown } from "../../design-system/icons";
+import { IdentificationCard } from "../../design-system/icons";
 import { formatDate, formatDateTime } from "../../lib/date-format";
 import {
   useEffect,
@@ -20,7 +20,7 @@ import {
 import { Field, ErrorMessage } from "../form";
 import { Button } from "../ui/button";
 import { useDialogPending } from "../ui/dialog";
-import { SettingsSection, SettingsRow } from "../ui/settings-section";
+import { SettingsDisclosure, SettingsSection, SettingsRow } from "../ui/settings-section";
 import { BusinessStructureChoice } from "../onboarding/business-structure-choice";
 import { OnboardingChoice } from "../onboarding/onboarding-choice";
 import { nationalJurisdiction } from "../onboarding/business-identity";
@@ -131,20 +131,17 @@ export function LegalIdentitySettings({
       {data &&
         (presentation !== "settings" || data.view.history.length > 0) &&
         (presentation === "settings" ? (
-          <details className="settings-identity-history">
-            <summary>
-              Change history{" "}
-              <span className="text-tertiary">
-                {data.view.history.length}
-                {data.view.has_more ? "+" : ""}
-              </span>
-            </summary>
+          <SettingsDisclosure
+            title="Change history"
+            className="settings-identity-history"
+            meta={`${data.view.history.length}${data.view.has_more ? "+" : ""}`}
+          >
             <IdentityHistoryList
               key={`history:${book.id}:${data.view.subject.revision}`}
               book={book}
               initial={data.view}
             />
-          </details>
+          </SettingsDisclosure>
         ) : (
           <IdentityHistoryList
             key={`history:${book.id}:${data.view.subject.revision}`}
@@ -156,9 +153,9 @@ export function LegalIdentitySettings({
   );
   return presentation === "settings" ? (
     <SettingsSection
-      title="Legal identity"
+      title="Legal identity" icon={IdentificationCard}
       description={
-        editing ? "Update the details, then review your changes." : undefined
+        undefined
       }
       actions={
         data && !editing ? (
@@ -916,17 +913,13 @@ function IdentityFieldsGroup({
   if (!enabled) return <>{children}</>;
   if (collapsed)
     return (
-      <details className="book-settings-identity-group settings-identity-details">
-        <summary className="vult-type-label">
-          <span>{title}</span>
-          <ChevronDown className="size-4" aria-hidden />
-        </summary>
+      <SettingsDisclosure title={title} className="book-settings-identity-group">
         <div className="book-settings-identity-group-fields">{children}</div>
-      </details>
+      </SettingsDisclosure>
     );
   return (
     <section className="book-settings-identity-group" aria-label={title}>
-      <h3 className="vult-type-compact-title">{title}</h3>
+      <h3 className="vult-type-label">{title}</h3>
       <div className="book-settings-identity-group-fields">{children}</div>
     </section>
   );
