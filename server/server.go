@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"github.com/vult-ai/vult/internal/update"
 	"io"
 	"io/fs"
 	"log"
@@ -61,6 +62,9 @@ type Options struct {
 	// LocalBooks lets a local browser create the owner's Books through the
 	// protected service. Local only.
 	LocalBooks LocalBooks
+	// Updates tells the owner when a newer release is published; only Vult on
+	// the owner's own computer sets it.
+	Updates *update.Checker
 	// Web is the built interface. It requires Access: every page reads the
 	// signed-in session, and /api/v1 serves only that session.
 	Web fs.FS
@@ -131,7 +135,7 @@ func New(c Config, options Options) (*http.Server, error) {
 				admitDecision: operationDecisionAdmission(options.Admission, ownerAdmission),
 				documents:     options.Documents, readDocument: options.ReadDocument,
 				uploadDocument: options.UploadDocument, documentUploads: make(chan struct{}, 4),
-				localBooks: options.LocalBooks,
+				localBooks: options.LocalBooks, updates: options.Updates,
 			}
 		}
 	}

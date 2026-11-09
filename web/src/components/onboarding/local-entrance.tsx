@@ -6,10 +6,8 @@ import { fetchJSON } from "../../lib/errors";
 import { writeHeaders } from "../../lib/session";
 import { settingsPost } from "../../lib/settings-requests";
 import { withRecentSignIn } from "../../lib/recent-sign-in";
+import { LOCAL_PROGRAM } from "../../lib/local-program";
 import { Entrance, type AgentEvent, type EntranceDraft, type Journey } from "./entrance";
-
-/** Where the vult command lives once Vult is installed on this Mac. */
-export const LOCAL_PROGRAM = "/Library/PrivilegedHelperTools/ai.vult.ledger/vult";
 
 type Activity = {
   seq: number;

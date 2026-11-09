@@ -71,10 +71,10 @@ function usePoll(run: () => void, enabled: boolean) {
   }, [enabled]);
 }
 
-/** A Vult with no Book yet. On this Mac the first run is its own scene
- * (`local`); a server shows the welcome steps. `fallback` covers a session
+/** A Vult with no Book yet. The first run is its own scene, on this Mac
+ * (`local`) and on a Vult server (`hosted`); without one, the welcome steps. `fallback` covers a session
  * that owns no Vult. */
-export function EmptyVult({ fallback, onCreated, local }: { fallback: ReactNode; onCreated: () => void; local: ReactNode }) {
+export function EmptyVult({ fallback, onCreated, local, hosted }: { fallback: ReactNode; onCreated: () => void; local: ReactNode; hosted?: ReactNode }) {
   const [owner, setOwner] = useState<{ tenant: string; local: boolean } | null | undefined>(undefined);
   useEffect(() => {
     const controller = new AbortController();
@@ -86,6 +86,7 @@ export function EmptyVult({ fallback, onCreated, local }: { fallback: ReactNode;
   }, []);
   if (owner === undefined) return null;
   if (owner?.local) return <>{local}</>;
+  if (owner && hosted) return <>{hosted}</>;
   return (
     <OnboardingLayout>
       {owner === null ? fallback : <Welcome book={null} tenant={owner.tenant} onBookSaved={onCreated} onOpenBook={() => undefined} onUpload={() => undefined} />}
@@ -373,7 +374,7 @@ export function CreateBook({ onCreated }: { tenant?: string; onCreated: (book: B
         placeholder="Search currency or country"
       />
       <AccountingTimezone value={zone} onChange={setZone} />
-      <p className="welcome-fact">A Book’s currency can’t change after it’s created.</p>
+      <p className="welcome-fact">Type, currency and timezone can’t change after the Book is created.</p>
       {error && (
         <p className="welcome-error" role="alert">
           {error}

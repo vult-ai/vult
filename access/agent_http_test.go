@@ -34,10 +34,7 @@ func (a *recordedAgents) DecideAgent(_ context.Context, session, request, book, 
 
 func TestLocalAgentApprovalNeedsARecentPasskeySignIn(t *testing.T) {
 	f := fresh(t)
-	host, err := loopback.Hostname()
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := loopback.Host
 	origin := "https://" + host + ":51997"
 	s, err := access.New(f.auth, f.owners, origin)
 	if err != nil {

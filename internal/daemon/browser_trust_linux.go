@@ -230,3 +230,8 @@ func RequestBrowserTrust(ctx context.Context) error {
 	}
 	return nil
 }
+
+// forgetBrowserCertificate has nothing to remove on Linux: trust lives in the
+// owner's own browser certificate database, and an old entry is limited to an
+// address that no longer serves anything.
+func forgetBrowserCertificate(string) error { return nil }

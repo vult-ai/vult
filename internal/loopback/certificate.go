@@ -19,21 +19,40 @@ import (
 
 var ErrCertificate = errors.New("local browser certificate unavailable")
 
-func Hostname() (string, error) {
+// Host is the browser address of Vult on this Mac or Linux computer, served on
+// the installation's own port. A name of its own, not plain localhost, keeps
+// Vult's cookies and passkeys apart from every other local web app, because
+// browsers share cookies across a hostname's ports.
+const Host = "vult.localhost"
+
+// ValidHostname reports whether host is Vult's local browser address.
+func ValidHostname(host string) bool { return host == Host }
+
+// InstallationID returns a new random identity for one installation. It names
+// the installation's private database logins; it is not part of the address.
+func InstallationID() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		return "", ErrCertificate
 	}
-	return "vult-" + hex.EncodeToString(b) + ".localhost", nil
+	return hex.EncodeToString(b), nil
 }
 
-func ValidHostname(host string) bool {
-	if !strings.HasPrefix(host, "vult-") || !strings.HasSuffix(host, ".localhost") {
-		return false
-	}
-	id := strings.TrimSuffix(strings.TrimPrefix(host, "vult-"), ".localhost")
+// ValidInstallationID reports whether id is an installation identity.
+func ValidInstallationID(id string) bool {
 	_, err := hex.DecodeString(id)
 	return err == nil && len(id) == 32 && id == strings.ToLower(id)
+}
+
+// LegacyInstallationID returns the identity carried by an address from before
+// 0.5.1, vult-<identity>.localhost, so an upgrade keeps the installation's
+// database logins while moving it to Host.
+func LegacyInstallationID(host string) (string, bool) {
+	if !strings.HasPrefix(host, "vult-") || !strings.HasSuffix(host, ".localhost") {
+		return "", false
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(host, "vult-"), ".localhost")
+	return id, ValidInstallationID(id)
 }
 
 // NewCertificate creates a self-signed server leaf for one local hostname. It

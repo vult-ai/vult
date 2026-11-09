@@ -3,6 +3,8 @@
 (() => {
   const button = document.getElementById("passkey-register") || document.getElementById("passkey-signin") || document.getElementById("passkey-recover");
   const status = document.getElementById("passkey-status");
+  // The local setup page's passkey dial follows the ceremony.
+  const dial = document.getElementById("passkey-dial");
   const csrf = document.querySelector('meta[name="vult-login-csrf"]')?.content;
   if (!button || !status || !csrf) return;
   let recovering = button.id === "passkey-recover";
@@ -54,10 +56,15 @@
           if (svg && svg.nodeName === "svg") qr.replaceChildren(svg);
         }
         if (secret) secret.textContent = enrollment.secret;
-        button.hidden = true;
-        const fine = document.getElementById("passkey-fine");
-        if (fine) fine.hidden = true;
-        authSwitch.hidden = true;
+        // The passkey screen gives way to its own authenticator screen.
+        const threshold = document.getElementById("passkey-threshold");
+        if (threshold) threshold.hidden = true;
+        else {
+          button.hidden = true;
+          const fine = document.getElementById("passkey-fine");
+          if (fine) fine.hidden = true;
+          authSwitch.hidden = true;
+        }
         authSetup.hidden = false;
         code?.focus?.();
       } catch {
@@ -68,22 +75,50 @@
     copy?.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(secret?.textContent || "");
-        if (authStatus) authStatus.textContent = "Key copied.";
+        if (authStatus) authStatus.textContent = "Setup key copied.";
+        if (copy?.dataset) {
+          copy.dataset.copied = "";
+          setTimeout(() => { delete copy.dataset.copied; }, 2000);
+        }
       } catch {
-        if (authStatus) authStatus.textContent = "Couldn't copy. Select the key and copy it by hand.";
+        if (authStatus) authStatus.textContent = "Couldn’t copy. Select the setup key and copy it manually.";
       }
     });
     let checking = false;
+    // Six boxes over one real input, as on Vult's sign-up: the input keeps
+    // typing, pasting and one-time-code autofill; the boxes draw it.
+    const slots = Array.from(document.getElementById("authenticator-slots")?.children || []);
+    const otp = slots[0]?.parentElement?.parentElement;
+    const verifying = document.getElementById("authenticator-verifying");
+    const digits = () => (code?.value || "").replace(/\D/g, "").slice(0, 6);
+    const paint = () => {
+      if (!code) return;
+      const value = digits();
+      if (code.value !== value) code.value = value;
+      const active = document.activeElement === code ? Math.min(value.length, 5) : -1;
+      slots.forEach((slot, i) => {
+        slot.textContent = value[i] || "";
+        if (i === active) slot.setAttribute("data-active", "");
+        else slot.removeAttribute("data-active");
+      });
+      if (verify) verify.disabled = checking || value.length !== 6;
+    };
+    const busy = (on) => {
+      checking = on;
+      if (verifying) verifying.hidden = !on;
+      if (verify) verify.textContent = on ? "Verifying…" : "Verify and continue";
+      if (code) code.disabled = on;
+      paint();
+    };
     const confirm = async () => {
       if (checking || !code || !authStatus) return;
-      const value = code.value.replace(/\s+/g, "");
+      const value = digits();
       if (!/^[0-9]{6}$/.test(value)) {
         authStatus.textContent = "Enter the 6-digit code from your authenticator app.";
         return;
       }
-      checking = true;
-      if (verify) verify.disabled = true;
-      authStatus.textContent = "Checking your code…";
+      authStatus.textContent = "";
+      busy(true);
       try {
         const response = await fetch("/auth/authenticator/enroll/verify", {
           method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store",
@@ -93,6 +128,7 @@
         const result = response.headers.get("Content-Type")?.includes("application/json") ? await response.json() : {};
         if (!response.ok) {
           code.value = "";
+          otp?.setAttribute("data-invalid", "");
           authStatus.textContent = result.error === "invalid_code" ? "That code didn't work. Enter the newest code from your authenticator app. If it keeps failing, check that your phone's clock is set automatically."
             : result.error === "too_many_attempts" ? "Too many codes were tried. Wait five minutes, then try again."
             : "Setup was not confirmed. Close this tab and run vult setup again, or ask your agent to.";
@@ -108,11 +144,45 @@
       } catch {
         authStatus.textContent = "Setup was not confirmed. Check your connection and try again.";
       }
-      checking = false;
-      if (verify) verify.disabled = false;
+      busy(false);
+      code.focus?.();
     };
     verify?.addEventListener("click", confirm);
     code?.addEventListener("keydown", (event) => { if (event.key === "Enter") confirm(); });
+    // The sixth digit checks the code, as on Vult's sign-up.
+    code?.addEventListener("input", () => {
+      otp?.removeAttribute("data-invalid");
+      paint();
+      if (digits().length === 6) confirm();
+    });
+    code?.addEventListener("focus", paint);
+    code?.addEventListener("blur", paint);
+    // Back to the passkey: the unfinished authenticator can't sign anyone in.
+    document.getElementById("authenticator-back")?.addEventListener("click", () => {
+      authSetup.hidden = true;
+      const threshold = document.getElementById("passkey-threshold");
+      if (threshold) threshold.hidden = false;
+      if (code) code.value = "";
+      if (authStatus) authStatus.textContent = "";
+      paint();
+      authSwitch.disabled = false;
+      button.focus?.();
+    });
+  }
+
+  // As on Vult's sign-up: without passkeys here, the authenticator leads; while
+  // the passkey prompt is open, the other ways wait.
+  const helpToggle = document.getElementById("setup-help-toggle");
+  const others = [authSwitch, helpToggle].filter(Boolean);
+  const shownOthers = () => others.filter((node) => !node.hidden);
+  if (dial && registering && !(window.isSecureContext && window.PublicKeyCredential && navigator.credentials?.create)) {
+    button.disabled = true;
+    const fine = document.getElementById("passkey-fine");
+    if (fine) fine.textContent = "Passkeys aren’t available here. Use an authenticator app, or open Vult on another device.";
+    if (authSwitch) {
+      authSwitch.textContent = "Use an authenticator app";
+      authSwitch.className = "secondary wide";
+    }
   }
 
   const decode = (value) => Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
@@ -181,7 +251,10 @@
       return;
     }
     button.disabled = true;
-    status.textContent = registering ? "Confirm creating your passkey." : "Confirm using your passkey.";
+    const waiting = dial ? shownOthers() : [];
+    for (const node of waiting) node.hidden = true;
+    if (dial) dial.dataset.phase = "reading";
+    status.textContent = dial ? "Touch the sensor to create your passkey…" : registering ? "Confirm creating your passkey." : "Confirm using your passkey.";
     const path = registering ? "/auth/passkeys/register" : "/auth/passkeys/login";
     try {
       const options = await request(path + "/options", registering ? { setup_token: setup } : {});
@@ -196,15 +269,24 @@
       if (result.signed_in !== true || (result.continue !== "/" && !/^\/oauth\/authorize\?request=[A-Za-z0-9_-]{43}$/.test(result.continue) && !exactReview && !local)) throw new Error("Sign-in was not confirmed");
       setup = "";
       try { sessionStorage.removeItem(setupKey); } catch { /* Nothing kept. */ }
-      status.textContent = "Signed in. Continuing…";
+      if (dial) {
+        dial.dataset.phase = "open";
+        status.textContent = "Passkey created";
+        // Let the dial open before the recovery codes.
+        await new Promise((resolve) => setTimeout(resolve, 900));
+      } else status.textContent = "Signed in. Continuing…";
       location.replace(result.continue);
     } catch {
-      if (registering && setupInput && setupLabel) {
+      if (dial) dial.dataset.phase = "idle";
+      for (const node of waiting) node.hidden = false;
+      // On this Mac the setup link's code stays for another try; there is
+      // never a code to type. A server asks for a fresh one.
+      if (registering && setupInput && setupLabel && !setupMissing) {
         setupInput.value = setup;
         setupLabel.hidden = false;
         setup = "";
       }
-      status.textContent = registering ? "Passkey setup was not confirmed. Try signing in with your passkey, or request a fresh setup code." : "Sign-in was not confirmed. Try your passkey again.";
+      status.textContent = registering && setupMissing ? "The passkey wasn’t created. Try again." : registering ? "Passkey setup was not confirmed. Try signing in with your passkey, or request a fresh setup code." : "Sign-in was not confirmed. Try your passkey again.";
       button.disabled = false;
     }
   });
@@ -254,5 +336,16 @@
       status.textContent = "Sign-in was not confirmed. Reload this page and try again.";
       busy = false;
     }
+  });
+})();
+
+// "Having trouble?" on the local setup page shows what else to try.
+(() => {
+  const toggle = document.getElementById("setup-help-toggle");
+  const help = document.getElementById("setup-help");
+  if (!toggle || !help) return;
+  toggle.addEventListener("click", () => {
+    help.hidden = !help.hidden;
+    toggle.setAttribute("aria-expanded", String(!help.hidden));
   });
 })();

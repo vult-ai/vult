@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vult-ai/vult/internal/update"
 	"io"
 	"net/http"
 	"strings"
@@ -29,9 +30,14 @@ type webAPI struct {
 	uploadDocument  func(context.Context, string, string, ledger.AddDocument, io.Reader) (ledger.OwnerDocumentUpload, error)
 	documentUploads chan struct{}
 	localBooks      LocalBooks
+	updates         *update.Checker
 }
 
 const webBookLimit = 1000
+
+// updatePath tells the owner of Vult on this computer whether a newer release
+// is published.
+const updatePath = "/api/v1/update"
 
 type webBook struct {
 	ID                   string           `json:"id"`
@@ -108,6 +114,11 @@ func (a *webAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.books(w, r, session.Value)
 	case r.URL.Path == booksPath && r.Method == http.MethodPost:
 		a.createBook(w, r, session.Value)
+	case r.URL.Path == updatePath && r.Method == http.MethodGet && a.updates != nil && r.URL.RawQuery == "":
+		_ = json.NewEncoder(w).Encode(struct {
+			SchemaVersion int `json:"schema_version"`
+			update.Status
+		}{1, a.updates.Status(r.Context())})
 	case r.URL.Path == periodsPath && r.Method == http.MethodGet:
 		a.readClosedPeriods(w, r, session.Value)
 	case r.URL.Path == periodsClosePath && r.Method == http.MethodPost:

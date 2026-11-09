@@ -329,6 +329,14 @@ The owner is not an accountant. Report like a careful assistant, not a ledger.
   restate entries line by line; Vult shows them.
 - Say where to act: "Review them in Vult under Approvals."
 
+## Keep Vult up to date
+
+On the owner's own computer, `vult update --check` reports whether a newer
+release is published. If one is, tell the owner in one line and offer to update.
+Run `vult update` only after they agree: it backs up every Book, then installs
+the release, and macOS asks them for administrator approval. Never update on
+your own initiative, and don't retry if they cancel.
+
 ## Report back
 
 Tell the owner the result in plain words, as above. When asked for detail,

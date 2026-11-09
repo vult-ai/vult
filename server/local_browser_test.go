@@ -20,10 +20,7 @@ import (
 
 func localBrowserConfig(t *testing.T, listen string) (Config, []byte) {
 	t.Helper()
-	host, err := loopback.Hostname()
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := loopback.Host
 	certificate, key, err := loopback.NewCertificate(host)
 	if err != nil {
 		t.Fatal(err)

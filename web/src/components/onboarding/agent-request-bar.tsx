@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { Book } from "../../lib/api";
 import { APIError, fetchJSON } from "../../lib/errors";
-import { readSession, writeHeaders } from "../../lib/session";
+import { writeHeaders } from "../../lib/session";
 import { Button } from "../ui/button";
+import { usePersonalAccount } from "../shell/personal-settings-host";
 import { readActivity, withRecentSignIn } from "./local-entrance";
 import "./agent-request-bar.css";
 
@@ -11,12 +12,17 @@ const POLL_MS = 3000;
 /** On this Mac, an agent asking to come in shows at the top of the Book, so
  * the owner lets it in where they already are. Nothing shows on a server. */
 export function AgentRequestBar({ book }: { book: Book }) {
+  const local = usePersonalAccount()?.mode === "local";
   const [waiting, setWaiting] = useState<{ request: string; client: string } | null>(null);
   const [busy, setBusy] = useState<"" | "allow" | "deny">("");
   const [error, setError] = useState("");
   const answered = useRef(new Set<string>());
 
   useEffect(() => {
+    if (!local) {
+      setWaiting(null);
+      return;
+    }
     let live = true;
     let timer = 0;
     // Only waiting agents matter here, so each read skips the steps already seen.
@@ -36,16 +42,12 @@ export function AgentRequestBar({ book }: { book: Book }) {
       }
       if (live) timer = window.setTimeout(() => void check(), POLL_MS);
     };
-    // Only a Vult on this computer has agents asking at its door.
-    readSession().then(
-      (s) => { if (live && s.mode === "local") void check(); },
-      () => { /* Signed out or unreachable: nothing to show. */ },
-    );
+    void check();
     return () => {
       live = false;
       window.clearTimeout(timer);
     };
-  }, [book.id]);
+  }, [book.id, local]);
 
   if (!waiting) return null;
   async function decide(deny: boolean) {

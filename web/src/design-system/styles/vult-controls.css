@@ -305,6 +305,15 @@
   border-radius: var(--radius-xs);
   justify-content: flex-start;
 }
+/* A radio or checkbox inside its label: the label (the whole choice) shows the
+   focus ring, so the small control never carries a second, native one. */
+label > input:is([type="radio"], [type="checkbox"]):focus-visible {
+  outline: none;
+}
+label:has(> input:is([type="radio"], [type="checkbox"]):focus-visible) {
+  --vult-focus-offset: 2px;
+}
+
 /* One focus treatment; components only choose the element and activation state.
    Outline preserves existing elevation shadows without stacking a second ring.
    React Aria owns focus visibility on its buttons: native :focus-visible can
@@ -336,7 +345,8 @@
 .vult-context-picker__search:focus-within,
 .prose a:focus-visible:not(:where(.not-prose, .not-prose *)),
 .outline-focus-ring:not([data-rac]):focus-visible,
-.outline-focus-ring[data-focus-visible] {
+.outline-focus-ring[data-focus-visible],
+label:has(> input:is([type="radio"], [type="checkbox"]):focus-visible) {
   --tw-ring-color: var(--vult-control-focus-border);
   outline: var(--vult-focus-ring-width) solid var(--vult-control-focus-ring);
   outline-offset: var(--vult-focus-offset, 0px);

@@ -40,7 +40,7 @@ static NSDictionary *readIdentity(void) {
         ![identity[@"hostname"] isKindOfClass:NSString.class] ||
         ![identity[@"certificate_der"] isKindOfClass:NSString.class]) return nil;
     NSString *host = identity[@"hostname"];
-    if ([host rangeOfString:@"\\Avult-[0-9a-f]{32}\\.localhost\\z" options:NSRegularExpressionSearch].location == NSNotFound) return nil;
+    if (![host isEqualToString:@"vult.localhost"]) return nil;
     return identity;
 }
 

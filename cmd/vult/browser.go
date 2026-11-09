@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -49,26 +51,54 @@ func localBrowserAddress(raw string, setup bool) (*url.URL, error) {
 }
 
 func waitLocalBrowser(ctx context.Context, origin *url.URL) error {
-	ctx, cancel := context.WithTimeout(ctx, 35*time.Second)
-	defer cancel()
 	config, err := localBrowserTLSConfig(origin.Hostname())
 	if err != nil {
 		return err
 	}
+	err = waitLocalBrowserHTTPS(ctx, origin, config, "/healthz")
+	var certificateError *tls.CertificateVerificationError
+	if errors.As(err, &certificateError) {
+		return errors.New("local HTTPS certificate approval did not complete; run vult open again")
+	}
+	return err
+}
+
+func pinnedBrowserTLS(host string, leaf *x509.Certificate) (*tls.Config, error) {
+	if leaf == nil {
+		return nil, loopback.ErrCertificate
+	}
+	checked, err := loopback.ParsePublicCertificate(host, leaf.Raw)
+	if err != nil {
+		return nil, err
+	}
+	roots := x509.NewCertPool()
+	roots.AddCert(checked)
+	return &tls.Config{MinVersion: tls.VersionTLS13, ServerName: host, RootCAs: roots,
+		VerifyConnection: func(state tls.ConnectionState) error {
+			if len(state.PeerCertificates) != 1 || !bytes.Equal(state.PeerCertificates[0].Raw, checked.Raw) {
+				return loopback.ErrCertificate
+			}
+			return nil
+		}}, nil
+}
+
+func waitLocalBrowserHTTPS(ctx context.Context, origin *url.URL, config *tls.Config, path string) error {
+	ctx, cancel := context.WithTimeout(ctx, 35*time.Second)
+	defer cancel()
 	transport := &http.Transport{Proxy: nil, TLSClientConfig: config, DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 		return (&net.Dialer{Timeout: time.Second}).DialContext(ctx, "tcp", net.JoinHostPort("127.0.0.1", origin.Port()))
 	}}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 2 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("unexpected local redirect") }}
 	for {
-		r, err := http.NewRequestWithContext(ctx, http.MethodGet, origin.String()+"/healthz", nil)
+		r, err := http.NewRequestWithContext(ctx, http.MethodGet, origin.String()+path, nil)
 		if err != nil {
 			return ledger.ErrInvalid
 		}
 		response, err := client.Do(r)
 		var certificateError *tls.CertificateVerificationError
 		if errors.As(err, &certificateError) {
-			return errors.New("local HTTPS certificate approval did not complete; run vult open again")
+			return err
 		}
 		if err == nil {
 			io.Copy(io.Discard, io.LimitReader(response.Body, 1024))
@@ -79,13 +109,15 @@ func waitLocalBrowser(ctx context.Context, origin *url.URL) error {
 		}
 		select {
 		case <-ctx.Done():
-			return errors.New("local browser is not ready or its hostname certificate is not trusted; reinstall or inspect the protected service")
+			return errors.New("local browser did not become ready; inspect the protected service")
 		case <-time.After(time.Second):
 		}
 	}
 }
 
 func checkLocalBrowser(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 40*time.Second)
+	defer cancel()
 	client, err := local.NewClient()
 	if err != nil {
 		return err
@@ -102,7 +134,17 @@ func checkLocalBrowser(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return waitLocalBrowser(ctx, origin)
+	leaf, err := daemon.BrowserCertificate(origin.Hostname())
+	if err != nil {
+		return err
+	}
+	config, err := pinnedBrowserTLS(origin.Hostname(), leaf)
+	if err != nil {
+		return err
+	}
+	// Installation checks the protected service without approving browser trust
+	// or requiring the owner to have enrolled a passkey yet.
+	return waitLocalBrowserHTTPS(ctx, origin, config, "/readyz")
 }
 
 func runBrowser(ctx context.Context, args []string, out io.Writer) error {

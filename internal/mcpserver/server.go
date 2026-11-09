@@ -3,8 +3,10 @@ package mcpserver
 
 import (
 	"context"
+
 	"encoding/json"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	vultversion "github.com/vult-ai/vult/internal/version"
 	"io"
 	"log/slog"
 	"strings"
@@ -77,7 +79,7 @@ func settings(options []Options) Options {
 	return options[0]
 }
 func makeServer(call Call, access string, remote bool, config Options) *mcp.Server {
-	version := "0.5.0"
+	version := vultversion.Version
 	options := &mcp.ServerOptions{Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	if remote {
 		options.Capabilities = &mcp.ServerCapabilities{}

@@ -34,7 +34,7 @@ func validAgentRequest(s string) bool {
 	return true
 }
 
-var agentPage = template.Must(template.New("agent").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect {{.Client}} · Vult</title><link rel="stylesheet" href="/auth/style.css"><script src="/auth/particles.js" defer></script></head><body><main>` + vultLockup + `
+var agentPage = template.Must(template.New("agent").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect {{.Client}} · Vult</title>` + authHead + `<script src="/auth/particles.js" defer></script></head><body>` + authBar + `<main>
 <h1>Connect {{.Client}}</h1>
 <p><strong>An app on this computer</strong> calls itself “{{.Client}}” and asked to use Vult. Allow it only if you just asked your agent to use Vult.</p>
 <form method="post" action="/auth/agent">
@@ -50,7 +50,7 @@ var agentPage = template.Must(template.New("agent").Parse(`<!doctype html><html 
 <button name="decision" value="deny" type="submit">Don't allow</button>
 </form></main></body></html>`))
 
-var agentMessage = template.Must(template.New("agent-message").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Title}} · Vult</title><link rel="stylesheet" href="/auth/style.css"><script src="/auth/particles.js" defer></script></head><body><main>` + vultLockup + `<h1>{{.Title}}</h1><p>{{.Body}}</p>{{if .Link}}<p><a href="{{.Link}}">{{.LinkText}}</a></p>{{end}}</main></body></html>`))
+var agentMessage = template.Must(template.New("agent-message").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Title}} · Vult</title>` + authHead + `<script src="/auth/particles.js" defer></script></head><body>` + authBar + `<main><h1>{{.Title}}</h1><p>{{.Body}}</p>{{if .Link}}<p><a href="{{.Link}}">{{.LinkText}}</a></p>{{end}}</main></body></html>`))
 
 func agentNotice(w http.ResponseWriter, status int, title, body, link, linkText string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

@@ -68,7 +68,7 @@ test("actual sign-in callback rejects substituted, ambiguous and noncanonical de
   assert.deepEqual(result.navigations, []);
 });
 
-async function register({ hash = "", code = "", recovering = false, failOptions = false, failFirstOptions = false, failCredential = false, failFirstCredential = false, failVerify = false } = {}) {
+async function register({ hash = "", code = "", recovering = false, local = false, failOptions = false, failFirstOptions = false, failCredential = false, failFirstCredential = false, failVerify = false } = {}) {
   let click;
   let rejectedOptions = false;
   let credentialAttempts = 0;
@@ -78,17 +78,19 @@ async function register({ hash = "", code = "", recovering = false, failOptions 
   const nodes = { [button.id]: button, "passkey-status": status, ...(recovering
     ? { "passkey-recovery-code": { value: "A".repeat(22) }, "passkey-code-label": { hidden: false } }
     : { "passkey-setup-code": input, "passkey-setup-label": label }) };
+  const dial = { dataset: { phase: "idle" } };
+  if (local) Object.assign(nodes, { "passkey-dial": dial, "passkey-setup-missing": { hidden: true } });
   const context = {
     document: { getElementById: (id) => nodes[id] || null, querySelector: () => ({ content: "example-csrf" }) },
     location: { hash, pathname: "/auth/setup", replace: (path) => navigations.push(path) },
     history: { replaceState: (_, __, path) => removedFragments.push(path) },
-    window: { isSecureContext: true },
+    window: { isSecureContext: true, PublicKeyCredential: function PublicKeyCredential() {} },
     navigator: { credentials: { create: async () => {
       assert.equal(input.value, "", "setup input retained the code during credential creation");
       if (failCredential || (failFirstCredential && credentialAttempts++ === 0)) throw new Error("canceled");
       return { toJSON: () => ({ id: "example", type: "public-key" }) };
     } } },
-    Uint8Array, URLSearchParams, atob, btoa,
+    Uint8Array, URLSearchParams, atob, btoa, setTimeout: (fn) => fn(),
     fetch: async (path, options) => {
       requests.push({ path, body: JSON.parse(options.body) });
       assert.equal(options.credentials, "same-origin");
@@ -109,7 +111,7 @@ async function register({ hash = "", code = "", recovering = false, failOptions 
   runInNewContext(script, context);
   const initiallyHidden = label.hidden;
   await click();
-  return { requests, navigations, removedFragments, input, label, status, button, initiallyHidden, click };
+  return { requests, navigations, removedFragments, input, label, status, button, initiallyHidden, click, dial };
 }
 
 test("manual setup uses the existing CSRF-checked registration without a secret URL", async () => {
@@ -276,4 +278,69 @@ test("setup can switch to an authenticator app and continues to the recovery cod
     "/auth/authenticator/enroll/verify", "/auth/authenticator/enroll/verify"]);
   assert.equal(requests[0].body.setup_token, reference);
   assert.deepEqual(navigations, ["/auth/recovery-codes"]);
+});
+
+test("on this Mac a failed passkey keeps the setup link and never asks for a code", async () => {
+  const result = await register({ local: true, hash: `#setup=${reference}`, failFirstCredential: true });
+  assert.equal(result.label.hidden, true);
+  assert.equal(result.status.textContent, "The passkey wasn’t created. Try again.");
+  assert.equal(result.dial.dataset.phase, "idle");
+  assert.equal(result.button.disabled, false);
+  await result.click();
+  assert.equal(result.label.hidden, true);
+  assert.deepEqual(result.requests.map((r) => r.body.setup_token).filter(Boolean), [reference, reference]);
+  assert.equal(result.dial.dataset.phase, "open");
+  assert.equal(result.status.textContent, "Passkey created");
+  assert.deepEqual(result.navigations, ["/"]);
+});
+
+test("the authenticator gets its own screen and the passkey stays one step back", async () => {
+  let switchClick, backClick;
+  const elements = Object.fromEntries(["passkey-register", "passkey-status", "authenticator-switch", "authenticator-setup", "passkey-threshold",
+    "authenticator-secret", "authenticator-code", "authenticator-status", "authenticator-back"].map((id) => [id, { id, hidden: id === "authenticator-setup" || id === "authenticator-switch", textContent: "", value: "", focus() {} }]));
+  elements["authenticator-switch"].addEventListener = (_, fn) => { switchClick = fn; };
+  elements["authenticator-back"].addEventListener = (_, fn) => { backClick = fn; };
+  elements["passkey-register"].addEventListener = () => {};
+  elements["authenticator-code"].addEventListener = () => {};
+  runInNewContext(script, {
+    document: { getElementById: (id) => elements[id] || null, querySelector: () => ({ content: "example-csrf" }) },
+    location: { hash: `#setup=${reference}`, pathname: "/auth/setup" },
+    history: { replaceState: () => {} },
+    window: { isSecureContext: true },
+    sessionStorage: { setItem() {}, getItem: () => null, removeItem() {} },
+    Uint8Array, URLSearchParams, atob, btoa, setTimeout,
+    fetch: async () => ({ ok: true, headers: { get: () => "application/json" }, json: async () => ({ secret: "JBSWY3DPEHPK3PXP" }) }),
+  });
+  assert.equal(elements["authenticator-switch"].hidden, false);
+  await switchClick();
+  assert.equal(elements["passkey-threshold"].hidden, true);
+  assert.equal(elements["authenticator-setup"].hidden, false);
+  assert.equal(elements["authenticator-secret"].textContent, "JBSWY3DPEHPK3PXP");
+  assert.equal(elements["passkey-register"].hidden, false, "the passkey button stays ready behind the screen");
+  elements["authenticator-code"].value = "123";
+  backClick();
+  assert.equal(elements["passkey-threshold"].hidden, false);
+  assert.equal(elements["authenticator-setup"].hidden, true);
+  assert.equal(elements["authenticator-code"].value, "");
+  assert.equal(elements["authenticator-switch"].disabled, false);
+});
+
+test("without passkeys on this device the authenticator leads, as on Vult's sign-up", () => {
+  const elements = Object.fromEntries(["passkey-register", "passkey-status", "passkey-dial", "passkey-fine", "passkey-setup-missing",
+    "authenticator-switch", "authenticator-setup", "setup-help-toggle"].map((id) => [id, { id, hidden: false, disabled: false, textContent: "", className: "link", dataset: {}, addEventListener() {} }]));
+  elements["authenticator-switch"].hidden = true;
+  runInNewContext(script, {
+    document: { getElementById: (id) => elements[id] || null, querySelector: () => ({ content: "example-csrf" }) },
+    location: { hash: `#setup=${reference}`, pathname: "/auth/setup" },
+    history: { replaceState: () => {} },
+    window: { isSecureContext: true },
+    navigator: {},
+    sessionStorage: { setItem() {}, getItem: () => null, removeItem() {} },
+    Uint8Array, URLSearchParams, atob, btoa,
+  });
+  assert.equal(elements["passkey-register"].disabled, true);
+  assert.equal(elements["passkey-fine"].textContent, "Passkeys aren’t available here. Use an authenticator app, or open Vult on another device.");
+  assert.equal(elements["authenticator-switch"].hidden, false);
+  assert.equal(elements["authenticator-switch"].textContent, "Use an authenticator app");
+  assert.equal(elements["authenticator-switch"].className, "secondary wide");
 });

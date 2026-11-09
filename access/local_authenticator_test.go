@@ -37,10 +37,7 @@ type authenticatorFixture struct {
 func newAuthenticatorFixture(t *testing.T, port string) *authenticatorFixture {
 	t.Helper()
 	f := fresh(t)
-	host, err := loopback.Hostname()
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := loopback.Host
 	origin := "https://" + host + ":" + port
 	s, err := access.New(f.auth, f.owners, origin)
 	if err != nil {

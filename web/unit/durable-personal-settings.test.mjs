@@ -3,11 +3,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { build } from "esbuild";
 import { createRequire } from "node:module";
-import { readFile } from "node:fs/promises";
-import { basename,dirname,resolve } from "node:path";
 import { React,withDOM } from "./helpers/dom.mjs";
 async function components(){
- const result=await build({stdin:{contents:'export {PersonalSettingsHost} from "./components/shell/personal-settings-host";export {AppShell} from "./components/shell/app-shell";',resolveDir:new URL("../src",import.meta.url).pathname,loader:"tsx"},jsx:"automatic",bundle:true,write:false,platform:"node",format:"cjs",packages:"external",loader:{".css":"empty",".module.css":"empty"},plugins:process.env.VULT_USER_STAGE?[{name:"qualified-personal-stage",setup(b){b.onLoad({filter:/(?:personal-settings-host|personal-settings|profile-menu)\.tsx$/},async args=>({contents:await readFile(resolve(process.env.VULT_USER_STAGE,basename(args.path)),"utf8"),resolveDir:dirname(args.path),loader:"tsx"}));}},phosphorPlugin]:[phosphorPlugin]});
+ const result=await build({stdin:{contents:'export {PersonalSettingsHost,usePersonalAccount} from "./components/shell/personal-settings-host";export {AppShell} from "./components/shell/app-shell";',resolveDir:new URL("../src",import.meta.url).pathname,loader:"tsx"},jsx:"automatic",bundle:true,write:false,platform:"node",format:"cjs",packages:"external",loader:{".css":"empty",".module.css":"empty"},plugins:[phosphorPlugin]});
  const module={exports:{}};new Function("module","exports","require",result.outputFiles[0].text)(module,module.exports,createRequire(import.meta.url));return module.exports;
 }
 const click=async node=>{assert.ok(node);await React.act(async()=>{node.click();await new Promise(requestAnimationFrame);});};
@@ -45,4 +43,44 @@ test("local personal settings use the instance and import browser values only af
    await click(document.querySelector('button[aria-label="Open profile menu"]'));assert.match(document.body.textContent,/Browser person/);assert.equal(writes.length,1,"clearing browser values must not write defaults over the instance");
   }finally{globalThis.fetch=prior;}
  });
+});
+
+test("the verified session mode is shared and disappears when session refresh fails", async () => {
+  await withDOM(async ({ render, unmount, window }) => {
+    const { PersonalSettingsHost, usePersonalAccount } = await components();
+    const before = globalThis.fetch;
+    const user = "b".repeat(64);
+    let failure = 0;
+    let reads = 0;
+    globalThis.fetch = async (url) => {
+      if (url === "/auth/session") {
+        reads += 1;
+        if (failure) return { ok: false, status: failure, json: async () => ({}) };
+        return { ok: true, json: async () => ({ mode: "local", user_id: user, csrf: "synthetic-session" }) };
+      }
+      assert.equal(url, "/api/v1/me/settings");
+      return { ok: true, json: async () => ({ user_id: user, revision: "1", profile: { version: 1, display_name: "Synthetic owner", photo: null }, preferences: { version: 1, language: "en", regional_format: "en-US", date_format: "standard", time_format: "24h", digit_grouping: true, negative_style: "minus" }, appearance: "light" }) };
+    };
+    function Mode() {
+      return React.createElement("output", { "data-mode": usePersonalAccount()?.mode ?? "unavailable" });
+    }
+    const mode = () => document.querySelector("output")?.dataset.mode;
+    try {
+      await render(React.createElement(PersonalSettingsHost, null, React.createElement(Mode)));
+      await waitFor(() => mode() === "local");
+      assert.equal(reads, 1, "all consumers share the host's existing session read");
+      failure = 503;
+      await React.act(async () => window.dispatchEvent(new Event("focus")));
+      await waitFor(() => mode() === "unavailable");
+      failure = 0;
+      await React.act(async () => window.dispatchEvent(new Event("focus")));
+      await waitFor(() => mode() === "local");
+      failure = 401;
+      await React.act(async () => window.dispatchEvent(new Event("focus")));
+      await waitFor(() => mode() === "unavailable");
+    } finally {
+      await unmount();
+      globalThis.fetch = before;
+    }
+  });
 });

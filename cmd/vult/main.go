@@ -48,6 +48,7 @@ const help = `Vult ` + daemon.Version + ` — local general ledger
   vult export --documents --book ID --output FILE.tar
   vult backup --output FILE.age
   vult restore --input FILE.age
+  vult update [--check]
   vult uninstall
   vult --version
   vult help
@@ -103,6 +104,9 @@ func run(args []string, out, errout io.Writer) error {
 	if args[0] == "doctor" {
 		return runDoctor(ctx, args[1:], out)
 	}
+	if args[0] == "update" {
+		return runUpdate(ctx, args[1:], out)
+	}
 	if archiveCommand(args) {
 		return runArchive(ctx, args, out)
 	}
@@ -122,7 +126,7 @@ func run(args []string, out, errout io.Writer) error {
 		return daemon.InstallNativeBrowser(ctx)
 	}
 	if args[0] == "_browser_check" {
-		if len(args) != 1 || runtime.GOOS != "linux" || os.Geteuid() != 0 {
+		if len(args) != 1 || (runtime.GOOS != "linux" && runtime.GOOS != "darwin") || os.Geteuid() != 0 {
 			return ledger.ErrDenied
 		}
 		return checkLocalBrowser(ctx)

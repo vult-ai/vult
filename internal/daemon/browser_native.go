@@ -3,14 +3,18 @@ package daemon
 import (
 	"context"
 	"errors"
+	"github.com/vult-ai/vult/internal/update"
 	"io/fs"
 	"net"
+	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/vult-ai/vult/internal/fssecurity"
 	"github.com/vult-ai/vult/internal/local"
@@ -222,6 +226,7 @@ func ServeNativeBrowser(ctx context.Context) error {
 		Database: db, Access: a, Web: app,
 		ReadDocument: client.DownloadForOwner, UploadDocument: client.UploadForOwner,
 		LocalBooks: localBooks{client},
+		Updates:    updateChecker(runtime.GOOS),
 	})
 	if err != nil {
 		return err
@@ -231,4 +236,14 @@ func ServeNativeBrowser(ctx context.Context) error {
 		return server.ErrUnavailable
 	}
 	return server.Serve(ctx, s, l)
+}
+
+// updateChecker looks for newer releases on macOS. The Ubuntu browser service
+// may reach only loopback addresses, so it has no checker; its owners update
+// from the release page.
+func updateChecker(goos string) *update.Checker {
+	if goos != "darwin" {
+		return nil
+	}
+	return &update.Checker{Current: Version, URL: update.ManifestURL, Client: &http.Client{Timeout: 10 * time.Second}, Every: 12 * time.Hour}
 }

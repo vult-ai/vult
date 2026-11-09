@@ -13,7 +13,8 @@ curl -fsSL https://vult.sh | sh
 The script checks your processor and macOS version before asking for native
 administrator approval. It downloads one fixed GitHub release into an
 administrator-owned temporary directory, verifies its pinned SHA-256, then runs
-the macOS installer. It removes its download on success or failure. No Docker,
+the macOS installer. Installation reports success after both the ledger and local
+browser are ready. It removes its download on success or failure. No Docker,
 Homebrew, Go or compilation is needed.
 
 Run the script as your normal user, never with `sudo sh`. The native approval
@@ -71,6 +72,31 @@ The package checksum checks that the downloaded bytes match the release selected
 by the script. Trust in the script itself comes from the HTTPS distribution path;
 this is not an Apple Developer ID signature or notarization claim.
 
+## Update
+
+While Vult is open on your Mac, it checks GitHub for a newer release at most once
+every 12 hours. It reads only the public release manifest and sends nothing about
+your installation. When a newer release is published, Vult shows a small notice
+in the sidebar.
+
+From your own terminal:
+
+```sh
+vult update
+```
+
+Vult downloads the installer for the exact release it checked and verifies its
+checksum from that release's manifest. It then writes a backup of every Book to
+`~/Library/Application Support/Vult/Backups/` before running the installer. If the
+download or backup fails, nothing is installed. macOS asks for administrator
+approval; once setup starts, finish or cancel in its prompt and keep the terminal
+open until it reports the result. `vult update --check` only reports whether a
+newer release is published.
+
+If the installer did not create the optional `vult` shortcut, use
+`/Library/PrivilegedHelperTools/ai.vult.ledger/vult update`. The sidebar copies
+this full command so it works with either installation.
+
 ## Remove or reinstall
 
 From your own terminal:
@@ -102,7 +128,7 @@ configuration, a missing initialized database, or a missing ledger schema stops
 startup and requires recovery. Installing over these conditions does not create
 an empty replacement or generate replacement keys.
 
-Version 0.5.0 upgrades recognized v0.1.0, v0.2.0, v0.3.0 and v0.4.0 ledgers through
+Version 0.5.1 upgrades recognized v0.1.0, v0.2.0, v0.3.0, v0.4.0 and v0.5.0 ledgers through
 checksum-verified forward migrations. It preserves Books, journal rows, request
 outcomes, connections, originals and local keys. Missing, altered, gapped or
 unknown migration receipts stop startup

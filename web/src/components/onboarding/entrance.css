@@ -5,11 +5,25 @@
  */
 .entrance {
   overflow: hidden;
+  /* Keeps the particles above the page's own background. */
+  isolation: isolate;
 }
+/* The same top bar as the sign-in pages that lead here: a quiet logo on the
+   left, the theme on the right. */
 .entrance-header {
   position: absolute;
   inset: 28px 32px auto;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1120px;
+  margin-inline: auto;
+}
+.entrance-logo {
+  display: flex;
+  opacity: 0.5;
+  filter: grayscale(1);
 }
 .entrance-stages {
   position: relative;
@@ -23,27 +37,18 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* Tall stages start below the top padding instead of centring into it. */
+  justify-content: safe center;
   gap: 16px;
-  padding: 104px 24px 56px;
+  padding: 152px 24px 56px;
   text-align: center;
   overflow-y: auto;
+  /* Content scrolls out of sight beneath the top bar instead of under the logo. */
+  mask-image: linear-gradient(to bottom, transparent 0, transparent 76px, black 128px);
   transition:
     opacity 700ms cubic-bezier(0.2, 0.7, 0.2, 1),
     transform 900ms cubic-bezier(0.2, 0.7, 0.2, 1),
     filter 700ms ease;
-}
-.entrance-stage[data-state="next"] {
-  opacity: 0;
-  transform: scale(0.96) translateY(12px);
-  filter: blur(4px);
-  pointer-events: none;
-}
-.entrance-stage[data-state="past"] {
-  opacity: 0;
-  transform: scale(1.08);
-  filter: blur(6px);
-  pointer-events: none;
 }
 .entrance h1 {
   max-width: 22ch;
@@ -54,28 +59,11 @@
   letter-spacing: var(--text-vult-page-title--letter-spacing);
   text-wrap: balance;
 }
-.entrance-lede {
-  max-width: 42ch;
-  margin: 0;
-  color: var(--color-text-tertiary);
-  font-size: var(--text-vult-body);
-  line-height: var(--text-vult-body--line-height);
-}
 .entrance-fine {
   margin: 0;
   color: var(--color-text-quaternary);
   font-size: var(--text-vult-metadata);
   line-height: var(--text-vult-metadata--line-height);
-}
-.entrance-status {
-  min-height: 20px;
-  margin: 0;
-  color: var(--color-text-tertiary);
-  font-size: var(--text-vult-ui);
-  line-height: var(--text-vult-ui--line-height);
-}
-.entrance-field-note {
-  margin-top: -10px;
 }
 .entrance-error {
   margin: 0;
@@ -92,182 +80,9 @@
   font-weight: var(--text-vult-metadata--font-weight);
   line-height: var(--text-vult-metadata--line-height);
 }
-.entrance-eyebrow svg {
-  width: 14px;
-  height: 14px;
-}
 .entrance .vult-button svg {
   width: 18px;
   height: 18px;
-}
-
-/* The threshold: a dial around the fingerprint that opens once the passkey exists. */
-.entrance-dial {
-  position: relative;
-  width: 200px;
-  height: 200px;
-  margin-bottom: 12px;
-  color: var(--color-fg-secondary);
-}
-.entrance-dial > svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  fill: none;
-}
-.entrance-dial circle {
-  stroke: var(--color-border-secondary);
-  stroke-width: 1;
-}
-.entrance-dial .entrance-ticks {
-  stroke: var(--color-fg-quaternary);
-  stroke-width: 2;
-  stroke-dasharray: 1 15.27;
-}
-.entrance-dial .entrance-dash {
-  stroke: var(--color-border-primary);
-  stroke-dasharray: 36 12;
-}
-.entrance-dial .entrance-dots {
-  stroke: var(--color-fg-quaternary);
-  stroke-dasharray: 2 7;
-  opacity: 0.6;
-}
-.entrance-ring-outer,
-.entrance-ring-inner {
-  transform-origin: 114px 114px;
-  transition:
-    transform 1100ms cubic-bezier(0.2, 0.7, 0.2, 1),
-    opacity 800ms ease;
-}
-.entrance-ring-outer {
-  animation: entrance-spin 60s linear infinite;
-}
-.entrance-ring-inner {
-  animation: entrance-spin 90s linear infinite reverse;
-}
-.entrance-core {
-  position: absolute;
-  inset: 56px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-full);
-  background: var(--color-bg-primary);
-  box-shadow: var(--shadow-lg), 0 0 0 1px var(--color-border-secondary);
-  transition:
-    transform 800ms cubic-bezier(0.2, 0.7, 0.2, 1),
-    box-shadow 500ms ease;
-}
-.entrance-core svg {
-  width: 44px;
-  height: 44px;
-}
-.entrance-dial[data-phase="reading"] .entrance-core {
-  box-shadow: var(--shadow-xl), 0 0 0 2px var(--color-border-primary);
-}
-.entrance-dial[data-phase="reading"] .entrance-core svg {
-  animation: entrance-scan 1s ease-in-out infinite;
-}
-.entrance-dial[data-phase="open"] .entrance-ring-outer {
-  animation: none;
-  transform: scale(1.8);
-  opacity: 0;
-}
-.entrance-dial[data-phase="open"] .entrance-ring-inner {
-  animation: none;
-  transform: scale(2.4);
-  opacity: 0;
-}
-.entrance-dial[data-phase="open"] .entrance-core {
-  color: var(--color-fg-success-primary);
-  transform: scale(0.9);
-}
-
-/* Authenticator app, instead of a passkey. */
-.entrance-authenticator {
-  display: grid;
-  justify-items: center;
-  gap: 12px;
-  width: min(340px, 100%);
-}
-.entrance-authenticator .field {
-  width: 100%;
-  text-align: left;
-}
-.entrance-authenticator code {
-  font-family: var(--font-log);
-  letter-spacing: 0.04em;
-}
-.entrance-qr {
-  width: 168px;
-  height: 168px;
-  padding: 8px;
-  border: 1px solid var(--color-border-secondary);
-  border-radius: var(--radius-xl);
-  background: var(--color-bg-primary);
-}
-
-/* Recovery codes. */
-.entrance-keys {
-  gap: 20px;
-}
-.entrance-codes {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 32px;
-  width: min(480px, 100%);
-  margin: 0;
-  padding: 20px 24px;
-  list-style: none;
-  border: 1px solid var(--color-border-secondary);
-  border-radius: var(--radius-2xl);
-  background: var(--color-bg-primary);
-  box-shadow: var(--shadow-sm);
-  text-align: left;
-}
-.entrance-codes li {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  opacity: 0;
-  transform: translateY(4px);
-  animation: entrance-rise 400ms ease-out forwards;
-}
-.entrance-codes span {
-  color: var(--color-text-quaternary);
-  font-family: var(--font-log);
-  font-size: var(--text-vult-metadata);
-  line-height: var(--text-vult-metadata--line-height);
-}
-.entrance-codes code {
-  font-family: var(--font-log);
-  font-size: var(--text-vult-log-value);
-  line-height: var(--text-vult-log-value--line-height);
-  letter-spacing: 0.04em;
-}
-.entrance-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: min(480px, 100%);
-}
-.entrance-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--color-text-secondary);
-  font-size: var(--text-vult-ui);
-  line-height: var(--text-vult-ui--line-height);
-  cursor: pointer;
-}
-.entrance-check input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--color-fg-primary);
 }
 
 /* The first Book: the form beside the dashboard it creates. */
@@ -275,8 +90,8 @@
   flex-direction: row;
   align-items: center;
   gap: 56px;
-  max-width: 1180px;
-  margin-inline: auto;
+  /* The stage spans the window, so its scrollbar sits at the window's edge. */
+  padding-inline: max(24px, calc((100% - 1180px) / 2));
   text-align: left;
 }
 .entrance-book-form {
@@ -292,20 +107,16 @@
 .entrance-book-form > .vult-button {
   align-self: flex-start;
 }
+/* The note sits with the button that makes those choices final. */
+.entrance-commit {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  margin-top: 12px;
+}
 .entrance-book-form .welcome-purpose {
   margin: 0;
 }
-.entrance-chip {
-  align-self: flex-start;
-  padding: 4px 10px;
-  border-radius: var(--radius-full);
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-secondary);
-  font-size: var(--text-vult-metadata);
-  font-weight: var(--text-vult-metadata--font-weight);
-  line-height: var(--text-vult-metadata--line-height);
-}
-
 /* Inside the Book: the form steps away and the agent work takes the stage. */
 .entrance-book[data-inside] .entrance-book-form {
   position: absolute;
@@ -314,7 +125,7 @@
   pointer-events: none;
 }
 .entrance-book[data-inside] {
-  justify-content: center;
+  justify-content: safe center;
 }
 .entrance-guide {
   display: grid;
@@ -347,9 +158,6 @@
   color: var(--color-text-tertiary);
   font-size: var(--text-vult-ui);
   line-height: var(--text-vult-ui--line-height);
-}
-.entrance-guide .welcome-agent-tabs {
-  margin: 0;
 }
 .entrance-steps {
   display: grid;
@@ -388,12 +196,11 @@
 .entrance-copy code {
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
+  overflow-wrap: anywhere;
   color: var(--color-text-primary);
   font-family: var(--font-log);
   font-size: var(--text-vult-log);
   line-height: var(--text-vult-log--line-height);
-  white-space: nowrap;
 }
 .entrance-waiting {
   display: flex;
@@ -515,33 +322,15 @@
 }
 /* Without the agent's work to show yet, the form stands on its own. */
 .entrance-book:not(:has(.entrance-journey)) {
-  justify-content: center;
+  justify-content: safe center;
 }
 .entrance-book[data-inside] .entrance-guide,
 .entrance-book[data-inside] .agent-status {
   width: min(560px, 100%);
 }
 
-@keyframes entrance-spin {
-  to { transform: rotate(360deg); }
-}
-@keyframes entrance-scan {
-  50% { opacity: 0.4; }
-}
-@keyframes entrance-rise {
-  to { opacity: 1; transform: none; }
-}
 @keyframes entrance-arrive-up {
   from { opacity: 0; transform: translateY(10px); }
-}
-@keyframes entrance-count {
-  from { opacity: 0.3; transform: translateY(4px); }
-}
-@keyframes entrance-grow {
-  from { transform: scaleY(0); }
-}
-@keyframes entrance-arrive {
-  from { opacity: 0; transform: translateY(-8px); background: var(--color-bg-secondary); }
 }
 @keyframes entrance-wait {
   50% { opacity: 0.45; }
@@ -561,26 +350,14 @@
     flex-basis: auto;
     width: 100%;
   }
-
-  .entrance-codes {
-    grid-template-columns: 1fr;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   .entrance-stage,
-  .entrance-ring-outer,
-  .entrance-ring-inner,
-  .entrance-core,
   .entrance-book-form,
   .entrance-guide,
   .entrance-guide-row,
-  .entrance-live,
-  .entrance-codes li {
+  .entrance-live {
     animation: none;
     transition: none;
-  }
-  .entrance-codes li {
-    opacity: 1;
-    transform: none;
   }
 }

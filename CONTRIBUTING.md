@@ -76,10 +76,10 @@ VULT_TEST_ISOLATED=1 VULT_TEST_DSN_FILE=/path/to/synthetic-dsn scripts/check-cha
 
 Browser components follow the [typography standard](docs/design/typography.md).
 
-The browser sign-in script has dependency-free tests using Node's test runner:
+The browser sign-in scripts have dependency-free tests using Node's test runner:
 
 ```sh
-node --test access/passkeys.test.mjs
+node --test access/passkeys.test.mjs access/theme.test.mjs
 ```
 
 To review the interface in a browser, build it and start the preview server.

@@ -19,6 +19,7 @@ import { OnboardingLayout } from "./components/onboarding/onboarding-layout";
 import { FirstRun } from "./components/onboarding/first-run";
 import { EmptyVult, Welcome, bookHasEntries, finishWelcome, welcomeEligible } from "./components/onboarding/welcome";
 import { LocalEntrance, entranceStarted, finishEntrance } from "./components/onboarding/local-entrance";
+import { HostedEntrance } from "./components/onboarding/hosted-entrance";
 import { AgentRequestBar } from "./components/onboarding/agent-request-bar";
 import { readSession } from "./lib/session";
 import { decodeReviewReference, readWaitingCount } from "./lib/proposals";
@@ -41,8 +42,9 @@ import {
 import { lazy, Suspense } from "react";
 import { AppShell } from "./components/shell/app-shell";
 import { OnboardingCard } from "./components/shell/onboarding-card";
+import { UpdateNotice, useUpdateNotice } from "./components/shell/update-notice";
 import { BookFinder } from "./components/shell/book-finder";
-import { PersonalSettingsHost } from "./components/shell/personal-settings-host";
+import { PersonalSettingsHost, usePersonalAccount } from "./components/shell/personal-settings-host";
 import { FocusVisibility } from "./design-system/focus-visibility";
 import { useReadRetry } from "./design-system/use-read-retry";
 import { errorCopy } from "./lib/error-copy";
@@ -120,6 +122,7 @@ function BookWorkspace({
   initialState?: State;
   Table?: TableComponent;
 }) {
+  const updateNotice = useUpdateNotice(usePersonalAccount()?.mode === "local");
   const [state, setState] = useState<State | null>(initialState ?? null);
   const [saveRevision, setSaveRevision] = useState(0);
   // Approvals waiting for the owner, shown on the sidebar. Checked every minute.
@@ -551,6 +554,8 @@ function BookWorkspace({
       ) : undefined,
     ready: !!book,
     sidebarCard: book ? (
+      <>
+      <UpdateNotice {...updateNotice} />
       <OnboardingCard
         bookId={book.id}
         onConnectAgent={() => {
@@ -563,6 +568,7 @@ function BookWorkspace({
         onAddStatement={() => navigate("documents")}
         onReview={() => navigate("approvals")}
       />
+      </>
     ) : undefined,
     collection,
     active: workspace,
@@ -1017,6 +1023,7 @@ function App({
         fallback={<FirstRun onCheck={() => void loadBooks()} checking={loading} />}
         onCreated={() => void loadBooks()}
         local={<LocalEntrance onOpen={(book, page) => openFromEntrance(book, page, () => void loadBooks())} />}
+        hosted={<HostedEntrance onOpen={(book, page) => openFromEntrance(book, page, () => void loadBooks())} />}
       />
     );
   }
@@ -1083,7 +1090,7 @@ function NewBookWelcome({
   onBooksChanged: () => void;
   children: ReactNode;
 }) {
-  const [status, setStatus] = useState<"checking" | "welcome" | "entrance" | "book">(() =>
+  const [status, setStatus] = useState<"checking" | "welcome" | "entrance" | "hosted" | "book">(() =>
     entranceStarted(book.id) || (readWorkspace() === "dashboard" && welcomeEligible(book)) ? "checking" : "book",
   );
   useEffect(() => {
@@ -1098,9 +1105,9 @@ function NewBookWelcome({
           setStatus("book");
           return;
         }
-        // On this Mac the first run is always the entrance scene.
-        const local = entranceStarted(book.id) || (await readSession(controller.signal).then((s) => s.mode === "local", () => false));
-        if (!controller.signal.aborted) setStatus(local ? "entrance" : "welcome");
+        // The first run is the entrance scene, on this Mac and on a Vult server.
+        const mode = await readSession(controller.signal).then((s) => s.mode ?? "", () => "");
+        if (!controller.signal.aborted) setStatus(mode === "local" ? "entrance" : mode ? "hosted" : entranceStarted(book.id) ? "entrance" : "welcome");
       },
       () => { if (!controller.signal.aborted) setStatus("book"); },
     );
@@ -1114,6 +1121,8 @@ function NewBookWelcome({
     );
   if (status === "entrance")
     return <LocalEntrance book={book} onOpen={(b, page) => openFromEntrance(b, page, () => { setStatus("book"); onBooksChanged(); })} />;
+  if (status === "hosted")
+    return <HostedEntrance book={book} onOpen={(b, page) => openFromEntrance(b, page, () => { setStatus("book"); onBooksChanged(); })} />;
   if (status === "welcome")
     return (
       <OnboardingLayout>

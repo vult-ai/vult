@@ -9,7 +9,7 @@ Keep the generated installer with its matching release archive. From your own
 terminal, run:
 
 ```sh
-sh install.sh ./vult-0.5.0-ubuntu-24.04-amd64.tar.gz
+sh install.sh ./vult-0.5.1-ubuntu-24.04-amd64.tar.gz
 ```
 
 The installer requests `sudo` approval, verifies the archive checksum pinned in

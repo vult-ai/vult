@@ -15,24 +15,21 @@ type LocalRecovery interface {
 	TakeRecovery(ctx context.Context, session string) (codes []string, backupKey string, err error)
 }
 
-var recoveryPage = template.Must(template.New("recovery").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Save your recovery codes · Vult</title><link rel="stylesheet" href="/auth/style.css"><script src="/auth/particles.js" defer></script><script src="/auth/recovery.js" defer></script></head><body><main>` + vultLockup + `
-<h1>Save your recovery codes</h1>
-<p>If you lose your passkey, one of these lets you back in. Each code works once. Keep them somewhere safe and offline, like a password manager. Never give them to an agent.</p>
-<ol class="codes" id="recovery-codes">{{range .Codes}}<li><code>{{.}}</code></li>{{end}}</ol>
+var recoveryPage = template.Must(template.New("recovery").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Save your recovery codes · Vult</title>` + authHead + `<script src="/auth/particles.js" defer></script><script src="/auth/recovery.js" defer></script></head><body>` + authBar + `<main class="recovery">
+<h1>If you can’t sign in, these let you back in</h1>
+<p>Each code works once. Keep them somewhere safe, like a password manager. Never give them to an agent.</p>
+<div class="code-actions"><button class="secondary" id="recovery-copy" type="button" hidden>` + copyIcon("when-ready") + checkMarkIcon("when-copied") + `<span>Copy codes</span></button><a class="button secondary" id="recovery-download" download="vult-recovery-codes.txt" href="{{.Download}}">` + downloadIcon() + `Download</a></div>
+<ol class="codes" id="recovery-codes" aria-label="Recovery codes">{{range .Codes}}<li><code>{{.}}</code></li>{{end}}</ol>
 {{if .BackupKey}}<h2>Backup key</h2><p class="fine start">Unlocks your encrypted backups.</p><p class="key"><code id="backup-key">{{.BackupKey}}</code></p>{{end}}
-<div class="row"><button class="button secondary" id="recovery-copy" type="button" hidden>Copy</button><a class="button secondary" id="recovery-download" download="vult-recovery-codes.txt" href="{{.Download}}">Download</a></div>
-<p class="fine">Shown only this once.</p>
-<label class="check"><input type="checkbox" id="recovery-saved"> I’ve saved them</label>
-<a class="button" id="recovery-continue" href="/">Continue</a>
-<p id="recovery-status" role="status" aria-live="polite"></p>
+<p class="saved-note">You won’t see these codes again.</p>
+<a class="button" id="recovery-continue" href="/">I’ve saved my codes</a>
+<p id="recovery-status" class="sr-only" role="status" aria-live="polite"></p>
 </main></body></html>`))
 
-// The page's buttons: copy the codes, and keep Continue until they're saved.
+// The page's copy button confirms on itself; Download saves a text file.
 const recoveryScript = `"use strict";
 (() => {
   const copy = document.getElementById("recovery-copy");
-  const saved = document.getElementById("recovery-saved");
-  const next = document.getElementById("recovery-continue");
   const status = document.getElementById("recovery-status");
   const text = () => {
     const codes = Array.from(document.querySelectorAll("#recovery-codes code"), (c) => c.textContent).join("\n");
@@ -40,14 +37,17 @@ const recoveryScript = `"use strict";
     return "Vult recovery codes\n\n" + codes + (key ? "\n\nBackup key\n" + key : "") + "\n";
   };
   if (copy && navigator.clipboard) {
+    const label = copy.querySelector("span");
+    let timer = 0;
     copy.hidden = false;
-    copy.addEventListener("click", () => navigator.clipboard.writeText(text()).then(() => { status.textContent = "Copied. Paste them into your password manager."; }, () => { status.textContent = "Couldn’t copy. Use Download instead."; }));
-  }
-  if (saved && next) {
-    const sync = () => next.setAttribute("aria-disabled", String(!saved.checked));
-    sync();
-    saved.addEventListener("change", sync);
-    next.addEventListener("click", (e) => { if (!saved.checked) e.preventDefault(); });
+    // Copying confirms on the button itself, where the owner is looking.
+    copy.addEventListener("click", () => navigator.clipboard.writeText(text()).then(() => {
+      copy.dataset.copied = "";
+      if (label) label.textContent = "Copied";
+      status.textContent = "Recovery codes copied.";
+      clearTimeout(timer);
+      timer = setTimeout(() => { delete copy.dataset.copied; if (label) label.textContent = "Copy codes"; }, 2000);
+    }, () => { status.textContent = "Couldn’t copy. Use Download instead."; }));
   }
 })();
 `

@@ -131,6 +131,7 @@ while [ "$attempt" -lt 30 ]; do
         "$binary" _browser_install || fail "Local browser setup failed; stored Books were preserved."
         /bin/launchctl bootstrap system /Library/LaunchDaemons/ai.vult.browser.plist
         /bin/launchctl kickstart system/ai.vult.browser
+        "$binary" _browser_check || fail "The local browser did not become ready. Stored Books were preserved; inspect the browser service log."
         echo "Vult installed. Next: $binary mcp install, then $binary setup."
         exit 0
     fi

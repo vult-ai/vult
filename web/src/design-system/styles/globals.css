@@ -214,6 +214,14 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/* Radios and checkboxes keep their own size inside flex rows, so a row never
+   stretches them (or their focus ring) into an oval. Components may resize them. */
+:where(input[type="radio"], input[type="checkbox"]) {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
 /* Hide the default clear button (X) from search inputs. */
 input[type="search"]::-webkit-search-cancel-button {
   -webkit-appearance: none;

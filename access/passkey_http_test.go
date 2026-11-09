@@ -120,10 +120,7 @@ func TestPasskeyBrowserResumesPendingAgentConsent(t *testing.T) {
 
 func TestPasskeyBrowserLocalSessionReportsActualOwnership(t *testing.T) {
 	f := fresh(t)
-	host, err := loopback.Hostname()
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := loopback.Host
 	origin := "https://" + host + ":51999"
 	s, err := access.New(f.auth, f.owners, origin)
 	if err != nil {

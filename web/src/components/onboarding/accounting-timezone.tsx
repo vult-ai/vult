@@ -41,7 +41,7 @@ export function timezoneOptions(current: string) {
 export function AccountingTimezone({
   value,
   onChange,
-  label = "Accounting timezone",
+  label = "Timezone",
 }: {
   value: string;
   onChange: (zone: string) => void;

@@ -61,6 +61,11 @@ access/proposals_test.go
 access/recovery_codes.go
 access/recovery_http.go
 access/review_http_test.go
+access/setup_page_test.go
+access/theme.go
+access/theme.js
+access/theme.test.mjs
+access/theme_test.go
 access/user_avatar.go
 access/user_settings.go
 cmd/vult-server-admin/archive.go
@@ -87,6 +92,8 @@ cmd/vult/browser_test.go
 cmd/vult/doctor.go
 cmd/vult/main.go
 cmd/vult/main_test.go
+cmd/vult/update.go
+cmd/vult/update_test.go
 docs/account-avatar-standard.md
 docs/account-reads.md
 docs/activity.md
@@ -123,6 +130,7 @@ docs/packaging.md
 docs/passkeys.md
 docs/releases/0.4.0.md
 docs/releases/0.5.0.md
+docs/releases/0.5.1.md
 docs/reports.md
 docs/search.md
 docs/server.md
@@ -157,9 +165,11 @@ internal/daemon/browser_native.go
 internal/daemon/browser_owner.go
 internal/daemon/browser_trust.go
 internal/daemon/browser_trust_default.go
+internal/daemon/browser_trust_default_test.go
 internal/daemon/browser_trust_linux.go
 internal/daemon/browser_trust_linux_test.go
 internal/daemon/browser_trust_test.go
+internal/daemon/browser_upgrade_test.go
 internal/daemon/connection_test.go
 internal/daemon/crypto.go
 internal/daemon/document_owner_darwin_test.go
@@ -261,6 +271,9 @@ internal/strictjson/json.go
 internal/strictjson/json_test.go
 internal/testutil/postgres.go
 internal/testutil/released.go
+internal/update/update.go
+internal/update/update_test.go
+internal/version/version.go
 ledger/account_activity.go
 ledger/account_codes_test.go
 ledger/account_detail.go
@@ -443,6 +456,7 @@ server/search_reads.go
 server/search_reads_test.go
 server/server.go
 server/server_test.go
+server/update_test.go
 server/user_settings.go
 server/web.go
 server/web_test.go
@@ -554,12 +568,14 @@ web/src/components/onboarding/entrance.css
 web/src/components/onboarding/entrance.tsx
 web/src/components/onboarding/first-run.css
 web/src/components/onboarding/first-run.tsx
+web/src/components/onboarding/hosted-entrance.tsx
 web/src/components/onboarding/local-entrance.tsx
 web/src/components/onboarding/onboarding-choice.tsx
 web/src/components/onboarding/onboarding-layout.tsx
 web/src/components/onboarding/onboarding-particles.LICENSE.md
 web/src/components/onboarding/onboarding-particles.tsx
 web/src/components/onboarding/onboarding.css
+web/src/components/onboarding/theme-switcher.tsx
 web/src/components/onboarding/timezone-search-aliases.json
 web/src/components/onboarding/welcome.css
 web/src/components/onboarding/welcome.tsx
@@ -576,6 +592,8 @@ web/src/components/shell/personal-settings.css
 web/src/components/shell/personal-settings.tsx
 web/src/components/shell/profile-menu.tsx
 web/src/components/shell/sidebar-context.ts
+web/src/components/shell/update-notice.css
+web/src/components/shell/update-notice.tsx
 web/src/components/shell/use-rail-tooltip.tsx
 web/src/components/statements/financial-grid-layout.tsx
 web/src/components/statements/financial-grid-widths.ts
@@ -816,6 +834,7 @@ web/src/lib/financial-reports.ts
 web/src/lib/journal-read.ts
 web/src/lib/legacy-personal-data.ts
 web/src/lib/legal-identity.ts
+web/src/lib/local-program.ts
 web/src/lib/movement-categories.ts
 web/src/lib/native-money.ts
 web/src/lib/open-created-book.ts
@@ -854,6 +873,8 @@ web/src/styles/multicurrency.css
 web/tests/fixtures/dashboard-errors.ts
 web/tests/fixtures/document-viewer-image.png
 web/tests/fixtures/document-viewer-unreadable.pdf
+web/tests/fixtures/entrance-preview.tsx
+web/tests/fixtures/entrance.html
 web/tests/fixtures/error-cases.ts
 web/tests/fixtures/error-catalog.css
 web/tests/fixtures/error-catalog.tsx
@@ -927,6 +948,7 @@ web/unit/dialog-standard.test.mjs
 web/unit/dialog.test.mjs
 web/unit/documents-readonly.test.mjs
 web/unit/durable-personal-settings.test.mjs
+web/unit/entrance.test.mjs
 web/unit/entry-account-codes.test.mjs
 web/unit/entry-document-history.test.mjs
 web/unit/entry-notes.test.mjs
@@ -946,6 +968,7 @@ web/unit/fixtures/agreement-real/jan_apr_months.json
 web/unit/fixtures/agreement-real/q1_months.json
 web/unit/fixtures/agreement-real/q1_quarter.json
 web/unit/fixtures/agreement-real/q1_weeks.json
+web/unit/fixtures/entrance-in-theme.tsx
 web/unit/fixtures/error-copy.json
 web/unit/fixtures/report-exports.json
 web/unit/fixtures/shared-assets/README.md
@@ -1031,6 +1054,7 @@ web/unit/transaction-journal.test.mjs
 web/unit/transactions-consumer.test.mjs
 web/unit/typography-standard.test.mjs
 web/unit/unclassified-statement-totals.test.mjs
+web/unit/update-notice.test.mjs
 web/unit/user-preferences-ui.test.mjs
 web/unit/user-preferences.test.mjs
 web/unit/user-profile.test.mjs

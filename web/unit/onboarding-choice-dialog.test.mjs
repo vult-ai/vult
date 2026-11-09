@@ -19,7 +19,7 @@ test("searchable options stay in the modal scroll boundary, outside its scrollin
           defaultValue: "Retained Book name",
         }),
         React.createElement(OnboardingChoice, {
-          label: "Accounting timezone",
+          label: "Timezone",
           name: "accounting_timezone",
           value,
           onChange: setValue,
@@ -112,7 +112,7 @@ test("keyboard option navigation retains input focus and highlights the virtual 
     const changes = [];
     await render(
       React.createElement(OnboardingChoice, {
-        label: "Accounting timezone",
+        label: "Timezone",
         name: "accounting_timezone",
         value: "UTC",
         onChange: (value) => changes.push(value),

@@ -67,8 +67,13 @@ administrator approval instead; the online code endpoint is disabled there.
 
 ## Local browser transport
 
-The local browser transport uses HTTPS at a randomly named, installation-specific
-`vult-<identifier>.localhost` origin with a fixed port. It binds only a literal
+The local browser transport uses HTTPS at `vult.localhost` on the installation's
+own fixed port. A hostname of its own, rather than plain `localhost`, keeps Vult's
+cookies and passkeys apart from other local web apps, because browsers share
+cookies across all of a hostname's ports. Installations from before 0.5.1 used an
+installation-specific `vult-<identifier>.localhost` hostname; upgrading moves them
+to `vult.localhost`, keeps their port, Books and database logins, and asks the
+owner to set up a passkey for the new address once. It binds only a literal
 loopback address, verifies the actual listener, and rejects proxy headers, foreign
 origins, wrong TLS server names and plaintext requests. Its certificate is a
 self-signed server leaf for that one hostname, with no certificate-signing

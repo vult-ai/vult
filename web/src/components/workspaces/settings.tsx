@@ -236,7 +236,7 @@ export function Settings({
                       : "Not recorded"}
                   </span>
                 </SettingsRow>
-                <SettingsRow label="Accounting timezone">
+                <SettingsRow label="Timezone">
                   {displayBook.accounting_timezone ? (
                     <span>{displayBook.accounting_timezone}</span>
                   ) : (

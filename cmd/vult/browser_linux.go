@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"net/url"
 	"os/exec"
@@ -15,25 +13,6 @@ import (
 	"github.com/vult-ai/vult/internal/local"
 	"github.com/vult-ai/vult/internal/loopback"
 )
-
-func pinnedBrowserTLS(host string, leaf *x509.Certificate) (*tls.Config, error) {
-	if leaf == nil {
-		return nil, loopback.ErrCertificate
-	}
-	checked, err := loopback.ParsePublicCertificate(host, leaf.Raw)
-	if err != nil {
-		return nil, err
-	}
-	roots := x509.NewCertPool()
-	roots.AddCert(checked)
-	return &tls.Config{MinVersion: tls.VersionTLS13, ServerName: host, RootCAs: roots,
-		VerifyConnection: func(state tls.ConnectionState) error {
-			if len(state.PeerCertificates) != 1 || !bytes.Equal(state.PeerCertificates[0].Raw, checked.Raw) {
-				return loopback.ErrCertificate
-			}
-			return nil
-		}}, nil
-}
 
 func localBrowserTLSConfig(host string) (*tls.Config, error) {
 	leaf, err := daemon.BrowserCertificate(host)

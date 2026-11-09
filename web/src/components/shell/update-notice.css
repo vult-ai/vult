@@ -1,0 +1,79 @@
+/* A newer release, at the foot of the sidebar: the version, one command, and
+   what changed. Hidden in the collapsed rail, like the other footer cards. */
+.update-notice {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-primary);
+}
+.update-notice header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.update-notice p {
+  margin: 0;
+  color: var(--color-text-tertiary);
+}
+.update-notice-close,
+.update-notice-copy {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+.update-notice-close svg,
+.update-notice-copy svg {
+  width: 14px;
+  height: 14px;
+}
+.update-notice-command {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 2px 10px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+}
+.update-notice-command code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-log);
+  font-size: var(--text-vult-log);
+  line-height: var(--text-vult-log--line-height);
+}
+.update-notice-copy {
+  flex: none;
+}
+.update-notice-notes {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: start;
+}
+.update-notice-notes svg {
+  width: 12px;
+  height: 12px;
+}
+@media (min-width: 48rem) {
+  .vult-shell-rail[data-expanded="false"] .update-notice {
+    display: none;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .update-notice-close:hover,
+  .update-notice-copy:hover {
+    background: var(--vult-interaction-hover);
+  }
+}

@@ -299,7 +299,7 @@ test("every Book field stays in the settings row layout, including fiscal year a
           "Book type",
           "Accounting currency",
           "Fiscal year starts",
-          "Accounting timezone",
+          "Timezone",
         ],
       );
       assert.equal(generalPanel.contains(section("Legal identity")), false);
@@ -360,7 +360,7 @@ test("every Book field stays in the settings row layout, including fiscal year a
         /April 6/,
       );
       assert.match(
-        row("Accounting timezone", accounting).querySelector(
+        row("Timezone", accounting).querySelector(
           ".vult-settings-row-content",
         ).textContent,
         /Europe\/Warsaw/,
@@ -666,7 +666,7 @@ test("legacy defaults, absent import actions and selected Book exports stay trut
       // An unrecorded calendar is not January 1, and an unrecorded zone is not UTC.
       assert.match(row("Fiscal year starts").textContent, /Not recorded/);
       // An unrecorded zone is offered as a choice, not shown as a recorded UTC.
-      assert.match(row("Accounting timezone").textContent, /Set timezone/);
+      assert.match(row("Timezone").textContent, /Set timezone/);
       await selectTab("General");
       assert.equal(
         row("Book name").querySelector("input").value,
@@ -758,7 +758,7 @@ test("Book names are directly editable and one submission saves the existing Boo
         "Book type",
         "Accounting currency",
         "Fiscal year starts",
-        "Accounting timezone",
+        "Timezone",
       ])
         assert.equal(row(label).querySelector("input,select"), null);
       assert.equal(

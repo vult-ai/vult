@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, Copy01, Fingerprint, Lock01, UploadCloud02 } from "../../design-system/icons";
+import { Check, Copy01, UploadCloud02 } from "../../design-system/icons";
 import { money } from "../../lib/api";
 import { bookCurrencyOptions, browserBookCurrency, currencyScale } from "../../lib/book-currency";
 import { browserTimeZone } from "../../lib/date-format";
@@ -10,11 +10,12 @@ import { AccountingTimezone } from "./accounting-timezone";
 import { OnboardingChoice } from "./onboarding-choice";
 import { OnboardingParticles } from "./onboarding-particles";
 import { AgentStatus, type AgentStatusStep } from "./agent-status";
+import { ThemeSwitcher } from "./theme-switcher";
 import { PurposeChoice, currencyItems } from "./welcome";
 import "./onboarding.css";
 import "./entrance.css";
 
-type Stage = "threshold" | "keys" | "book" | "inside";
+type Stage = "book" | "inside";
 
 export type EntranceDraft = { name: string; profile?: string; currency: string; timezone?: string };
 /** What Vult sees the agent do, as it happens. Vult never reads the statement
@@ -34,8 +35,7 @@ export type EntranceEntry = { date: string; description: string; amountMinor?: s
 /** The agent's own name for itself, such as Claude Code or Codex. */
 export type EntranceAgent = string;
 
-/** How agents reach this Vult: through the vult command on this Mac, or by
- * address on a Vult server. */
+/** How agents reach the local Vult: through its installed command. */
 export type EntranceConnection = { kind: "local"; program: string } | { kind: "server"; address: string };
 
 export type Journey = {
@@ -54,63 +54,40 @@ export type Journey = {
   /** Where an earlier visit left off: the statement uploaded, and whether an
    * agent is already let in. Null when nothing has happened yet. */
   resume?: () => Promise<{ file: string; skipped?: boolean; agent?: EntranceAgent; allowed: boolean } | null>;
-  /** Offers an authenticator app instead of a passkey (a Vult server). */
-  authenticator?: {
-    secret: string;
-    /** A QR code for the secret, as an image the page can show. */
-    qr?: string;
-    verify: (code: string) => Promise<void>;
-  };
 };
 
-/** The first minutes in a new Vult, as one continuous scene: create the
- * passkey, keep the recovery codes, shape the first Book, then step inside it
- * and bring in the agent and the first statement. It works the same whether
- * the owner started from their agent's chat or from the browser. */
+/** Shape the first Book, then step inside it and bring in the agent and the
+ * first statement. Sign-in and recovery codes come first on Vult's sign-in pages. */
 export function Entrance({
-  start = "threshold",
+  start = "book",
   draft,
   book,
-  recoveryCodes = [],
-  createPasskey = async () => undefined,
   createBook,
   journey,
   onOpen,
 }: {
-  /** Where to begin. On this Mac the passkey and recovery codes come first on
-   * Vult's sign-in pages, so the scene begins at the Book. */
+  /** Start with a new Book, or continue inside one created on an earlier visit. */
   start?: Stage;
   draft?: EntranceDraft | null;
   /** A Book created on an earlier visit, to continue inside it. */
   book?: { name: string; profile?: string; currency: string };
-  recoveryCodes?: string[];
-  createPasskey?: () => Promise<void>;
   createBook: (book: { name: string; profile: string; currency: string; timezone: string }) => Promise<void>;
   journey: Journey;
   /** Leaves the scene for the Book, or for the entries waiting for review. */
   onOpen?: (page: "dashboard" | "approvals") => void;
 }) {
   const [stage, setStage] = useState<Stage>(start);
-  const order: Stage[] = ["threshold", "keys", "book", "inside"];
-  const at = order.indexOf(stage);
-  const state = (s: Stage) => (s === stage ? "on" : order.indexOf(s) < at ? "past" : "next");
   return (
     <div className="onboarding entrance" data-stage={stage}>
-      <OnboardingParticles className="onboarding-particles" aria-hidden="true" color="#666666" ease={20} quantity={140} />
+      <OnboardingParticles className="onboarding-particles" aria-hidden="true" color="#666666" ease={20} quantity={120} />
       <header className="entrance-header">
-        <VultBrand />
+        <span className="entrance-logo">
+          <VultBrand />
+        </span>
+        <ThemeSwitcher />
       </header>
       <main className="entrance-stages" id="main-content" tabIndex={-1}>
-        {order.indexOf(start) <= 0 && <Threshold
-          state={state("threshold")}
-          onDone={() => setStage("keys")}
-          createPasskey={createPasskey}
-          authenticator={journey.authenticator}
-          hosted={journey.connection.kind === "server"}
-        />}
-        {order.indexOf(start) <= 1 && <Keys state={state("keys")} codes={recoveryCodes} onDone={() => setStage("book")} />}
         <FirstBook
-          state={state("book")}
           inside={stage === "inside"}
           draft={book ? { name: book.name, profile: book.profile, currency: book.currency } : draft}
           journey={journey}
@@ -128,187 +105,17 @@ function hidden(when: boolean) {
   return when ? { inert: true } : {};
 }
 
-function useFocusWhenShown(state: string) {
+function useFocusWhenShown(shown: boolean) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
-    if (state !== "on") return;
+    if (!shown) return;
     const id = window.setTimeout(() => ref.current?.querySelector<HTMLElement>("button:not([disabled]), input")?.focus({ preventScroll: true }), 600);
     return () => window.clearTimeout(id);
-  }, [state]);
+  }, [shown]);
   return ref;
 }
 
-function Threshold({
-  state,
-  onDone,
-  createPasskey,
-  authenticator,
-  hosted,
-}: {
-  state: string;
-  onDone: () => void;
-  createPasskey: () => Promise<void>;
-  authenticator?: Journey["authenticator"];
-  hosted: boolean;
-}) {
-  const heading = useId();
-  const [phase, setPhase] = useState<"idle" | "reading" | "open">("idle");
-  const [useApp, setUseApp] = useState(false);
-  const [error, setError] = useState("");
-  const ref = useFocusWhenShown(state);
-  async function start() {
-    setError("");
-    setPhase("reading");
-    try {
-      await createPasskey();
-      setPhase("open");
-      window.setTimeout(onDone, 900);
-    } catch {
-      setPhase("idle");
-      setError("The passkey wasn’t created. Try again.");
-    }
-  }
-  return (
-    <section ref={ref} className="entrance-stage entrance-threshold" data-state={state} aria-labelledby={heading} {...hidden(state !== "on")}>
-      <div className="entrance-dial" data-phase={phase} aria-hidden="true">
-        <svg viewBox="0 0 228 228">
-          <g className="entrance-ring-outer">
-            <circle cx="114" cy="114" r="110" />
-            <circle className="entrance-ticks" cx="114" cy="114" r="110" />
-          </g>
-          <g className="entrance-ring-inner">
-            <circle className="entrance-dash" cx="114" cy="114" r="88" />
-            <circle className="entrance-dots" cx="114" cy="114" r="98" />
-          </g>
-        </svg>
-        <span className="entrance-core">
-          {phase === "open" ? <Check /> : <Fingerprint />}
-        </span>
-      </div>
-      <h1 id={heading}>Your Vult is ready</h1>
-      <p className="entrance-lede">{hosted ? "We host it for you, and only you can open it." : "It lives on this Mac, and only you can open it."}</p>
-      {useApp && authenticator ? (
-        <AuthenticatorSetup
-          authenticator={authenticator}
-          onDone={() => {
-            setPhase("open");
-            window.setTimeout(onDone, 900);
-          }}
-          onBack={() => setUseApp(false)}
-        />
-      ) : (
-        <>
-          <Button size="lg" onClick={() => void start()} disabled={phase !== "idle"}>
-            <Fingerprint aria-hidden="true" /> Create your passkey
-          </Button>
-          <p className="entrance-fine">Touch ID or your device password. Nothing to remember.</p>
-          {authenticator && phase === "idle" && (
-            <Button color="tertiary" size="sm" onClick={() => setUseApp(true)}>
-              Use an authenticator app instead
-            </Button>
-          )}
-        </>
-      )}
-      <p className="entrance-status" role="status" aria-live="polite">
-        {error || (phase === "reading" ? "Touch the sensor to create your passkey…" : phase === "open" ? "Passkey created" : "")}
-      </p>
-    </section>
-  );
-}
-
-/** For owners who can't or won't use a passkey: a six-digit code from an
- * authenticator app. Recovery codes follow either way. */
-function AuthenticatorSetup({
-  authenticator,
-  onDone,
-  onBack,
-}: {
-  authenticator: NonNullable<Journey["authenticator"]>;
-  onDone: () => void;
-  onBack: () => void;
-}) {
-  const [code, setCode] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  async function verify() {
-    if (!/^\d{6}$/.test(code)) {
-      setError("Enter the 6-digit code from your app.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      await authenticator.verify(code);
-      onDone();
-    } catch {
-      setBusy(false);
-      setError("That code didn’t match. Try the next one your app shows.");
-    }
-  }
-  return (
-    <form
-      className="entrance-authenticator"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void verify();
-      }}
-    >
-      <p className="entrance-lede">Scan this with your authenticator app, then enter the code it shows.</p>
-      {authenticator.qr ? <img className="entrance-qr" src={authenticator.qr} alt="QR code for your authenticator app" /> : null}
-      <p className="entrance-fine">
-        Can’t scan? Enter this key: <code>{authenticator.secret}</code>
-      </p>
-      <Field label="6-digit code" error={error}>
-        <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
-      </Field>
-      <Button size="lg" type="submit" busy={busy}>
-        Verify
-      </Button>
-      <Button color="tertiary" size="sm" onClick={onBack}>
-        Use a passkey instead
-      </Button>
-    </form>
-  );
-}
-
-function Keys({ state, codes, onDone }: { state: string; codes: string[]; onDone: () => void }) {
-  const heading = useId();
-  const [saved, setSaved] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const ref = useFocusWhenShown(state);
-  return (
-    <section ref={ref} className="entrance-stage entrance-keys" data-state={state} aria-labelledby={heading} {...hidden(state !== "on")}>
-      <span className="entrance-eyebrow"><Lock01 aria-hidden="true" /> Your recovery codes</span>
-      <h1 id={heading}>If you lose your passkey, these let you back in</h1>
-      <p className="entrance-lede">Each code works once. Keep them somewhere safe and offline, like a password manager. Never give them to an agent.</p>
-      <ol className="entrance-codes">
-        {codes.map((code, i) => (
-          <li key={code} style={{ animationDelay: `${300 + i * 50}ms` }}>
-            <span>{String(i + 1).padStart(2, "0")}</span>
-            <code>{code}</code>
-          </li>
-        ))}
-      </ol>
-      <div className="entrance-row">
-        <Button
-          color="secondary"
-          onClick={() => void navigator.clipboard?.writeText(codes.join("\n")).then(() => setCopied(true), () => undefined)}
-        >
-          {copied ? <Check aria-hidden="true" /> : <Copy01 aria-hidden="true" />} {copied ? "Copied" : "Copy codes"}
-        </Button>
-        <label className="entrance-check">
-          <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} /> I’ve saved them
-        </label>
-      </div>
-      <Button size="lg" disabled={!saved} onClick={onDone}>
-        Continue
-      </Button>
-    </section>
-  );
-}
-
 function FirstBook({
-  state,
   inside,
   draft,
   journey,
@@ -316,7 +123,6 @@ function FirstBook({
   onDone,
   onOpen,
 }: {
-  state: string;
   inside: boolean;
   draft?: EntranceDraft | null;
   journey: Journey;
@@ -333,7 +139,7 @@ function FirstBook({
   const [zone, setZone] = useState(draft?.timezone || browserTimeZone());
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
-  const ref = useFocusWhenShown(state);
+  const ref = useFocusWhenShown(!inside);
   const ready = name.trim() !== "" && profile !== "" && currency !== "" && zone !== "";
   async function create() {
     if (!ready) {
@@ -354,10 +160,8 @@ function FirstBook({
     <section
       ref={ref}
       className="entrance-stage entrance-book"
-      data-state={inside ? "on" : state}
       data-inside={inside || undefined}
       aria-labelledby={heading}
-      {...hidden(state !== "on" && !inside)}
     >
       <div className="entrance-book-form" {...hidden(inside)}>
         <span className="entrance-eyebrow">Your first Book</span>
@@ -368,16 +172,13 @@ function FirstBook({
         </Field>
         <OnboardingChoice label="Currency" name="currency" value={currency} items={currencyItems} onChange={setCurrency} placeholder="Search currency or country" />
         <AccountingTimezone value={zone} onChange={setZone} />
-        {zone === browserTimeZone() && (
-          <p className="entrance-fine entrance-field-note">
-            From {journey.connection.kind === "local" ? "this Mac’s" : "your device’s"} clock
-          </p>
-        )}
-        <p className="entrance-fine">A Book’s currency can’t change after it’s created.</p>
-        {error && <p className="entrance-error" role="alert">{error}</p>}
-        <Button size="lg" busy={creating} onClick={() => void create()}>
-          Create Book
-        </Button>
+        <div className="entrance-commit">
+          {error && <p className="entrance-error" role="alert">{error}</p>}
+          <Button size="lg" busy={creating} onClick={() => void create()}>
+            Create Book
+          </Button>
+          <p className="entrance-fine">Type, currency and timezone can’t change after the Book is created.</p>
+        </div>
       </div>
       <JourneyStatus name={name} profile={profile} currency={currency} zone={zone} journey={journey} inside={inside} onOpen={onOpen} />
     </section>
@@ -466,7 +267,12 @@ function JourneyStatus({
     journey.waitForAgent().then((who) => {
       if (!live) return;
       setAgent(who);
-      setPhase("approve");
+      // On a Vult server the owner lets the agent in on its sign-in page.
+      if (journey.connection.kind === "server") {
+        setAllowed(true);
+        if (file) void work(file);
+        else setPhase("ready");
+      } else setPhase("approve");
     });
     return () => {
       live = false;
@@ -571,8 +377,8 @@ function JourneyStatus({
       {phase === "statement" && (
         <div className="entrance-guide">
           <div className="entrance-guide-head">
-            <strong>Do you have a statement to start with?</strong>
-            <small>Upload your most recent bank or card statement. It stays in Vult; your agent reads it here once you let it in.</small>
+            <strong>Start with a statement</strong>
+            <small>Upload your latest bank or card statement. Your agent reads it here.</small>
           </div>
           <FirstStatement
             onAdded={async (f) => {
@@ -595,7 +401,7 @@ function JourneyStatus({
           </div>
           <ConnectAgent connection={journey.connection} />
           <p className="entrance-waiting">
-            <span className="entrance-live" aria-hidden="true" /> Waiting for Claude Code or Codex…
+            <span className="entrance-live" aria-hidden="true" /> Waiting for your agent…
           </p>
         </div>
       )}
@@ -694,44 +500,25 @@ function CopyLine({ text, label }: { text: string; label: string }) {
   );
 }
 
-const agents: EntranceAgent[] = ["Claude Code", "Codex"];
-
-/** One command connects Claude Code and Codex on this Mac; on a Vult server
- * each agent adds the address and signs in. The page notices when it arrives. */
+/** One command adds Vult to the agents it finds on this computer. */
 function ConnectAgent({ connection }: { connection: EntranceConnection }) {
-  const [agent, setAgent] = useState<EntranceAgent>("Claude Code");
-  const tabs = useId();
   const local = connection.kind === "local";
   const steps: { text: string; command?: string }[] = local
     ? [
-        { text: "Run this in Terminal. It connects Claude Code and Codex, whichever you have.", command: `${connection.program} mcp install` },
-        agent === "Claude Code" ? { text: "Restart Claude Code, or type /mcp in it and reconnect Vult." } : { text: "Restart Codex." },
-        { text: `Ask ${agent}: “Use Vult to do my bookkeeping.”` },
+        { text: "Run this in Terminal to add Vult to your agents:", command: `${connection.program} mcp install` },
+        { text: "Restart your agent and ask it: “Use Vult to do my bookkeeping.”" },
       ]
-    : agent === "Claude Code"
-      ? [
-          { text: "Run this in Terminal:", command: `claude mcp add --transport http vult ${connection.address}` },
-          { text: "In Claude Code, type /mcp, choose Vult and sign in." },
-        ]
-      : [
-          { text: "Run this in Terminal:", command: `codex mcp add vult --url ${connection.address}` },
-          { text: "Then sign in to Vult:", command: "codex mcp login vult" },
-        ];
+    : [
+        { text: "Add Vult to your agent as an MCP server:", command: connection.address },
+        { text: "Your agent asks you to sign in. Then ask it: “Use Vult to do my bookkeeping.”" },
+      ];
   return (
     <div className="entrance-guide-step">
-      <div className="welcome-agent-tabs" role="radiogroup" aria-label="Your agent">
-        {agents.map((a) => (
-          <label key={a} data-selected={agent === a || undefined}>
-            <input type="radio" name={tabs} checked={agent === a} onChange={() => setAgent(a)} />
-            {a}
-          </label>
-        ))}
-      </div>
       <ol className="entrance-steps">
         {steps.map((s, i) => (
           <li key={i}>
             <span>{s.text}</span>
-            {s.command && <CopyLine text={s.command} label="Copy command" />}
+            {s.command && <CopyLine text={s.command} label={local ? "Copy command" : "Copy address"} />}
           </li>
         ))}
       </ol>

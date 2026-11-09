@@ -9,14 +9,15 @@ import (
 	"encoding/pem"
 	"errors"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 )
 
 func TestLocalCertificateHasOneHostnameAndNoSigningAuthority(t *testing.T) {
-	host, err := Hostname()
-	if err != nil || !ValidHostname(host) {
-		t.Fatal("local hostname unavailable", err)
+	host := Host
+	if !ValidHostname(host) {
+		t.Fatal("local hostname is not valid")
 	}
 	certificate, key, err := NewCertificate(host)
 	if err != nil {
@@ -56,7 +57,7 @@ func TestLocalCertificateHasOneHostnameAndNoSigningAuthority(t *testing.T) {
 }
 
 func TestLocalCertificateRejectsBroaderExpiredAndMismatchedInputs(t *testing.T) {
-	host, _ := Hostname()
+	host := Host
 	certificate, key, err := NewCertificate(host)
 	if err != nil {
 		t.Fatal(err)
@@ -92,8 +93,9 @@ func TestLocalCertificateRejectsBroaderExpiredAndMismatchedInputs(t *testing.T) 
 			}
 		})
 	}
-	otherHost, _ := Hostname()
-	_, otherKey, err := NewCertificate(otherHost)
+	// Addresses from before 0.5.1 are no longer served.
+	otherHost := "vult-0123456789abcdef0123456789abcdef.localhost"
+	_, otherKey, err := NewCertificate(Host)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,9 +107,29 @@ func TestLocalCertificateRejectsBroaderExpiredAndMismatchedInputs(t *testing.T) 
 			t.Fatal("mismatched local identity accepted", err)
 		}
 	}
-	for _, host := range []string{"localhost", "vult-short.localhost", "vult-0123456789abcdef0123456789abcdef.localhost.example.com", "vult-0123456789ABCDEF0123456789abcdef.localhost", "vult-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz.localhost", "*.localhost"} {
+	for _, host := range []string{"localhost", "vult-0123456789abcdef0123456789abcdef.localhost", "vult-short.localhost", "vult-0123456789abcdef0123456789abcdef.localhost.example.com", "vult-0123456789ABCDEF0123456789abcdef.localhost", "vult-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz.localhost", "*.localhost"} {
 		if ValidHostname(host) {
 			t.Fatal("non-installation host accepted", host)
+		}
+	}
+}
+
+// Installations keep a random identity apart from the shared address; addresses
+// from before 0.5.1 still yield theirs so an upgrade keeps its database logins.
+func TestInstallationIdentityIsSeparateFromTheAddress(t *testing.T) {
+	id, err := InstallationID()
+	if err != nil || !ValidInstallationID(id) || ValidHostname(id) {
+		t.Fatal("installation identity unavailable", err)
+	}
+	if other, _ := InstallationID(); other == id {
+		t.Fatal("installation identities repeat")
+	}
+	if got, ok := LegacyInstallationID("vult-" + id + ".localhost"); !ok || got != id {
+		t.Fatal("an old address lost its installation identity")
+	}
+	for _, host := range []string{Host, "localhost", "vult-short.localhost", "vult-" + id + ".localhost.example.com", "vult-" + strings.ToUpper(id) + ".localhost"} {
+		if _, ok := LegacyInstallationID(host); ok {
+			t.Fatal("not an old installation address", host)
 		}
 	}
 }

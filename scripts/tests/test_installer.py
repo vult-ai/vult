@@ -109,6 +109,45 @@ if os.environ.get('FIXTURE_INSTALL_FAIL'):sys.exit(1)
         owner = self.mock("osascript", "#!/bin/sh\n/bin/cat >/dev/null\nprintf approved >\"$FIXTURE_OWNER_LOG\"\nexit \"${FIXTURE_OWNER_FAIL:-0}\"\n")
         return self.script.replace("/usr/bin/uname", uname).replace("/usr/bin/sw_vers", version).replace("/usr/bin/osascript", owner)
 
+    def postinstall_startup_fixture(self):
+        self.startup_log = self.work / "startup.json"
+        self.env["FIXTURE_STARTUP_LOG"] = str(self.startup_log)
+        control = self.mock("control", """#!/usr/bin/python3
+import json, os, pathlib, sys
+log=pathlib.Path(os.environ['FIXTURE_STARTUP_LOG'])
+calls=json.loads(log.read_text()) if log.exists() else []
+calls.append(['vult', *sys.argv[1:]])
+log.write_text(json.dumps(calls))
+if sys.argv[1:]==['_browser_check'] and os.environ.get('FIXTURE_BROWSER_UNAVAILABLE'):sys.exit(1)
+""")
+        launchctl = self.mock("launchctl", """#!/usr/bin/python3
+import json, os, pathlib, sys
+log=pathlib.Path(os.environ['FIXTURE_STARTUP_LOG'])
+calls=json.loads(log.read_text()) if log.exists() else []
+calls.append(['launchctl', *sys.argv[1:]])
+log.write_text(json.dumps(calls))
+""")
+        # Exercise the actual startup block, after protected account/file setup.
+        # Both service control and the installed command are synthetic stubs.
+        postinstall = (ROOT / "packaging/macos/scripts/postinstall").read_text()
+        start = postinstall.index("/bin/launchctl bootstrap system /Library/LaunchDaemons/ai.vult.ledger.plist")
+        startup = postinstall[start:].replace("/bin/launchctl", launchctl).replace('"$binary"', control)
+        return 'set -eu\nfail() { echo "Vult: $*" >&2; exit 1; }\nbinary=/synthetic/vult\n' + startup
+
+    def test_package_waits_for_browser_readiness_before_reporting_success(self):
+        result = self.run_shell(self.postinstall_startup_fixture())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = json.loads(self.startup_log.read_text())
+        self.assertEqual(calls[-2:], [["launchctl", "kickstart", "system/ai.vult.browser"], ["vult", "_browser_check"]])
+        self.assertIn("Vult installed.", result.stdout)
+
+    def test_package_never_reports_success_when_browser_readiness_fails(self):
+        result = self.run_shell(self.postinstall_startup_fixture(), extra_env={"FIXTURE_BROWSER_UNAVAILABLE": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("local browser did not become ready", result.stderr)
+        self.assertNotIn("Vult installed.", result.stdout)
+        self.assertEqual(json.loads(self.startup_log.read_text())[-1], ["vult", "_browser_check"])
+
     def test_success_verifies_before_install_and_removes_staging(self):
         r = self.run_shell(self.root_fixture())
         self.assertEqual(r.returncode, 0, r.stderr)

@@ -38,6 +38,7 @@ import {
 } from "../../lib/legacy-personal-data";
 
 type PersonalAccount = {
+  mode?: Session["mode"];
   contactSession?: { user_id: string; csrf: string };
   scope: PreferenceScope;
   profile: Readonly<UserProfile>;
@@ -231,6 +232,7 @@ export function PersonalSettingsHost({ children }: { children: ReactNode }) {
     store.update(copy.patch);
   }
   const value: PersonalAccount = {
+    mode: sessionError ? undefined : session?.mode,
     contactSession:
       session?.personal_data_version === "1" &&
       session.user_id &&
@@ -302,7 +304,8 @@ export function PersonalSettingsHost({ children }: { children: ReactNode }) {
     <Theme
       initialPreference="system"
       initialTheme="light"
-      preferenceOverride={snapshot.value.appearance}
+      // An account that has never chosen a theme keeps the one this browser already uses.
+      preferenceOverride={snapshot.value.revision === "0" ? undefined : snapshot.value.appearance}
       onPreferenceChange={
         store && snapshot.loaded && !legacyBusy
           ? (v) => store.update({ appearance: v })

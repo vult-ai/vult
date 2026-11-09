@@ -2,11 +2,13 @@ package daemon
 
 import (
 	"bufio"
+
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/vult-ai/vult/internal/version"
 	"io"
 	"net"
 	"os"
@@ -19,7 +21,8 @@ import (
 	"github.com/vult-ai/vult/ledger"
 )
 
-const Version = "0.5.0"
+// Version is the release this program belongs to.
+const Version = version.Version
 
 type grant struct {
 	Action, Digest string
