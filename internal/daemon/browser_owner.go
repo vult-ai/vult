@@ -83,9 +83,6 @@ func (b *browserOwner) setup(ctx context.Context, admin ledger.Admin, reset bool
 		if err == nil {
 			setup, err = op.InitializePasskeys(ctx, tenant, localOwnerSubject, b.configuration.origin())
 		}
-		if err == nil && len(setup.RecoveryCodes) == 0 {
-			setup, err = op.ResetPasskeys(ctx, localOwnerSubject, b.configuration.origin())
-		}
 	}
 	if err != nil {
 		return local.BrowserSetup{}, ledger.ErrDenied
@@ -95,7 +92,7 @@ func (b *browserOwner) setup(ctx context.Context, admin ledger.Admin, reset bool
 		return local.BrowserSetup{}, ledger.ErrInvalid
 	}
 	u.Fragment = "setup=" + setup.Token
-	return local.BrowserSetup{Origin: b.configuration.origin(), SetupURL: u.String(), RecoveryCodes: setup.RecoveryCodes}, nil
+	return local.BrowserSetup{Origin: b.configuration.origin(), SetupURL: u.String()}, nil
 }
 
 // addressMoved reports whether the owner's passkeys belong to another address,

@@ -108,8 +108,8 @@ func (h *HTTP) authenticatorRoute(w http.ResponseWriter, r *http.Request) {
 	h.setSession(w, r, session)
 	w.Header().Set("Content-Type", "application/json")
 	destination := h.signInDestination(w, r, "/")
-	if enrolling && h.localRecovery() != nil {
-		// A new local sign-in method: show the setup secrets once, in this
+	if enrolling {
+		// A new sign-in method: show any recovery codes owed once, in this
 		// browser, exactly as after a first passkey.
 		destination = "/auth/recovery-codes"
 	}

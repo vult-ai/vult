@@ -215,10 +215,10 @@ func (c Client) CreateBookForOwner(ctx context.Context, session string, q OwnerB
 	return out, nil
 }
 
-// SetupSecrets are shown once in the owner's browser after a passkey is set up.
+// SetupSecrets are shown once in the owner's browser after a passkey is set
+// up, beside the recovery codes the access service issues.
 type SetupSecrets struct {
-	RecoveryCodes []string `json:"recovery_codes"`
-	BackupKey     string   `json:"backup_key,omitempty"`
+	BackupKey string `json:"backup_key,omitempty"`
 }
 
 // SetupSecrets is called by the local browser service with the owner's new

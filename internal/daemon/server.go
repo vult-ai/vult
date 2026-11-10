@@ -277,12 +277,11 @@ func (s *Server) owner(ctx context.Context, uid uint32, method string, input []b
 		if err != nil {
 			return nil, err
 		}
-		// The recovery codes and backup key are shown once in the browser,
-		// after the passkey exists, never in the terminal that asked.
+		// The backup key is shown once in the browser beside the owner's new
+		// recovery codes, after the passkey exists, never in the terminal.
 		s.mu.Lock()
-		s.recovery = &pendingRecovery{codes: result.RecoveryCodes, key: s.RecoveryKey, created: time.Now()}
+		s.recovery = &pendingRecovery{key: s.RecoveryKey, created: time.Now()}
 		s.mu.Unlock()
-		result.RecoveryCodes = nil
 		return marshal(result), nil
 	case "init":
 		if decode(&struct{}{}) != nil {

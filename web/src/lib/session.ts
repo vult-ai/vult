@@ -22,6 +22,14 @@ export function readSession(signal?: AbortSignal) {
   });
 }
 
+/**
+ * Where Continue goes when a session ended: sign-in, which returns the owner
+ * to the page they are on.
+ */
+export function continueSignInHref(location: Pick<Location, "pathname" | "search"> = window.location) {
+  return "/auth/login?" + new URLSearchParams({ return: location.pathname + location.search }).toString();
+}
+
 export function csrfHeaders(session: Pick<Session, "csrf">) {
   return { [CSRF_HEADER]: session.csrf };
 }

@@ -34,7 +34,11 @@ export type Failure = {
   status?: number;
   code?: string;
   outcome: "rejected" | "unknown" | "read";
-  recovery: "retry" | "sign-in" | "review" | "none";
+  /**
+   * "sign-in" when this browser has no session; "confirm" when its session
+   * ended and the owner only needs to confirm it's them.
+   */
+  recovery: "retry" | "sign-in" | "confirm" | "review" | "none";
 };
 export type FailureSeverity = "routine" | "attention" | "critical";
 export type FailureIcon =
@@ -65,6 +69,7 @@ const copy = {
   unsupported: errorCopy.featureUnavailable,
   access: errorCopy.access,
   signIn: errorCopy.signIn,
+  sessionEnded: errorCopy.sessionEnded,
   missing: errorCopy.missing,
   validation: errorCopy.validation,
   conflict: errorCopy.conflict,
@@ -175,12 +180,20 @@ export function responseFailure(
       outcome: "read",
       recovery: "none",
     };
-  else if (status === 401)
+  else if (status === 401 && code === "SIGNED_OUT")
     failure = {
       kind: "access",
       message: copy.signIn,
       outcome: "rejected",
       recovery: "sign-in",
+    };
+  else if (status === 401)
+    // A session this browser held ended; the account is still known.
+    failure = {
+      kind: "access",
+      message: copy.sessionEnded,
+      outcome: "rejected",
+      recovery: "confirm",
     };
   else if (status === 403)
     failure = {
@@ -356,9 +369,9 @@ export function presentFailure(error: unknown, context: FailureContext = {}) {
       ? error.failure
       : {
           kind:
-            known === "signIn"
+            known === "signIn" || known === "sessionEnded"
               ? "access"
-              : known && known !== "signIn"
+              : known
                 ? (known as FailureKind)
                 : reviewedValidation.some(([, text]) => text === message)
                   ? "validation"
@@ -369,7 +382,9 @@ export function presentFailure(error: unknown, context: FailureContext = {}) {
           recovery:
             known === "signIn"
               ? "sign-in"
-              : known === "missing" || known === "access" || known === "unsupported"
+              : known === "sessionEnded"
+                ? "confirm"
+                : known === "missing" || known === "access" || known === "unsupported"
                 ? "none"
                 : known === "uncertain" || known === "conflict"
                   ? "review"
@@ -486,11 +501,14 @@ export function presentFailureState(
       : context.retained === "view"
         ? "refresh"
         : "load";
-  // Being signed out is a state, not a failure: say so and offer sign-in.
-  const signedOut = failure.recovery === "sign-in";
-  const title = signedOut
-    ? "You’re signed out"
-    : `Couldn’t ${verb} ${context.resource ? stateNouns[context.resource] : "this"}`;
+  // Being signed out, or a session that ended, is a state, not a failure:
+  // say so and offer the way back in.
+  const title =
+    failure.recovery === "sign-in"
+      ? "You’re signed out"
+      : failure.recovery === "confirm"
+        ? "Your session ended"
+        : `Couldn’t ${verb} ${context.resource ? stateNouns[context.resource] : "this"}`;
   const detail =
     failure.severity === "critical"
       ? failureStateCopy.recordsUnverified
@@ -502,7 +520,9 @@ export function presentFailureState(
             ? failureStateCopy.missing
             : failure.recovery === "sign-in"
               ? failureStateCopy.signedOut
-              : failure.kind === "access"
+              : failure.recovery === "confirm"
+                ? failureStateCopy.sessionEnded
+                : failure.kind === "access"
                 ? failureStateCopy.access
                 : failure.message === errorCopy.busy
                   ? failureStateCopy.busy

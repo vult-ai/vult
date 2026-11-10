@@ -8,12 +8,12 @@ import (
 	"github.com/vult-ai/vult/ledger"
 )
 
-// PasskeySetup contains one-use setup authority and optional new recovery codes.
-// Deliver it only through a protected operator channel, never service logs.
+// PasskeySetup is one-use setup authority. Deliver it only through a protected
+// operator channel, never service logs. It carries no recovery codes: the
+// owner receives those in the browser after setting up sign-in.
 type PasskeySetup struct {
-	TenantID      string
-	Token         string
-	RecoveryCodes []string
+	TenantID string
+	Token    string
 }
 
 func (o Operator) InitializePasskeys(ctx context.Context, tenant, subject, origin string) (PasskeySetup, error) {
@@ -71,8 +71,10 @@ func (o Operator) InitializePasskeys(ctx context.Context, tenant, subject, origi
 	return out, nil
 }
 
-// ResetPasskeys is explicit offline recovery. It retains Books and identities,
-// invalidates prior sign-ins and ceremonies, and requires fresh registration.
+// ResetPasskeys is the operator's explicit account reset, separate from the
+// owner's recovery codes. It retains Books and identities, invalidates prior
+// sign-ins, ceremonies and recovery codes, and requires fresh registration;
+// the owner then receives new codes in the browser.
 func (o Operator) ResetPasskeys(ctx context.Context, subject, origin string) (PasskeySetup, error) {
 	if o.DB == nil || len(subject) == 0 || len(subject) > 80 {
 		return PasskeySetup{}, ErrDenied
@@ -119,16 +121,10 @@ func preparePasskeySetup(ctx context.Context, tx pgx.Tx, tenant, who string, epo
 	if _, err := tx.Exec(ctx, "INSERT INTO access.passkey_setups(token_hash,identity_id,epoch) VALUES($1,$2,$3)", Hash(out.Token), who, epoch); err != nil {
 		return PasskeySetup{}, ErrDenied
 	}
-	var count int
-	if err := tx.QueryRow(ctx, "SELECT count(*) FROM access.recovery_codes WHERE identity_id=$1", who).Scan(&count); err != nil {
+	// The owner receives a new set of recovery codes after setting up sign-in;
+	// issuing it retires every earlier code.
+	if _, err := tx.Exec(ctx, "UPDATE access.passkey_profiles SET recovery_codes_owed=true WHERE identity_id=$1", who); err != nil {
 		return PasskeySetup{}, ErrDenied
-	}
-	if count == 0 {
-		var err error
-		out.RecoveryCodes, err = addRecoveryCodes(ctx, tx, who)
-		if err != nil {
-			return PasskeySetup{}, err
-		}
 	}
 	kind := "setup"
 	if recovery {

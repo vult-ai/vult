@@ -53,6 +53,12 @@ func (p *Passkeys) profile(ctx context.Context) (passkeyUser, int64, error) {
 	return user, epoch, nil
 }
 
+// HasPasskey reports whether the owner has registered a passkey.
+func (p *Passkeys) HasPasskey(ctx context.Context) bool {
+	user, _, err := p.profile(ctx)
+	return err == nil && len(user.Credentials) > 0
+}
+
 func (p *Passkeys) BeginRegistration(ctx context.Context, setup, browser string) (PasskeyChallenge, error) {
 	if !validToken(setup) || !validToken(browser) {
 		return PasskeyChallenge{}, ErrDenied

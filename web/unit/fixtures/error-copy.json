@@ -34,11 +34,11 @@
     "outcome": "read"
   },
   {
-    "id": "sign-in",
+    "id": "session-ended",
     "status": 401,
     "intent": "read",
-    "message": "Sign in to continue.",
-    "recovery": "sign-in",
+    "message": "Your session ended. Confirm it’s you to continue.",
+    "recovery": "confirm",
     "outcome": "rejected"
   },
   {

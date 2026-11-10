@@ -23,9 +23,8 @@ type BrowserStatus struct {
 }
 
 type BrowserSetup struct {
-	Origin        string   `json:"origin"`
-	SetupURL      string   `json:"setup_url"`
-	RecoveryCodes []string `json:"recovery_codes,omitempty"`
+	Origin   string `json:"origin"`
+	SetupURL string `json:"setup_url"`
 }
 
 type Request struct {

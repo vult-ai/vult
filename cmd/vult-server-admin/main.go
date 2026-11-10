@@ -170,12 +170,13 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		} else {
 			setup, e = operator.ResetPasskeys(ctx, q.Username, q.Origin)
 		}
+		// The owner receives recovery codes in the browser after using this
+		// link; they never appear in the operator's output.
 		result = struct {
-			TenantID      string   `json:"tenant_id"`
-			SetupURL      string   `json:"setup_url"`
-			ExpiresIn     int      `json:"expires_in_seconds"`
-			RecoveryCodes []string `json:"recovery_codes,omitempty"`
-		}{setup.TenantID, q.Origin + "/auth/setup#setup=" + setup.Token, 300, setup.RecoveryCodes}
+			TenantID  string `json:"tenant_id"`
+			SetupURL  string `json:"setup_url"`
+			ExpiresIn int    `json:"expires_in_seconds"`
+		}{setup.TenantID, q.Origin + "/auth/setup#setup=" + setup.Token, 300}
 	case "book":
 		var owner ledger.TenantAdmin
 		owner, e = (ledger.Admin{DB: db}).ForTenant(ctx, q.TenantID)

@@ -202,3 +202,85 @@ func TestPasskeyRecoveryHTTPRequiresBrowserBinding(t *testing.T) {
 		t.Fatal("recovery browser could not start replacement registration", w.Code)
 	}
 }
+
+func TestOwnersReceiveTheirRecoveryCodesOnceInTheBrowser(t *testing.T) {
+	f := fresh(t)
+	setup, err := f.operator.InitializePasskeys(f.db.Context, "", "example-owner", "https://ledger.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A code an operator was given by an earlier version of setup.
+	operatorCode := access.Random()
+	if _, err := f.db.Admin.Exec(f.db.Context, "INSERT INTO access.recovery_codes(identity_id,code_hash) SELECT identity_id,$1 FROM access.passkey_profiles", access.Hash(operatorCode)); err != nil {
+		t.Fatal(err)
+	}
+	p, err := access.NewPasskeys(f.db.Context, f.service, "example-owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	browser := access.Random()
+	register := func(token string) string {
+		t.Helper()
+		challenge, err := p.BeginRegistration(f.db.Context, token, browser)
+		if err != nil {
+			t.Fatal(err)
+		}
+		session, err := p.FinishRegistration(f.db.Context, challenge.Token, browser, newPasskeyAuthenticator(t).registration(t, challenge, "https://ledger.example.com", "ledger.example.com"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return session
+	}
+	session := register(setup.Token)
+	codes, err := p.IssueRecoveryCodes(f.db.Context, session)
+	if err != nil || len(codes) != 8 {
+		t.Fatal("the owner did not receive recovery codes after setup", err)
+	}
+	if again, err := p.IssueRecoveryCodes(f.db.Context, session); err != nil || len(again) != 0 {
+		t.Fatal("recovery codes were shown twice", len(again), err)
+	}
+	// The owner's codes replace every earlier one.
+	if _, err := p.Recover(f.db.Context, operatorCode, browser); !errors.Is(err, access.ErrDenied) {
+		t.Fatal("a code given to the operator still works", err)
+	}
+
+	// Recovering with a code gives the owner a fresh set for the new passkey,
+	// and only a sign-in from the last few minutes can receive it.
+	token, err := p.Recover(f.db.Context, codes[0], browser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session = register(token)
+	if _, err := f.db.Admin.Exec(f.db.Context, "UPDATE access.sessions SET authenticated_at=clock_timestamp()-interval '11 minutes' WHERE token_hash=$1", access.Hash(session)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.IssueRecoveryCodes(f.db.Context, session); !errors.Is(err, access.ErrDenied) {
+		t.Fatal("an older sign-in received recovery codes", err)
+	}
+	if _, err := f.db.Admin.Exec(f.db.Context, "UPDATE access.sessions SET authenticated_at=clock_timestamp() WHERE token_hash=$1", access.Hash(session)); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := p.IssueRecoveryCodes(f.db.Context, session)
+	if err != nil || len(fresh) != 8 {
+		t.Fatal("recovery did not give the owner a fresh set", err)
+	}
+	if _, err := p.Recover(f.db.Context, codes[1], browser); !errors.Is(err, access.ErrDenied) {
+		t.Fatal("a code from before recovery still works", err)
+	}
+
+	// The operator's reset is separate: it ends every sign-in and code, and the
+	// owner again receives new codes in the browser.
+	reset, err := f.operator.ResetPasskeys(f.db.Context, "example-owner", "https://ledger.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.service.Identity(f.db.Context, session); !errors.Is(err, access.ErrDenied) {
+		t.Fatal("the operator's reset kept an earlier sign-in", err)
+	}
+	if _, err := p.Recover(f.db.Context, fresh[0], browser); !errors.Is(err, access.ErrDenied) {
+		t.Fatal("the operator's reset kept the owner's codes", err)
+	}
+	if after, err := p.IssueRecoveryCodes(f.db.Context, register(reset.Token)); err != nil || len(after) != 8 {
+		t.Fatal("the owner did not receive codes after the operator's reset", err)
+	}
+}

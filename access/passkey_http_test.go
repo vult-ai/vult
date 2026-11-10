@@ -227,8 +227,8 @@ func TestPasskeyBrowserSetupSignInAndSessionBoundaries(t *testing.T) {
 		SignedIn bool   `json:"signed_in"`
 		Continue string `json:"continue"`
 	}
-	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &outcome) != nil || !outcome.SignedIn || outcome.Continue != "/" {
-		t.Fatal("browser registration did not confirm sign-in", w.Code)
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &outcome) != nil || !outcome.SignedIn || outcome.Continue != "/auth/recovery-codes" {
+		t.Fatal("browser registration did not lead the owner to their recovery codes", w.Code, outcome.Continue)
 	}
 	session := responseCookie(t, w, access.SessionCookie)
 	if !session.Secure || !session.HttpOnly || session.SameSite != http.SameSiteLaxMode || session.Domain != "" || session.Path != "/" || session.MaxAge != 7200 || strings.Contains(w.Body.String(), session.Value) {
@@ -237,13 +237,28 @@ func TestPasskeyBrowserSetupSignInAndSessionBoundaries(t *testing.T) {
 	if id, err := f.service.Identity(f.db.Context, session.Value); err != nil || id.Subject != "example-owner" {
 		t.Fatal("browser session has wrong identity", err)
 	}
+	// The owner, not whoever ran setup, sees the recovery codes: once.
+	codesPage := func() *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, "https://ledger.example.com/auth/recovery-codes", nil)
+		r.AddCookie(session)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if page := codesPage(); page.Code != http.StatusOK || strings.Count(page.Body.String(), "<li><code>") != 8 {
+		t.Fatal("the owner's browser did not show their recovery codes", page.Code)
+	}
+	if again := codesPage(); again.Code != http.StatusSeeOther {
+		t.Fatal("recovery codes were shown twice", again.Code)
+	}
 	w = passkeyPost(t, h, "/auth/passkeys/register/verify", nonce, ceremony, map[string]any{"credential": proof})
 	if w.Code != http.StatusUnauthorized {
 		t.Fatal("registration HTTP replay accepted", w.Code)
 	}
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "https://ledger.example.com/auth/login", nil))
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Sign in with a passkey") || strings.Contains(w.Body.String(), "<form") {
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Unlock with your passkey") || strings.Contains(w.Body.String(), "<form") ||
+		!strings.Contains(w.Body.String(), `href="/auth/recover"`) || !strings.Contains(w.Body.String(), "one of your recovery codes") {
 		t.Fatal("passkey-only login offered a broken form", w.Code)
 	}
 	nonce = responseCookie(t, w, "__Host-vult-login")

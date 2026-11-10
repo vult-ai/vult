@@ -4,6 +4,19 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 
 const script = readFileSync(new URL("./passkeys.js", import.meta.url), "utf8");
+const ui = readFileSync(new URL("./ui.js", import.meta.url), "utf8");
+
+// Runs the page script with the shared sign-in helpers. Messages are read as
+// text (title, then the next step) and leaving for the Books is a navigation.
+function run(context) {
+  context.window ??= {};
+  runInNewContext(ui, context);
+  context.window.vultNotice = (slot, feedback) => {
+    if (slot) slot.textContent = feedback ? feedback.title + (feedback.detail ? " " + feedback.detail : "") : "";
+  };
+  context.window.vultOpen = (destination) => context.location.replace(destination);
+  runInNewContext(script, context);
+}
 const reference = "AAAAAAAAAAAAAAAAAAAAAf____________________4";
 
 async function signIn(destination, signedIn = true) {
@@ -33,7 +46,7 @@ async function signIn(destination, signedIn = true) {
       return { ok: true, headers: { get: () => "application/json" }, json: async () => body };
     },
   };
-  runInNewContext(script, context);
+  run(context);
   assert.equal(typeof click, "function");
   await click();
   assert.deepEqual(requests, ["/auth/passkeys/login/options", "/auth/passkeys/login/verify"]);
@@ -44,7 +57,8 @@ test("actual sign-in callback accepts only supported relative continuations", as
   for (const destination of ["/", `/oauth/authorize?request=${reference}`, `/auth/approve?operation=${reference}`, "/auth/recovery-codes", `/auth/agent?request=${"A".repeat(43)}`]) {
     const result = await signIn(destination);
     assert.deepEqual(result.navigations, [destination]);
-    assert.equal(result.status, "Signed in. Continuing…");
+    // Leaving for the next step replaces the page; no message is left behind.
+    assert.equal(result.status, "Waiting for your device…");
   }
 });
 
@@ -62,7 +76,7 @@ test("actual sign-in callback rejects substituted, ambiguous and noncanonical de
     const result = await signIn(destination);
     assert.deepEqual(result.navigations, []);
     assert.equal(result.disabled, false);
-    assert.equal(result.status, "Sign-in was not confirmed. Try your passkey again.");
+    assert.equal(result.status, "Sign-in wasn’t confirmed Try your passkey again.");
   }
   const result = await signIn(`/auth/approve?operation=${reference}`, false);
   assert.deepEqual(result.navigations, []);
@@ -108,7 +122,7 @@ async function register({ hash = "", code = "", recovering = false, local = fals
       return { ok: true, headers: { get: () => "application/json" }, json: async () => body };
     },
   };
-  runInNewContext(script, context);
+  run(context);
   const initiallyHidden = label.hidden;
   await click();
   return { requests, navigations, removedFragments, input, label, status, button, initiallyHidden, click, dial };
@@ -125,7 +139,7 @@ test("manual setup uses the existing CSRF-checked registration without a secret 
   assert.deepEqual(result.navigations, ["/"]);
   assert.equal(result.input.value, "");
   assert.equal(result.label.hidden, true);
-  assert.equal(result.status.textContent, "Signed in. Continuing…");
+  assert.equal(result.status.textContent, "Waiting for your device…");
 });
 
 test("a valid setup fragment keeps precedence over a different manual code", async () => {
@@ -155,7 +169,7 @@ test("a failed setup request does not navigate or invent a completed sign-in", a
     assert.deepEqual(result.navigations, []);
     assert.equal(result.button.disabled, false);
     assert.ok(!result.status.textContent.includes(reference));
-    assert.equal(result.status.textContent, "Passkey setup was not confirmed. Try signing in with your passkey, or request a fresh setup code.");
+    assert.equal(result.status.textContent, "Passkey setup wasn’t confirmed Try signing in with your passkey, or request a fresh setup code.");
   }
 });
 
@@ -212,7 +226,7 @@ async function codeSignIn(value, reply) {
       return { ok: reply.status === 200, headers: { get: () => "application/json" }, json: async () => reply.body };
     },
   };
-  runInNewContext(script, context);
+  run(context);
   assert.equal(typeof submit, "function");
   await submit({ preventDefault: () => {} });
   return { navigations, requests, status: status.textContent, input };
@@ -233,7 +247,7 @@ test("an authenticator code is checked before sending and wrong codes are explai
   const wrong = await codeSignIn("654321", { status: 400, body: { error: "invalid_code" } });
   assert.deepEqual(wrong.navigations, []);
   assert.equal(wrong.input.value, "");
-  assert.match(wrong.status, /didn't work/);
+  assert.match(wrong.status, /Code not accepted/);
 });
 
 test("setup can switch to an authenticator app and continues to the recovery codes", async () => {
@@ -262,7 +276,7 @@ test("setup can switch to an authenticator app and continues to the recovery cod
       return { ok: !reply.error, headers: { get: () => "application/json" }, json: async () => reply };
     },
   };
-  runInNewContext(script, context);
+  run(context);
   assert.equal(elements["authenticator-switch"].hidden, false);
   await listeners["authenticator-switch:click"]();
   assert.equal(elements["authenticator-setup"].hidden, false);
@@ -270,7 +284,7 @@ test("setup can switch to an authenticator app and continues to the recovery cod
   assert.equal(elements["authenticator-secret"].textContent, "JBSWY3DPEHPK3PXP");
   elements["authenticator-code"].value = "111111";
   await listeners["authenticator-verify:click"]();
-  assert.match(elements["authenticator-status"].textContent, /didn't work/);
+  assert.match(elements["authenticator-status"].textContent, /Code not accepted/);
   assert.deepEqual(navigations, []);
   elements["authenticator-code"].value = "123456";
   await listeners["authenticator-verify:click"]();
@@ -283,7 +297,7 @@ test("setup can switch to an authenticator app and continues to the recovery cod
 test("on this Mac a failed passkey keeps the setup link and never asks for a code", async () => {
   const result = await register({ local: true, hash: `#setup=${reference}`, failFirstCredential: true });
   assert.equal(result.label.hidden, true);
-  assert.equal(result.status.textContent, "The passkey wasn’t created. Try again.");
+  assert.equal(result.status.textContent, "Passkey not created Try again, or use an authenticator app.");
   assert.equal(result.dial.dataset.phase, "idle");
   assert.equal(result.button.disabled, false);
   await result.click();

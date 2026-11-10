@@ -329,8 +329,9 @@ func TestNativeBrowserRolesAndAdministratorSetupPreserveExistingBooks(t *testing
 	if json.Unmarshal(data, &enrollment) != nil || enrollment.Origin != c.origin() || !strings.HasPrefix(enrollment.SetupURL, c.origin()+"/auth/setup#setup=") {
 		t.Fatal("local enrollment omitted its bounded setup result")
 	}
-	// Recovery codes wait for the owner's browser; the terminal never sees them.
-	if len(enrollment.RecoveryCodes) != 0 || strings.Contains(string(data), "recovery") || s.recovery == nil || len(s.recovery.codes) != 8 {
+	// Recovery codes and the backup key wait for the owner's browser; the
+	// terminal never sees them.
+	if strings.Contains(string(data), "recovery") || s.recovery == nil {
 		t.Fatal("local enrollment returned its recovery codes to the terminal")
 	}
 	if _, err := s.Handle(db.Context, 501, q); !errors.Is(err, ledger.ErrDenied) {

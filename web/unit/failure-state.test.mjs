@@ -60,7 +60,7 @@ test("recovery picks the action: none, sign-in, and no retry for writes", async 
     await render(
       React.createElement(FailureState, {
         scope: "region",
-        error: policy.responseFailure(401, {}),
+        error: policy.responseFailure(401, { code: "SIGNED_OUT" }),
         resource: "accounts",
       }),
     );
@@ -69,6 +69,23 @@ test("recovery picks the action: none, sign-in, and no retry for writes", async 
     assert.match(document.body.textContent, /You’re signed out/);
     assert.doesNotMatch(document.body.textContent, /Couldn’t/);
     assert.equal(document.querySelector("p").textContent, "Sign in to open your Books.");
+    // A session that ended while the account is still known never says
+    // "signed out": the owner confirms it's them and returns to this page.
+    window.history.replaceState(null, "", "/BOOK1/activity?range=month");
+    await render(
+      React.createElement(FailureState, {
+        scope: "page",
+        error: policy.responseFailure(401, {}),
+        resource: "accounts",
+      }),
+    );
+    assert.deepEqual(buttons(), ["Continue"]);
+    assert.match(document.body.textContent, /Your session ended/);
+    assert.doesNotMatch(document.body.textContent, /signed out|Couldn’t/i);
+    assert.equal(document.querySelector("p").textContent, "For your security, Vult asks you to confirm it’s you.");
+    const resume = [...document.querySelectorAll("a")].find((a) => a.textContent === "Continue");
+    assert.equal(resume.getAttribute("href"), "/auth/login?return=%2FBOOK1%2Factivity%3Frange%3Dmonth");
+    assert.notEqual(resume.getAttribute("target"), "_blank");
     await render(
       React.createElement(FailureState, {
         scope: "region",
@@ -123,11 +140,11 @@ test("the states gallery renders every read failure at every scope through the r
     assert.ok(cases.length >= 12);
     assert.equal(
       document.querySelectorAll('.failure-state[data-scope="page"]').length,
-      8,
+      9,
     );
     assert.equal(
       document.querySelectorAll('.failure-state[data-scope="region"]').length,
-      8,
+      9,
     );
     assert.ok(document.querySelector('.failure-state[data-severity="critical"]'));
     assert.doesNotMatch(
@@ -140,7 +157,7 @@ test("the states gallery renders every read failure at every scope through the r
     await new Promise((resolve) => setTimeout(resolve, 1400));
     assert.equal(
       document.querySelectorAll('.failure-state[data-scope="page"]').length,
-      9,
+      10,
     );
   });
 });

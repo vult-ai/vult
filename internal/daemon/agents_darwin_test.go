@@ -179,7 +179,7 @@ func TestAgentsAreApprovedOnlyByTheOwnersRecentPasskeySession(t *testing.T) {
 
 	// Setup secrets wait for the owner's browser and are shown once.
 	s := &Server{Admin: db.Owner, Ledger: db.Store, Browser: &browserOwner{configuration: c, uid: uid, documents: reader}}
-	s.recovery = &pendingRecovery{codes: []string{"EXAMPLE-CODE-1", "EXAMPLE-CODE-2"}, key: "example-backup-key", created: time.Now()}
+	s.recovery = &pendingRecovery{key: "example-backup-key", created: time.Now()}
 	take := func(session string, peer uint32) (local.SetupSecrets, error) {
 		var out local.SetupSecrets
 		data, err := s.Handle(ctx, peer, local.Request{Method: "owner_recovery", Authorization: session, Payload: marshal(struct{}{})})
@@ -197,7 +197,7 @@ func TestAgentsAreApprovedOnlyByTheOwnersRecentPasskeySession(t *testing.T) {
 		}
 	}
 	secrets, err := take(fresh, uid)
-	if err != nil || len(secrets.RecoveryCodes) != 2 || secrets.BackupKey != "example-backup-key" {
+	if err != nil || secrets.BackupKey != "example-backup-key" {
 		t.Fatal("the owner could not see the setup secrets", secrets, err)
 	}
 	if _, err := take(fresh, uid); err == nil {

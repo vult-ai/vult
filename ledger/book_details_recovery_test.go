@@ -86,7 +86,7 @@ func TestPortableArchiveRequiresTheRecordedBookMigration(t *testing.T) {
 	if err := source.Admin.QueryRow(source.Context, "SELECT jsonb_object_agg(filename,sha256) FROM public.schema_receipts").Scan(&receipts); err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Format != "vult-documents-backup-v5" || len(receipts) != 5 || receipts[folded] == "" {
+	if snapshot.Format != "vult-documents-backup-v5" || len(receipts) != 6 || receipts[folded] == "" {
 		t.Fatal("the archive did not identify the current Book format")
 	}
 	for _, mode := range []string{"valid", "earlier-release", "changed", "missing", "gap", "prerelease", "split-prerelease", "extra", "wrong-format"} {
@@ -108,6 +108,7 @@ func TestPortableArchiveRequiresTheRecordedBookMigration(t *testing.T) {
 			case "earlier-release":
 				// A backup from before agents could propose restores unchanged.
 				delete(hashes, "0005_proposing_agents.sql")
+				delete(hashes, "0006_owner_recovery_codes.sql")
 			case "extra":
 				hashes["0006_unknown.sql"] = hashes[folded]
 			case "wrong-format":

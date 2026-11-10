@@ -22,11 +22,10 @@ const (
 	maxAgentRequests = 16
 )
 
-// The setup secrets wait this long for the owner's browser to show them.
+// The backup key waits this long for the owner's browser to show it.
 const recoveryDisplayLife = 30 * time.Minute
 
 type pendingRecovery struct {
-	codes   []string
 	key     string
 	created time.Time
 }
@@ -119,7 +118,7 @@ func (s *Server) handleAgent(ctx context.Context, uid uint32, q local.Request) (
 		if pending == nil || time.Since(pending.created) > recoveryDisplayLife {
 			return nil, ledger.ErrNotFound, true
 		}
-		return marshal(local.SetupSecrets{RecoveryCodes: pending.codes, BackupKey: pending.key}), nil, true
+		return marshal(local.SetupSecrets{BackupKey: pending.key}), nil, true
 	case "owner_book_create":
 		var create local.OwnerBookCreate
 		if strictjson.Decode(q.Payload, &create) != nil {
@@ -317,7 +316,7 @@ func (b localBooks) Decide(ctx context.Context, session, request, book, access s
 	return b.client.ApproveAgent(ctx, session, local.AgentApproval{Request: request, BookID: book, Access: access, Deny: deny})
 }
 
-func (b localAgents) TakeRecovery(ctx context.Context, session string) ([]string, string, error) {
+func (b localAgents) TakeBackupKey(ctx context.Context, session string) (string, error) {
 	secrets, err := b.client.SetupSecrets(ctx, session)
-	return secrets.RecoveryCodes, secrets.BackupKey, err
+	return secrets.BackupKey, err
 }

@@ -5,6 +5,7 @@ import { Button } from "./button";
 import { Button as LinkButton } from "../../design-system/catalog/components/vult-ui/button";
 import { FailureIcon } from "./failure-icon";
 import { errorCopy } from "../../lib/error-copy";
+import { continueSignInHref } from "../../lib/session";
 import "./error-notice.css";
 
 export type ErrorNoticeProps = FailureContext & {
@@ -113,7 +114,7 @@ export function ErrorNotice({
             : failure.message}
         </p>
       </div>
-      {(review || retry || failure.recovery === "sign-in") && (
+      {(review || retry || failure.recovery === "sign-in" || failure.recovery === "confirm") && (
         <div className="error-notice-actions">
           {review ? (
             <Button
@@ -146,6 +147,19 @@ export function ErrorNotice({
               rel="noopener noreferrer"
             >
               Sign in
+            </LinkButton>
+          ) : failure.recovery === "confirm" ? (
+            <LinkButton
+              color="tertiary"
+              size="sm"
+              aria-describedby={messageId}
+              href={continueSignInHref()}
+              // A notice sits beside work that may not be saved yet; confirm
+              // in another tab so this one keeps it.
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Continue
             </LinkButton>
           ) : (
             <Button

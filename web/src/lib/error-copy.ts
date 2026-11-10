@@ -7,6 +7,7 @@ export const errorCopy = {
   featureUnavailable: "This view isn’t available yet.",
   access: "You don’t have permission to do that.",
   signIn: "Sign in to continue.",
+  sessionEnded: "Your session ended. Confirm it’s you to continue.",
   missing: "We can’t open this right now.",
   actionUnavailable: "We can’t make that change right now.",
   validation: "Check your details and try again.",
@@ -51,6 +52,7 @@ export const failureStateCopy = {
   access: "Your account doesn’t have access to this.",
   signIn: "You’re signed out.",
   signedOut: "Sign in to open your Books.",
+  sessionEnded: "For your security, Vult asks you to confirm it’s you.",
   recordsUnverified:
     "We couldn’t verify these records. Review them before relying on these figures.",
 } as const;

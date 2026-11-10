@@ -1,8 +1,11 @@
 package access
 
 import (
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -97,5 +100,54 @@ func TestNewLoginClearsCancelledReviewBeforeOrdinaryOrAgentSignIn(t *testing.T) 
 				t.Fatal("new sign-in returned to a cancelled review", got)
 			}
 		}
+	}
+}
+
+func TestEndedSessionReturnsToThePageItLeft(t *testing.T) {
+	for _, local := range []bool{false, true} {
+		login := httptest.NewRequest(http.MethodGet, "https://ledger.example.com/auth/login?return="+url.QueryEscape("/BOOK1/activity?range=month"), nil)
+		w := httptest.NewRecorder()
+		if !startReviewContinuation(w, login) {
+			t.Fatal("a page to return to was refused")
+		}
+		cookies := w.Result().Cookies()
+		if len(cookies) != 1 || cookies[0].Name != returnCookie || cookies[0].MaxAge != 600 || !cookies[0].HttpOnly || !cookies[0].Secure {
+			t.Fatal("the return page was not kept for sign-in", cookies)
+		}
+		done := httptest.NewRequest(http.MethodPost, "https://ledger.example.com/auth/callback", nil)
+		done.AddCookie(cookies[0])
+		w = httptest.NewRecorder()
+		if got := (&HTTP{local: local}).signInDestination(w, done, "/auth/complete"); got != "/BOOK1/activity?range=month" {
+			t.Fatal("sign-in did not return to the page the owner left", got)
+		}
+		if c := w.Result().Cookies(); len(c) != 1 || c[0].Name != returnCookie || c[0].MaxAge >= 0 {
+			t.Fatal("the return page outlived sign-in")
+		}
+		// A review continuation still wins.
+		done = httptest.NewRequest(http.MethodPost, "https://ledger.example.com/auth/callback", nil)
+		done.AddCookie(cookies[0])
+		done.AddCookie(&http.Cookie{Name: reviewCookie, Value: exampleReview})
+		if got := (&HTTP{local: local}).signInDestination(httptest.NewRecorder(), done, "/auth/complete"); got != "/auth/approve?operation="+exampleReview {
+			t.Fatal("the return page replaced a review", got)
+		}
+	}
+	for _, unsafe := range []string{"//example.com/", "https://example.com/", "/auth/logout", "/api/v1/books", "/BOOK1#x", "/a/../auth/login", "BOOK1"} {
+		w := httptest.NewRecorder()
+		if !startReviewContinuation(w, httptest.NewRequest(http.MethodGet, "https://ledger.example.com/auth/login?return="+url.QueryEscape(unsafe), nil)) || len(w.Result().Cookies()) != 0 {
+			t.Fatal("an unsafe return page was kept", unsafe)
+		}
+	}
+	forged := httptest.NewRequest(http.MethodPost, "https://ledger.example.com/auth/callback", nil)
+	forged.AddCookie(&http.Cookie{Name: returnCookie, Value: base64.RawURLEncoding.EncodeToString([]byte("//example.com/"))})
+	if got := (&HTTP{}).signInDestination(httptest.NewRecorder(), forged, "/auth/complete"); got != "/auth/complete" {
+		t.Fatal("a forged return cookie was followed", got)
+	}
+}
+
+func TestSessionSaysSignedOutOnlyWithoutASession(t *testing.T) {
+	w := httptest.NewRecorder()
+	(&HTTP{}).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "https://ledger.example.com/auth/session", nil))
+	if w.Code != 401 || !strings.Contains(w.Body.String(), `"code":"SIGNED_OUT"`) {
+		t.Fatal("a browser without a session was not told it is signed out", w.Code, w.Body.String())
 	}
 }

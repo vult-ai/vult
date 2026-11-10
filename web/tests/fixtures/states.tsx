@@ -99,10 +99,18 @@ const cases: Case[] = [
     scopes: reads,
   },
   {
-    id: "signed-out",
-    label: "Signed out",
+    id: "session-ended",
+    label: "Session ended",
     source: "HTTP 401 · read",
     error: responseFailure(401, {}, "read"),
+    context: { intent: "read", resource: "accounts" },
+    scopes: reads,
+  },
+  {
+    id: "signed-out",
+    label: "Signed out",
+    source: "HTTP 401 SIGNED_OUT · read",
+    error: responseFailure(401, { code: "SIGNED_OUT" }, "read"),
     context: { intent: "read", resource: "accounts" },
     scopes: reads,
   },
@@ -153,10 +161,11 @@ const cases: Case[] = [
 ];
 
 const severities = ["routine", "attention", "critical"] as const;
-const recoveries = ["retry", "sign-in", "review", "none"] as const;
+const recoveries = ["retry", "sign-in", "confirm", "review", "none"] as const;
 const recoveryLabel = {
   retry: "Try again",
   "sign-in": "Sign in",
+  confirm: "Continue",
   review: "Review",
   none: "No action",
 };

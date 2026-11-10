@@ -1,5 +1,7 @@
 "use strict";
 
+const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
+
 (() => {
   const button = document.getElementById("passkey-register") || document.getElementById("passkey-signin") || document.getElementById("passkey-recover");
   const status = document.getElementById("passkey-status");
@@ -47,7 +49,7 @@
     authSwitch.addEventListener("click", async () => {
       if (authSwitch.disabled) return;
       authSwitch.disabled = true;
-      status.textContent = "";
+      say(status, null);
       try {
         const enrollment = await request("/auth/authenticator/enroll/options", { setup_token: setup });
         if (typeof enrollment.secret !== "string" || !/^[A-Z2-7]+$/.test(enrollment.secret)) throw new Error("No key");
@@ -68,20 +70,20 @@
         authSetup.hidden = false;
         code?.focus?.();
       } catch {
-        status.textContent = "Couldn't start authenticator setup. Close this tab and run vult setup again, or ask your agent to.";
+        say(status, { title: "Couldn’t start authenticator setup", detail: "Close this tab and run vult setup again, or ask your agent to." });
         authSwitch.disabled = false;
       }
     });
     copy?.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(secret?.textContent || "");
-        if (authStatus) authStatus.textContent = "Setup key copied.";
+        say(authStatus, { title: "Setup key copied", tone: "success" });
         if (copy?.dataset) {
           copy.dataset.copied = "";
           setTimeout(() => { delete copy.dataset.copied; }, 2000);
         }
       } catch {
-        if (authStatus) authStatus.textContent = "Couldn’t copy. Select the setup key and copy it manually.";
+        say(authStatus, { title: "Couldn’t copy", detail: "Select the setup key and copy it." });
       }
     });
     let checking = false;
@@ -114,10 +116,10 @@
       if (checking || !code || !authStatus) return;
       const value = digits();
       if (!/^[0-9]{6}$/.test(value)) {
-        authStatus.textContent = "Enter the 6-digit code from your authenticator app.";
+        say(authStatus, { title: "Enter the 6-digit code", detail: "Use the latest code from your authenticator app." });
         return;
       }
-      authStatus.textContent = "";
+      say(authStatus, null);
       busy(true);
       try {
         const response = await fetch("/auth/authenticator/enroll/verify", {
@@ -129,20 +131,22 @@
         if (!response.ok) {
           code.value = "";
           otp?.setAttribute("data-invalid", "");
-          authStatus.textContent = result.error === "invalid_code" ? "That code didn't work. Enter the newest code from your authenticator app. If it keeps failing, check that your phone's clock is set automatically."
-            : result.error === "too_many_attempts" ? "Too many codes were tried. Wait five minutes, then try again."
-            : "Setup was not confirmed. Close this tab and run vult setup again, or ask your agent to.";
-        } else if (result.signed_in === true && (result.continue === "/auth/recovery-codes" || result.continue === "/")) {
+          say(authStatus, result.error === "invalid_code"
+            ? { title: "Code not accepted", detail: "Enter the latest code from your authenticator app. If it keeps failing, check that your phone sets its time automatically.", invalidCode: true }
+            : result.error === "too_many_attempts" ? { title: "Too many attempts", detail: "Wait five minutes, then try again.", tone: "warning" }
+            : { title: "Setup wasn’t confirmed", detail: "Close this tab and run vult setup again, or ask your agent to." });
+        } else if (result.signed_in === true && window.vultContinuation?.(result.continue)) {
           setup = "";
           try { sessionStorage.removeItem(setupKey); } catch { /* Nothing kept. */ }
-          authStatus.textContent = "Authenticator set up. Continuing…";
-          location.replace(result.continue);
+          // The recovery codes come next; the Books open after them.
+          if (result.continue === "/auth/recovery-codes") location.replace(result.continue);
+          else window.vultOpen(result.continue);
           return;
         } else {
-          authStatus.textContent = "Setup was not confirmed. Close this tab and run vult setup again, or ask your agent to.";
+          say(authStatus, { title: "Setup wasn’t confirmed", detail: "Close this tab and run vult setup again, or ask your agent to." });
         }
       } catch {
-        authStatus.textContent = "Setup was not confirmed. Check your connection and try again.";
+        say(authStatus, { title: "Setup wasn’t confirmed", detail: "Check your connection and try again." });
       }
       busy(false);
       code.focus?.();
@@ -151,6 +155,8 @@
     code?.addEventListener("keydown", (event) => { if (event.key === "Enter") confirm(); });
     // The sixth digit checks the code, as on Vult's sign-up.
     code?.addEventListener("input", () => {
+      // Editing a rejected code clears its message.
+      if (otp?.hasAttribute("data-invalid")) say(authStatus, null);
       otp?.removeAttribute("data-invalid");
       paint();
       if (digits().length === 6) confirm();
@@ -163,7 +169,7 @@
       const threshold = document.getElementById("passkey-threshold");
       if (threshold) threshold.hidden = false;
       if (code) code.value = "";
-      if (authStatus) authStatus.textContent = "";
+      say(authStatus, null);
       paint();
       authSwitch.disabled = false;
       button.focus?.();
@@ -173,7 +179,8 @@
   // As on Vult's sign-up: without passkeys here, the authenticator leads; while
   // the passkey prompt is open, the other ways wait.
   const helpToggle = document.getElementById("setup-help-toggle");
-  const others = [authSwitch, helpToggle].filter(Boolean);
+  const signInLinks = document.querySelector("#passkey-threshold .links");
+  const others = [authSwitch, helpToggle, signInLinks].filter(Boolean);
   const shownOthers = () => others.filter((node) => !node.hidden);
   if (dial && registering && !(window.isSecureContext && window.PublicKeyCredential && navigator.credentials?.create)) {
     button.disabled = true;
@@ -223,11 +230,11 @@
     if (recovering) {
       const input = document.getElementById("passkey-recovery-code");
       if (!window.isSecureContext || !input || !/^[A-Za-z0-9_-]{22}$/.test(input.value)) {
-        status.textContent = "Enter a saved recovery code at this installation's secure address.";
+        say(status, { title: "Enter a recovery code", detail: "Use one of your saved codes at this installation’s secure address." });
         return;
       }
       button.disabled = true;
-      status.textContent = "Checking your recovery code…";
+      say(status, { title: "Checking your recovery code…", tone: "neutral" });
       try {
         const result = await request("/auth/passkeys/recover", { code: input.value });
         if (!/^[A-Za-z0-9_-]{43}$/.test(result.setup_token || "")) throw new Error("Recovery was not confirmed");
@@ -237,9 +244,9 @@
         recovering = false;
         registering = true;
         button.textContent = "Create replacement passkey";
-        status.textContent = "Your old sign-ins and passkeys are revoked. Create a replacement passkey to sign in.";
+        say(status, { title: "Code accepted", detail: "Your old sign-ins and passkeys are revoked. Create a replacement passkey to sign in.", tone: "success" });
       } catch {
-        status.textContent = "Recovery was not confirmed. If the code was already used, use another saved code or contact your administrator.";
+        say(status, { title: "Code not accepted", detail: "If you already used this code, try another saved code." });
       }
       button.disabled = false;
       return;
@@ -247,14 +254,16 @@
     if (registering && !setup && setupInput) setup = setupInput.value.trim();
     if (!window.isSecureContext || !navigator.credentials || (registering && !/^[A-Za-z0-9_-]{43}$/.test(setup || ""))) {
       if (registering) setup = "";
-      status.textContent = registering ? "Enter a valid setup code or use a fresh setup link." : "Open this installation's secure address to use a passkey.";
+      say(status, registering
+        ? { title: "Setup code needed", detail: "Enter a valid setup code, or use a fresh setup link." }
+        : { title: "Passkeys need a secure address", detail: "Open this installation’s secure address to use a passkey." });
       return;
     }
     button.disabled = true;
     const waiting = dial ? shownOthers() : [];
     for (const node of waiting) node.hidden = true;
     if (dial) dial.dataset.phase = "reading";
-    status.textContent = dial ? "Touch the sensor to create your passkey…" : registering ? "Confirm creating your passkey." : "Confirm using your passkey.";
+    say(status, { title: "Waiting for your device…", tone: "neutral" });
     const path = registering ? "/auth/passkeys/register" : "/auth/passkeys/login";
     try {
       const options = await request(path + "/options", registering ? { setup_token: setup } : {});
@@ -263,19 +272,17 @@
       const credential = registering ? await navigator.credentials.create(optionsFromJSON(options)) : await navigator.credentials.get(optionsFromJSON(options));
       if (!credential) throw new Error("Passkey was not used");
       const result = await request(path + "/verify", { credential: credentialJSON(credential) });
-      const review = typeof result.continue === "string" && /^\/auth\/approve\?operation=([A-Za-z0-9_-]{43})$/.exec(result.continue);
-      const exactReview = review && encode(decode(review[1])) === review[1];
-      const local = result.continue === "/auth/recovery-codes" || /^\/auth\/agent\?request=[A-Za-z0-9_-]{43}$/.test(result.continue);
-      if (result.signed_in !== true || (result.continue !== "/" && !/^\/oauth\/authorize\?request=[A-Za-z0-9_-]{43}$/.test(result.continue) && !exactReview && !local)) throw new Error("Sign-in was not confirmed");
+      if (result.signed_in !== true || !window.vultContinuation?.(result.continue)) throw new Error("Sign-in was not confirmed");
       setup = "";
       try { sessionStorage.removeItem(setupKey); } catch { /* Nothing kept. */ }
       if (dial) {
         dial.dataset.phase = "open";
-        status.textContent = "Passkey created";
-        // Let the dial open before the recovery codes.
-        await new Promise((resolve) => setTimeout(resolve, 900));
-      } else status.textContent = "Signed in. Continuing…";
-      location.replace(result.continue);
+        // Setup says what it made; sign-in lets the dial open on its own.
+        say(status, registering ? { title: "Passkey created", tone: "success" } : null);
+        await new Promise((resolve) => setTimeout(resolve, registering ? 900 : 600));
+      }
+      if (result.continue.startsWith("/auth/") || result.continue.startsWith("/oauth/")) location.replace(result.continue);
+      else window.vultOpen(result.continue);
     } catch {
       if (dial) dial.dataset.phase = "idle";
       for (const node of waiting) node.hidden = false;
@@ -286,9 +293,32 @@
         setupLabel.hidden = false;
         setup = "";
       }
-      status.textContent = registering && setupMissing ? "The passkey wasn’t created. Try again." : registering ? "Passkey setup was not confirmed. Try signing in with your passkey, or request a fresh setup code." : "Sign-in was not confirmed. Try your passkey again.";
+      say(status, registering && setupMissing
+        ? { title: "Passkey not created", detail: "Try again, or use an authenticator app.", tone: "neutral" }
+        : registering ? { title: "Passkey setup wasn’t confirmed", detail: "Try signing in with your passkey, or request a fresh setup code." }
+        : { title: "Sign-in wasn’t confirmed", detail: document.getElementById("authenticator-signin-switch") ? "Try your passkey again, or use your authenticator app." : "Try your passkey again." });
       button.disabled = false;
     }
+  });
+})();
+
+// On the sign-in page an authenticator app is the other way in: it has its
+// own screen, and the passkey is one step back.
+(() => {
+  const open = document.getElementById("authenticator-signin-switch");
+  const back = document.getElementById("authenticator-signin-back");
+  const threshold = document.getElementById("passkey-threshold");
+  const form = document.getElementById("authenticator-signin");
+  if (!open || !back || !threshold || !form) return;
+  open.addEventListener("click", () => {
+    threshold.hidden = true;
+    form.hidden = false;
+    document.getElementById("authenticator-code")?.focus?.();
+  });
+  back.addEventListener("click", () => {
+    form.hidden = true;
+    threshold.hidden = false;
+    document.getElementById("passkey-signin")?.focus?.();
   });
 })();
 
@@ -300,16 +330,39 @@
   const csrf = document.querySelector('meta[name="vult-login-csrf"]')?.content;
   if (!form || !input || !status || !csrf) return;
   let busy = false;
+  // Six cells over the real input, as on every Vult code entry; the sixth
+  // digit signs in.
+  const slots = Array.from(document.getElementById("authenticator-slots")?.children || []);
+  const otp = document.getElementById("authenticator-otp");
+  const digits = () => (input.value || "").replace(/\D/g, "").slice(0, 6);
+  const paint = () => {
+    if (input.value !== digits()) input.value = digits();
+    const active = document.activeElement === input ? Math.min(input.value.length, 5) : -1;
+    slots.forEach((slot, i) => {
+      slot.textContent = input.value[i] || "";
+      if (i === active) slot.setAttribute("data-active", "");
+      else slot.removeAttribute("data-active");
+    });
+  };
+  input.addEventListener?.("focus", paint);
+  input.addEventListener?.("blur", paint);
+  input.addEventListener?.("input", () => {
+    // Editing a rejected code clears its message.
+    if (otp?.hasAttribute("data-invalid")) say(status, null);
+    otp?.removeAttribute("data-invalid");
+    paint();
+    if (digits().length === 6) form.requestSubmit?.();
+  });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (busy) return;
     const code = input.value.replace(/\s+/g, "");
     if (!/^[0-9]{6}$/.test(code)) {
-      status.textContent = "Enter the 6-digit code from your authenticator app.";
+      say(status, { title: "Enter the 6-digit code", detail: "Use the latest code from your authenticator app." });
       return;
     }
     busy = true;
-    status.textContent = "Checking your code…";
+    say(status, { title: "Checking your code…", tone: "neutral" });
     try {
       const response = await fetch("/auth/authenticator/login", {
         method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store",
@@ -319,21 +372,19 @@
       const json = response.headers.get("Content-Type")?.includes("application/json") ? await response.json() : {};
       if (!response.ok) {
         input.value = "";
-        status.textContent = json.error === "invalid_code" ? "That code didn't work. Enter the newest code from your authenticator app."
-          : json.error === "too_many_attempts" ? "Too many codes were tried. Wait five minutes, then try again."
-          : "Sign-in was not confirmed. Reload this page and try again.";
+        otp?.setAttribute("data-invalid", "");
+        paint();
+        say(status, json.error === "invalid_code" ? { title: "Code not accepted", detail: "Enter the latest code from your authenticator app." }
+          : json.error === "too_many_attempts" ? { title: "Too many attempts", detail: "Wait five minutes, then try again.", tone: "warning" }
+          : { title: "Sign-in wasn’t confirmed", detail: "Reload this page and try again." });
         busy = false;
         return;
       }
-      const operation = typeof json.continue === "string" && /^\/auth\/approve\?operation=([A-Za-z0-9_-]{43})$/.exec(json.continue);
-      const bytes = operation && Uint8Array.from(atob(operation[1].replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
-      const review = operation && btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "") === operation[1];
-      const local = json.continue === "/" || /^\/auth\/agent\?request=[A-Za-z0-9_-]{43}$/.test(json.continue);
-      if (json.signed_in !== true || (!review && !local)) throw new Error("Sign-in was not confirmed");
-      status.textContent = "Signed in. Continuing…";
-      location.replace(json.continue);
+      if (json.signed_in !== true || !window.vultContinuation?.(json.continue)) throw new Error("Sign-in was not confirmed");
+      if (json.continue.startsWith("/auth/") || json.continue.startsWith("/oauth/")) location.replace(json.continue);
+      else window.vultOpen(json.continue);
     } catch {
-      status.textContent = "Sign-in was not confirmed. Reload this page and try again.";
+      say(status, { title: "Sign-in wasn’t confirmed", detail: "Reload this page and try again." });
       busy = false;
     }
   });

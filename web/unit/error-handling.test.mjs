@@ -183,13 +183,24 @@ test("failed retry is recoverable; writes have no automatic retry; sign-in keeps
     );
     await render(
       React.createElement(ErrorNotice, {
-        error: responseFailure(401, {}),
+        error: responseFailure(401, { code: "SIGNED_OUT" }),
         intent: "read",
       }),
     );
-    const link = document.querySelector("a");
+    let link = document.querySelector("a");
     assert.equal(link.target, "_blank");
     assert.equal(link.getAttribute("href"), "/auth/login");
+    window.history.replaceState(null, "", "/BOOK1/sources");
+    await render(
+      React.createElement(ErrorNotice, {
+        error: responseFailure(401, {}),
+        intent: "write",
+      }),
+    );
+    link = document.querySelector("a");
+    assert.equal(link.textContent, "Continue");
+    assert.equal(link.target, "_blank");
+    assert.equal(link.getAttribute("href"), "/auth/login?return=%2FBOOK1%2Fsources");
   });
 });
 

@@ -219,7 +219,14 @@ func (a *passkeyAuthenticator) assertion(t *testing.T, challenge access.PasskeyC
 	return data
 }
 
-func enrollPasskey(t *testing.T, f *fixture) (*access.Passkeys, access.PasskeySetup, *passkeyAuthenticator, string, string) {
+// enrolledPasskey is an operator's setup and the recovery codes its owner then
+// received in the browser.
+type enrolledPasskey struct {
+	access.PasskeySetup
+	RecoveryCodes []string
+}
+
+func enrollPasskey(t *testing.T, f *fixture) (*access.Passkeys, enrolledPasskey, *passkeyAuthenticator, string, string) {
 	t.Helper()
 	setup, err := f.operator.InitializePasskeys(f.db.Context, "", "example-owner", "https://ledger.example.com")
 	if err != nil {
@@ -239,7 +246,11 @@ func enrollPasskey(t *testing.T, f *fixture) (*access.Passkeys, access.PasskeySe
 	if err != nil {
 		t.Fatal("finish registration", err)
 	}
-	return p, setup, a, session, browser
+	codes, err := p.IssueRecoveryCodes(f.db.Context, session)
+	if err != nil || len(codes) != 8 {
+		t.Fatal("the owner did not receive recovery codes after setup", err)
+	}
+	return p, enrolledPasskey{setup, codes}, a, session, browser
 }
 
 func TestPasskeySignedLifecycleRecoveryAndPreservedBooks(t *testing.T) {
@@ -280,8 +291,8 @@ func TestPasskeySignedLifecycleRecoveryAndPreservedBooks(t *testing.T) {
 		t.Fatal(err)
 	}
 	recovery, err := f.operator.ResetPasskeys(f.db.Context, "example-owner", "https://ledger.example.com")
-	if err != nil || recovery.TenantID != setup.TenantID || len(recovery.RecoveryCodes) != 8 {
-		t.Fatal("offline recovery changed ownership or omitted codes", err)
+	if err != nil || recovery.TenantID != setup.TenantID {
+		t.Fatal("offline recovery changed ownership", err)
 	}
 	for _, token := range []string{session, login} {
 		if _, err := f.service.Identity(f.db.Context, token); !errors.Is(err, access.ErrDenied) {

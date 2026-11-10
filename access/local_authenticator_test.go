@@ -17,11 +17,11 @@ import (
 	"github.com/vult-ai/vult/ledger"
 )
 
-// recoveringAgents also hands out the new installation's recovery codes.
+// recoveringAgents also hands out the new installation's backup key.
 type recoveringAgents struct{ recordedAgents }
 
-func (*recoveringAgents) TakeRecovery(context.Context, string) ([]string, string, error) {
-	return []string{"example-recovery-code"}, "", nil
+func (*recoveringAgents) TakeBackupKey(context.Context, string) (string, error) {
+	return "", nil
 }
 
 type authenticatorFixture struct {
@@ -229,7 +229,7 @@ func TestLocalAuthenticatorEnrolsSignsInAndApprovesAgents(t *testing.T) {
 	if !a.auth.Ready(a.f.db.Context) {
 		t.Fatal("the enrolled authenticator is not ready")
 	}
-	if page := a.get("/auth/login"); !strings.Contains(page.Body.String(), "Use an authenticator app instead") || !strings.Contains(page.Body.String(), `id="authenticator-code"`) {
+	if page := a.get("/auth/login"); !strings.Contains(page.Body.String(), "Use an authenticator app") || !strings.Contains(page.Body.String(), `id="authenticator-code"`) {
 		t.Fatal("the sign-in page did not offer the authenticator")
 	}
 

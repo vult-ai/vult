@@ -17,8 +17,8 @@ vult-server-admin passkey-setup --dsn-file operator.dsn --input owner.json --out
 ```
 
 The command reserves a new private output file before changing anything. It
-contains a five-minute setup link, tenant ID and any newly generated recovery
-codes. Keep it private; do not paste it into service logs. The setup token is in
+contains a five-minute setup link and the tenant ID, never recovery codes: the
+owner receives those in the browser after creating the passkey. Keep it private; do not paste it into service logs. The setup token is in
 the URL fragment, removed by the sign-in page before any request. The browser
 submits it only to this installation in an origin- and CSRF-checked request.
 The same setup code can be entered on `/auth/setup` without putting it in a
@@ -33,7 +33,9 @@ after preparing a passkey for that same owner and tenant. OIDC and external
 identity configuration are unchanged and do not enable the built-in passkey path.
 
 Open the setup link in your own browser, create the passkey and complete the
-device's user-verification prompt. Later visits to `/auth/login` offer passkey
+device's user-verification prompt. Vult then shows your recovery codes, once,
+in that browser. Recovery codes belong to the account owner: they never appear
+in the operator's output, and receiving them retires any earlier codes. Later visits to `/auth/login` offer passkey
 sign-in. In a combined built-in configuration, the passphrase and authenticator
 form remains available. Sign-in cookies are Secure, HttpOnly and host-only;
 credential replies and setup authority never become agent credentials.
@@ -50,17 +52,19 @@ For offline lost-key recovery, use the same private input with:
 vult-server-admin passkey-recover --dsn-file operator.dsn --input owner.json --output recovery-enrollment.json
 ```
 
-Recovery preserves the identity, tenant and Books, revokes earlier passkeys and
-identity sessions, invalidates pending ceremonies and replaces recovery codes.
-Use its new setup link to register again. Setup never reopens automatically when
+This is the operator's account reset, separate from the owner's recovery codes.
+It preserves the identity, tenant and Books, revokes earlier passkeys, identity
+sessions and recovery codes, and invalidates pending ceremonies. The owner uses
+its new setup link to register again and then receives new recovery codes in the
+browser. Setup never reopens automatically when
 credentials are missing. A lost setup result can be replaced through this explicit
 offline recovery command. No financial restore imports sign-in authority.
 
 A self-hosted owner can also choose **Use a recovery code** on the sign-in page.
 One accepted code revokes earlier sign-ins and passkeys and prepares a replacement
 credential in that same browser. The code does not create a session: complete the
-replacement passkey's user-verification prompt to sign in. Each code works once;
-unused codes remain valid. Failed code attempts share a durable bounded window.
+replacement passkey's user-verification prompt to sign in. Vult then shows a
+fresh set of recovery codes, which replaces the remaining ones. Failed code attempts share a durable bounded window.
 If a reply is lost after a code is used, another saved code or offline recovery
 can replace the unfinished setup. Local browser recovery requires native
 administrator approval instead; the online code endpoint is disabled there.
@@ -97,8 +101,8 @@ Installation asks for administrator approval and prepares the public certificate
 without trusting it. Run `vult open` from your own terminal: its visible setup
 application requests macOS approval for SSL trust scoped to the one local
 hostname. The certificate has no CA authority. After normal HTTPS verification,
-native enrollment approval displays recovery codes to keep offline and opens
-the five-minute setup link in your browser.
+native enrollment approval opens the five-minute setup link in your browser,
+which shows your recovery codes to keep offline after you create the passkey.
 Later runs open the sign-in page. The link stays out of command-line arguments,
 files and logs. If a passkey is lost, run `vult browser reset`; native approval
 revokes the old browser credentials while retaining the same Books and origin.

@@ -60,12 +60,14 @@ access/proposals.go
 access/proposals_test.go
 access/recovery_codes.go
 access/recovery_http.go
+access/recovery_page_test.go
 access/review_http_test.go
 access/setup_page_test.go
 access/theme.go
 access/theme.js
 access/theme.test.mjs
 access/theme_test.go
+access/ui.js
 access/user_avatar.go
 access/user_settings.go
 cmd/vult-server-admin/archive.go
@@ -131,6 +133,7 @@ docs/passkeys.md
 docs/releases/0.4.0.md
 docs/releases/0.5.0.md
 docs/releases/0.5.1.md
+docs/releases/0.5.2.md
 docs/reports.md
 docs/search.md
 docs/server.md
@@ -332,6 +335,7 @@ ledger/migrations/0002_server_access.sql
 ledger/migrations/0003_documents.sql
 ledger/migrations/0004_recorded_book.sql
 ledger/migrations/0005_proposing_agents.sql
+ledger/migrations/0006_owner_recovery_codes.sql
 ledger/postings.go
 ledger/postings_test.go
 ledger/proposal_decisions.go

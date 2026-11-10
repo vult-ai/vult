@@ -36,14 +36,18 @@ func TestOfflinePasskeySetupKeepsAuthorityPrivateAndRecoveryBound(t *testing.T) 
 		Codes    []string `json:"recovery_codes"`
 	}
 	stored, err := os.ReadFile(output)
-	if err != nil || json.Unmarshal(stored, &enrollment) != nil || !ledger.ValidID(enrollment.TenantID) || enrollment.Expires != 300 || len(enrollment.Codes) != 8 {
+	if err != nil || json.Unmarshal(stored, &enrollment) != nil || !ledger.ValidID(enrollment.TenantID) || enrollment.Expires != 300 {
 		t.Fatal("private enrollment output incomplete", err)
+	}
+	// Recovery codes belong to the owner, who receives them in the browser.
+	if len(enrollment.Codes) != 0 || strings.Contains(string(stored), "recovery") {
+		t.Fatal("the operator received the owner's recovery codes")
 	}
 	link, err := url.Parse(enrollment.SetupURL)
 	if err != nil || link.RawQuery != "" || link.Path != "/auth/setup" || !strings.HasPrefix(link.Fragment, "setup=") {
 		t.Fatal("setup authority reached the request query", err)
 	}
-	if strings.Contains(stdout.String(), enrollment.SetupURL) || strings.Contains(stdout.String(), enrollment.Codes[0]) {
+	if strings.Contains(stdout.String(), enrollment.SetupURL) {
 		t.Fatal("setup authority reached the console")
 	}
 	info, err := os.Stat(output)
@@ -67,10 +71,10 @@ func TestOfflinePasskeySetupKeepsAuthorityPrivateAndRecoveryBound(t *testing.T) 
 		Codes    []string `json:"recovery_codes"`
 	}
 	data, err = os.ReadFile(recoveryOutput)
-	if err != nil || json.Unmarshal(data, &recovery) != nil || recovery.TenantID != enrollment.TenantID || recovery.SetupURL == enrollment.SetupURL || len(recovery.Codes) != 8 {
+	if err != nil || json.Unmarshal(data, &recovery) != nil || recovery.TenantID != enrollment.TenantID || recovery.SetupURL == enrollment.SetupURL || len(recovery.Codes) != 0 {
 		t.Fatal("recovery changed ownership or reused setup authority", err)
 	}
-	if strings.Contains(stdout.String(), recovery.SetupURL) || strings.Contains(stdout.String(), recovery.Codes[0]) {
+	if strings.Contains(stdout.String(), recovery.SetupURL) {
 		t.Fatal("recovery authority reached the console")
 	}
 }

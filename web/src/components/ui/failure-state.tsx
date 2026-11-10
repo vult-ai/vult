@@ -6,6 +6,7 @@ import {
   type FailureContext,
 } from "../../lib/errors";
 import { failureStateCopy } from "../../lib/error-copy";
+import { continueSignInHref } from "../../lib/session";
 import { Button } from "./button";
 import { Button as LinkButton } from "../../design-system/catalog/components/vult-ui/button";
 import { FailureIcon } from "./failure-icon";
@@ -82,6 +83,7 @@ export function FailureState({
     state.recovery === "retry" &&
     (context.intent ?? "read") === "read";
   const signIn = state.recovery === "sign-in";
+  const confirm = state.recovery === "confirm";
   useEffect(() => {
     // A page that failed to load replaces what had focus. Only claim focus
     // when nothing else holds it.
@@ -93,7 +95,7 @@ export function FailureState({
   const size = scope === "page" ? "md" : "sm";
   const busy = pending || retry.running || review.running;
   const actions =
-    canReview || canRetry || signIn || secondaryAction ? (
+    canReview || canRetry || signIn || confirm || secondaryAction ? (
       <>
         {canReview ? (
           <Button
@@ -131,6 +133,15 @@ export function FailureState({
             rel="noopener noreferrer"
           >
             Sign in
+          </LinkButton>
+        ) : confirm ? (
+          <LinkButton
+            color={scope === "page" ? "primary" : "secondary"}
+            size={scope === "page" ? "md" : "sm"}
+            aria-describedby={detailId}
+            href={continueSignInHref()}
+          >
+            Continue
           </LinkButton>
         ) : null}
         {secondaryAction}

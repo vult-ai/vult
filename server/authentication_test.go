@@ -119,7 +119,7 @@ func TestAuthenticationWiringRequiresSeparateRestrictedRoles(t *testing.T) {
 			w := httptest.NewRecorder()
 			service.Handler.ServeHTTP(w, r)
 			opened.Close()
-			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Sign in with a passkey") || strings.Contains(w.Body.String(), "Passphrase") != (mode == "builtin") {
+			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Unlock with your passkey") || strings.Contains(w.Body.String(), "Passphrase") != (mode == "builtin") {
 				t.Fatal("configured login methods changed", mode, w.Code)
 			}
 		}
