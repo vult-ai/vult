@@ -10,9 +10,9 @@ const steps = [
     command: 'vult book create --name "Personal" --currency USD --scale 2',
   },
   {
-    title: "Connect your agent",
+    title: "Connect an agent",
     detail:
-      "Use the Book ID the first command printed. Add the MCP entry this one prints to your agent’s settings. You approve each agent session.",
+      "Use the Book ID the first command printed. Add the MCP entry this one prints to the agent’s settings. You approve each agent session.",
     command: 'vult connection create --name "My agent" --book BOOK_ID --access write',
   },
 ] as const;
@@ -42,10 +42,10 @@ export function FirstRun({
   }, []);
   return (
     <section className="first-run" aria-labelledby={heading}>
-      <h1 id={heading}>Start your first Book</h1>
+      <h1 id={heading}>Start a Book</h1>
       <p className="first-run-intro">
-        Your agent records the Book. You review and approve it here. Run these
-        two commands in your terminal; this page opens your Book as soon as it
+        The agent records the Book. You review and approve it here. Run these
+        two commands in a terminal; this page opens the Book as soon as it
         exists.
       </p>
       <ol className="first-run-steps">
@@ -63,7 +63,7 @@ export function FirstRun({
         ))}
       </ol>
       <p className="first-run-note">
-        On a Vult server, your administrator creates Books, and your agent
+        On a Vult server, an administrator creates Books, and the agent
         connects by signing in.
       </p>
       <div className="onboarding-actions">

@@ -1,4 +1,5 @@
 import { ArrowUpRight, ChevronDown } from "../../design-system/icons";
+import { EntryPayee } from "./entry-payee";
 import { formatDateTime } from "../../lib/date-format";
 import { money, rateDisplay, type Book, type State } from "../../lib/api";
 import type { CurrencyAmount, JournalLine, JournalRead } from "../../lib/journal-read";
@@ -75,11 +76,14 @@ export function LedgerEntry({
   state,
   book,
   onNavigate,
+  onChanged,
 }: {
   read: JournalRead;
   state: State;
   book: Book;
   onNavigate: (id: string) => void;
+  /** Reloads the entry after a change to a separate decision, such as its payee. */
+  onChanged?: () => void;
 }) {
   const entry = read.entry;
   const chart = new Map(state.accounts.map((account) => [account.code, account]));
@@ -113,6 +117,7 @@ export function LedgerEntry({
           tone={tone}
         />
       </section>
+      {read.payee && <EntryPayee book={book} read={read.payee} onChanged={() => onChanged?.()} />}
       <EntryPostings bookId={book.id} postings={postings} />
       <div className="entry-provenance">
         <EntryDocuments key={`${book.id}:${entry.id}`} entryId={entry.id} bookId={book.id} receipt={null} imported={false} />

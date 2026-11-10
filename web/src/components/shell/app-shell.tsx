@@ -103,7 +103,7 @@ export function AppShell({
       ? failed
         ? "Unavailable"
         : "Opening Book…"
-      : "Create your Book";
+      : "Create a Book";
   const nav = (mobile = false) => (
     <Navigation
       items={navigation}
@@ -248,7 +248,7 @@ export function AppShell({
           the Book's pages first, Settings at the bottom. */}
       <Dialog
         variant="navigation"
-        title={bookName || "Your Book"}
+        title={bookName || "Book"}
         description={null}
         open={mobileOpen}
         onOpenChange={setMobileOpen}

@@ -17,6 +17,8 @@ type JournalRead struct {
 	Scale         int              `json:"scale"`
 	Entry         Entry            `json:"entry"`
 	RecordedBy    *JournalRecorder `json:"recorded_by,omitempty"`
+	// Payee is who the entry was with, a separate decision from the entry.
+	Payee *EntryPayeeRead `json:"payee,omitempty"`
 }
 
 // JournalRecorder is the display identity of the entry's recorded actor.
@@ -45,16 +47,18 @@ func (a TenantAdmin) Journal(ctx context.Context, book, entry string) (JournalRe
 		// its identity after revocation. A profile is visible only when the
 		// actor is the currently authenticated owner of this Book.
 		var connectionID, connectionName, ownerName *string
+		var payees []byte
 		row := tx.QueryRow(ctx, "SELECT "+entryColumns+`, recorder.connection_id, recorder.connection_name,
 			CASE WHEN recorder.connection_id IS NULL AND access.owner_identity(e.tenant_id)=e.actor_id
-			THEN coalesce((SELECT display_name FROM access.user_settings WHERE identity_id=e.actor_id),'') END
+			THEN coalesce((SELECT display_name FROM access.user_settings WHERE identity_id=e.actor_id),'') END,
+			`+entryPayeeHistory+`
 			FROM public.entries e
 			LEFT JOIN LATERAL (
 				SELECT id::text AS connection_id, name AS connection_name FROM public.connections
 				WHERE tenant_id=e.tenant_id AND book_id=e.book_id AND actor_id=e.actor_id
 			) recorder ON true
 			WHERE e.tenant_id=$1 AND e.book_id=$2 AND e.id=$3`, scope.TenantID, scope.BookID, entry)
-		value, err := readEntryRow(ctx, tx, scope, row, &connectionID, &connectionName, &ownerName)
+		value, err := readEntryRow(ctx, tx, scope, row, &connectionID, &connectionName, &ownerName, &payees)
 		if err != nil {
 			return dbError(err)
 		}
@@ -63,6 +67,11 @@ func (a TenantAdmin) Journal(ctx context.Context, book, entry string) (JournalRe
 			return err
 		}
 		out = JournalRead{RecordedState: state.RecordedState, SchemaVersion: 1, Version: 1, BookID: book, Currency: header.Currency, Scale: header.Scale, Entry: value}
+		payee, err := entryPayeeFromHistory(entry, payees)
+		if err != nil {
+			return err
+		}
+		out.Payee = &payee
 		if connectionID != nil && connectionName != nil {
 			out.RecordedBy = &JournalRecorder{Kind: "agent", Name: *connectionName, ConnectionID: *connectionID}
 		} else if ownerName != nil {

@@ -162,6 +162,11 @@ func TestBrowserAPIRejectsCredentialsAndUnprovedWrites(t *testing.T) {
 			if w.Code != tc.status || !json.Valid(w.Body.Bytes()) || strings.Contains(w.Body.String(), f.book.Name) {
 				t.Fatalf("browser boundary: status %d, want %d", w.Code, tc.status)
 			}
+			// Only a browser holding no session is told it is signed out; a
+			// session that was present and ended is not.
+			if signedOut := strings.Contains(w.Body.String(), `"code":"SIGNED_OUT"`); signedOut != (tc.name == "no-cookie" || tc.name == "bearer-only" && w.Code == http.StatusUnauthorized) {
+				t.Fatalf("browser boundary %s: signed-out code %v", tc.name, signedOut)
+			}
 		})
 	}
 	var count int

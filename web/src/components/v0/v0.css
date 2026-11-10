@@ -222,6 +222,13 @@
   padding: 0 24px 12px;
   flex-shrink: 0;
 }
+/* The Accounts page fills the pane, so its list scrolls inside it. */
+.v0-accounts-mount:not([hidden]) {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
 .v0-accounts-page {
   display: flex;
   flex-direction: column;

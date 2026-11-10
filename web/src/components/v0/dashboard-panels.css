@@ -1,8 +1,10 @@
 /* Dashboard panel standard: an outer shell with icon, title and subtitle,
    and one inner card that carries the figure, its keys and its detail. The
-   Accounts overview uses the same panels. */
+   Accounts overview and Reconcile use the same panels; a page opts
+   in with .dash-surface. */
 .dash-grid-layout,
-.accounts-overview {
+.accounts-overview,
+.dash-surface {
   --dash-shell: color-mix(in srgb, var(--color-text-primary) 7%, var(--color-bg-primary));
   --dash-card: var(--color-bg-primary);
   --dash-fill: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
@@ -234,6 +236,16 @@ button.dash-row:hover { background: var(--dash-fill); }
 .dash-meter > span { display: block; height: 100%; border-radius: var(--radius-sm); }
 
 @media (width < 640px) {
+  /* On a phone the title keeps its line; the card's controls take the next. */
+  .dash-panel-header { flex-wrap: wrap; gap: 8px 10px; padding: 10px 6px 8px 4px; }
+  .dash-panel-icon { width: 32px; height: 32px; }
+  .dash-panel-titles h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* A single small control stays beside the title; a switch or a picker
+     with its link moves under it. */
+  .dash-panel-action:has(.dash-mode, .dash-chart-actions) { flex: 1 1 100%; justify-content: space-between; min-width: 0; }
+  .dash-panel .vult-headline.vult-headline:not([data-stacked]) { align-items: stretch; }
+  .dash-chart-actions { flex: 1; justify-content: space-between; }
+  .dash-account-select { flex: 0 1 220px; min-width: 0; }
   .dash-panel-body { padding: 14px 12px; }
   .dash-grid-layout { --dash-bar: 9px; }
   .dash-plot { --axis: 46px; }
@@ -386,3 +398,4 @@ li[data-active] > .dash-row { background: var(--dash-fill); }
 /* An empty panel's one line and its next step. */
 .dash-empty { margin: 0; text-align: center; }
 .dash-empty-action { color: var(--color-text-secondary); text-decoration: underline; text-underline-offset: 2px; }
+

@@ -95,7 +95,7 @@ export function PersonalSettingsHost({ children }: { children: ReactNode }) {
           throw new APIError(
             next.mode === "local"
               ? "Personal settings are not ready on this instance. Retry when it is ready."
-              : "Sign in to load your personal settings.",
+              : "Sign in to load personal settings.",
             next.mode === "local" ? 503 : 403,
           );
         setSession(next);
@@ -254,13 +254,13 @@ export function PersonalSettingsHost({ children }: { children: ReactNode }) {
       (legacyBusy
         ? "Saving…"
         : !store
-          ? "Loading your personal settings…"
+          ? "Loading personal settings…"
           : snapshot.status === "saved"
             ? ""
             : snapshot.status === "saving"
               ? "Saving…"
               : snapshot.status === "loading"
-                ? "Loading your personal settings…"
+                ? "Loading personal settings…"
                 : snapshot.status === "conflict"
                   ? "Changes were not saved. Reload the settings saved on another device."
                   : "Changes have not been saved."),

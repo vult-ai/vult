@@ -428,7 +428,7 @@ export function AccountTree(props: Props) {
           <EmptyState
             scope="region"
             title="No accounts in this view"
-            detail="Adjust your search or filters."
+            detail="Adjust the search or filters."
           />
         )}
       >

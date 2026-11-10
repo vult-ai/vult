@@ -132,26 +132,58 @@ func (a Admin) Revoke(ctx context.Context, id string) error {
 	}
 	return nil
 }
-func (a Admin) ClosePeriod(ctx context.Context, book, from, through string) error {
+
+// ClosePeriod records the installation owner's close as a decision. A reason
+// is required when review items remain open.
+func (a Admin) ClosePeriod(ctx context.Context, book, from, through, reason string) error {
 	if !ValidID(book) || !ValidDate(from) || !ValidDate(through) || from > through {
 		return ErrInvalid
 	}
-	tx, e := a.DB.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
-	if e != nil {
-		return e
+	var actor string
+	if err := a.DB.QueryRow(ctx, `SELECT o.identity_id::text FROM access.owners o JOIN public.books b
+ ON b.tenant_id=o.tenant_id WHERE b.id=$1`, book).Scan(&actor); err != nil {
+		return ErrDenied
+	}
+	_, err := a.ClosePeriodDecision(ctx, book, actor, ClosePeriod{RequestKey: ID(), From: from, Through: through, Reason: reason})
+	return err
+}
+
+// ClosePeriodDecision records a native-authorized owner's close through the
+// same review and receipt path used by the app. The caller supplies the
+// installation owner's identity after native authorization.
+func (a Admin) ClosePeriodDecision(ctx context.Context, book, actor string, q ClosePeriod) (AccountingPeriod, error) {
+	var out AccountingPeriod
+	if !ValidID(book) || !ValidID(actor) {
+		return out, ErrInvalid
+	}
+	if _, _, err := validPeriodChange("close_period", raw(q)); err != nil {
+		return out, err
+	}
+	tx, err := a.DB.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return out, dbError(err)
 	}
 	defer tx.Rollback(context.Background())
 	var tenant string
-	if e = tx.QueryRow(ctx, "SELECT tenant_id::text FROM public.books WHERE id=$1", book).Scan(&tenant); e != nil {
-		return dbError(e)
+	if err = tx.QueryRow(ctx, `SELECT b.tenant_id::text FROM public.books b JOIN access.owners o
+ ON o.tenant_id=b.tenant_id WHERE b.id=$1 AND o.identity_id=$2`, book, actor).Scan(&tenant); err != nil {
+		return out, ErrDenied
 	}
-	if e = setScope(ctx, tx, Scope{TenantID: tenant, BookID: book}); e != nil {
-		return e
+	scope := Scope{TenantID: tenant, BookID: book, ActorID: actor}
+	if err = setScope(ctx, tx, scope); err != nil {
+		return out, dbError(err)
 	}
-	if _, e = tx.Exec(ctx, "INSERT INTO public.closed_periods(tenant_id,book_id,id,start_date,end_date) VALUES($1,$2,$3,$4,$5)", tenant, book, ID(), from, through); e != nil {
-		return dbError(e)
+	if _, err = tx.Exec(ctx, "SELECT public.ledger_lock($1,$2)", tenant, book); err != nil {
+		return out, dbError(err)
 	}
-	return dbError(tx.Commit(ctx))
+	result, err := periodWrite(ctx, tx, scope, "close_period", raw(q), nil)
+	if err != nil {
+		return out, err
+	}
+	if json.Unmarshal(result, &out) != nil {
+		return out, ErrInvalid
+	}
+	return out, dbError(tx.Commit(ctx))
 }
 
 type Export struct {
@@ -266,7 +298,14 @@ type Snapshot struct {
 var releasedSnapshotTables = []string{"tenants", "books", "accounts", "account_revisions", "requests", "entries", "lines", "closed_periods"}
 var bookSnapshotTables = append(append([]string{}, releasedSnapshotTables...), "book_revisions")
 var proposalSnapshotTables = append(append([]string{}, bookSnapshotTables...), "operation_proposals", "operation_decisions", "operation_consumptions")
-var snapshotTables = append(append([]string{}, proposalSnapshotTables...), "book_addresses", "book_identity_revisions", "book_logo_images")
+var bookDetailSnapshotTables = append(append([]string{}, proposalSnapshotTables...), "book_addresses", "book_identity_revisions", "book_logo_images")
+
+// foundationTables hold the chart, payee, statement and period history. They
+// follow documents, which statements cite, and are restored in this order.
+var foundationTables = []string{"payees", "payee_revisions", "entry_payees", "statements", "statement_rows",
+	"statement_duplicates", "statement_matches", "statement_match_parts", "statement_match_revocations",
+	"statement_adjustments", "statement_reviews", "accounting_periods", "accounting_period_events"}
+var snapshotTables = append(append([]string{}, bookDetailSnapshotTables...), foundationTables...)
 
 func readSnapshotRows(ctx context.Context, tx pgx.Tx, table string, scope Scope, order string, owner bool, budget int) ([]byte, error) {
 	if budget < 2 {
@@ -359,8 +398,10 @@ func (a Admin) Snapshot(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, e
 	}
 	tables, format := releasedSnapshotTables, "vult-ledger-backup-v1"
-	if slices.Contains(names[:applied], recordedBookMigration) {
-		tables, format = snapshotTables, "vult-ledger-backup-v5"
+	if slices.Contains(names[:applied], foundationsMigration) {
+		tables, format = snapshotTables, "vult-ledger-backup-v6"
+	} else if slices.Contains(names[:applied], recordedBookMigration) {
+		tables, format = bookDetailSnapshotTables, "vult-ledger-backup-v5"
 	}
 	var documentTable bool
 	if e = tx.QueryRow(ctx, "SELECT to_regclass('public.documents') IS NOT NULL").Scan(&documentTable); e != nil {
@@ -394,7 +435,7 @@ func (a Admin) Snapshot(ctx context.Context) (Snapshot, error) {
 	return out, nil
 }
 func (a Admin) Restore(ctx context.Context, s Snapshot) error {
-	if (s.Format != "vult-ledger-backup-v1" && s.Format != "vult-ledger-backup-v2" && s.Format != "vult-ledger-backup-v3" && s.Format != "vult-ledger-backup-v4" && s.Format != "vult-ledger-backup-v5") || s.SchemaSHA256 != SchemaSHA256() {
+	if (s.Format != "vult-ledger-backup-v1" && s.Format != "vult-ledger-backup-v2" && s.Format != "vult-ledger-backup-v3" && s.Format != "vult-ledger-backup-v4" && s.Format != "vult-ledger-backup-v5" && s.Format != "vult-ledger-backup-v6") || s.SchemaSHA256 != SchemaSHA256() {
 		return ErrInvalid
 	}
 	var normalizeErr error
@@ -408,7 +449,10 @@ func (a Admin) Restore(ctx context.Context, s Snapshot) error {
 	}
 	defer tx.Rollback(context.Background())
 	tables := proposalSnapshotTables
-	if s.Format == "vult-ledger-backup-v5" {
+	switch s.Format {
+	case "vult-ledger-backup-v5":
+		tables = bookDetailSnapshotTables
+	case "vult-ledger-backup-v6":
 		tables = snapshotTables
 	}
 	if err = restoreSnapshotRows(ctx, tx, s, tables, false); err != nil {
@@ -439,25 +483,38 @@ func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder 
 		return e
 	}
 	columns := map[string][]string{
-		"tenants":                 {"id", "created_at"},
-		"books":                   {"tenant_id", "id", "name", "currency", "scale", "created_at"},
-		"accounts":                {"tenant_id", "book_id", "id", "class", "created_at"},
-		"account_revisions":       {"tenant_id", "book_id", "account_id", "revision", "code", "name", "actor_id", "recorded_at"},
-		"requests":                {"tenant_id", "book_id", "id", "actor_id", "request_key", "operation", "request_bytes", "result_bytes", "recorded_at"},
-		"entries":                 {"tenant_id", "book_id", "id", "sequence", "receipt_id", "actor_id", "economic_date", "accounting_date", "description", "reversal_of", "recorded_at"},
-		"lines":                   {"tenant_id", "book_id", "id", "entry_id", "position", "account_id", "side", "amount_minor", "memo", "reverses_line_id"},
-		"closed_periods":          {"tenant_id", "book_id", "id", "start_date", "end_date", "closed_at"},
-		"book_logo_images":        {"tenant_id", "book_id", "id", "sha256", "content_type", "data"},
-		"book_addresses":          {"tenant_id", "book_id", "code", "slug", "revision", "aliases"},
-		"book_identity_revisions": {"tenant_id", "book_id", "revision", "id", "prior_kind", "new_kind", "prior_identity", "new_identity", "actor_id", "reason", "effective_date", "recorded_at"},
-		"book_revisions":          {"tenant_id", "book_id", "revision", "actor_id", "request_key", "prior_name", "name", "founder", "profile", "start_date", "fiscal_year_start_month", "fiscal_year_start_day", "accounting_timezone", "request_bytes", "result_bytes", "recorded_at"},
-		"documents":               {"tenant_id", "book_id", "id", "sequence", "sha256", "size_bytes", "media_type", "original_name", "storage_id", "key_id", "state", "actor_id", "created_at", "ready_at", "expires_at", "used_at"},
-		"document_uploads":        {"tenant_id", "book_id", "id", "document_id", "storage_id", "actor_id", "connection_id", "receipt_id", "created_at", "expires_at"},
-		"source_citations":        {"tenant_id", "book_id", "id", "source_id", "revision", "sequence", "entry_id", "position", "document_id", "location", "actor_id", "receipt_id", "reason", "recorded_at"},
-		"evidence_links":          {"tenant_id", "book_id", "id", "link_id", "revision", "sequence", "entry_id", "document_id", "role", "action", "actor_id", "receipt_id", "reason", "recorded_at"},
-		"operation_proposals":     {"tenant_id", "book_id", "id", "sequence", "actor_id", "connection_id", "request_key", "operation", "operation_key", "payload_bytes", "created_at", "expires_at"},
-		"operation_decisions":     {"tenant_id", "book_id", "proposal_id", "revision", "owner_id", "owner_epoch", "request_key", "sha256", "decision", "reason", "executor_actor_id", "executor_connection_id", "recorded_at", "expires_at"},
-		"operation_consumptions":  {"tenant_id", "book_id", "proposal_id", "decision_revision", "receipt_id", "actor_id", "recorded_at"},
+		"tenants":                     {"id", "created_at"},
+		"books":                       {"tenant_id", "id", "name", "currency", "scale", "created_at"},
+		"accounts":                    {"tenant_id", "book_id", "id", "class", "created_at"},
+		"account_revisions":           {"tenant_id", "book_id", "account_id", "revision", "code", "name", "actor_id", "recorded_at", "status", "heading"},
+		"requests":                    {"tenant_id", "book_id", "id", "actor_id", "request_key", "operation", "request_bytes", "result_bytes", "recorded_at"},
+		"entries":                     {"tenant_id", "book_id", "id", "sequence", "receipt_id", "actor_id", "economic_date", "accounting_date", "description", "reversal_of", "recorded_at"},
+		"lines":                       {"tenant_id", "book_id", "id", "entry_id", "position", "account_id", "side", "amount_minor", "memo", "reverses_line_id"},
+		"closed_periods":              {"tenant_id", "book_id", "id", "start_date", "end_date", "closed_at"},
+		"book_logo_images":            {"tenant_id", "book_id", "id", "sha256", "content_type", "data"},
+		"book_addresses":              {"tenant_id", "book_id", "code", "slug", "revision", "aliases"},
+		"book_identity_revisions":     {"tenant_id", "book_id", "revision", "id", "prior_kind", "new_kind", "prior_identity", "new_identity", "actor_id", "reason", "effective_date", "recorded_at"},
+		"book_revisions":              {"tenant_id", "book_id", "revision", "actor_id", "request_key", "prior_name", "name", "founder", "profile", "start_date", "fiscal_year_start_month", "fiscal_year_start_day", "accounting_timezone", "request_bytes", "result_bytes", "recorded_at"},
+		"documents":                   {"tenant_id", "book_id", "id", "sequence", "sha256", "size_bytes", "media_type", "original_name", "storage_id", "key_id", "state", "actor_id", "created_at", "ready_at", "expires_at", "used_at"},
+		"document_uploads":            {"tenant_id", "book_id", "id", "document_id", "storage_id", "actor_id", "connection_id", "receipt_id", "created_at", "expires_at"},
+		"source_citations":            {"tenant_id", "book_id", "id", "source_id", "revision", "sequence", "entry_id", "position", "document_id", "location", "actor_id", "receipt_id", "reason", "recorded_at"},
+		"evidence_links":              {"tenant_id", "book_id", "id", "link_id", "revision", "sequence", "entry_id", "document_id", "role", "action", "actor_id", "receipt_id", "reason", "recorded_at"},
+		"operation_proposals":         {"tenant_id", "book_id", "id", "sequence", "actor_id", "connection_id", "request_key", "operation", "operation_key", "payload_bytes", "created_at", "expires_at"},
+		"operation_decisions":         {"tenant_id", "book_id", "proposal_id", "revision", "owner_id", "owner_epoch", "request_key", "sha256", "decision", "reason", "executor_actor_id", "executor_connection_id", "recorded_at", "expires_at"},
+		"operation_consumptions":      {"tenant_id", "book_id", "proposal_id", "decision_revision", "receipt_id", "actor_id", "recorded_at"},
+		"payees":                      {"tenant_id", "book_id", "id", "actor_id", "receipt_id", "recorded_at"},
+		"payee_revisions":             {"tenant_id", "book_id", "payee_id", "revision", "display_name", "kind", "brand_id", "status", "actor_id", "reason", "receipt_id", "recorded_at"},
+		"entry_payees":                {"tenant_id", "book_id", "entry_id", "revision", "counterpart", "payee_id", "actor_id", "reason", "receipt_id", "recorded_at"},
+		"statements":                  {"tenant_id", "book_id", "id", "account_id", "kind", "currency", "scale", "document_id", "period_start", "period_end", "opening_balance_minor", "closing_balance_minor", "evidence_state", "note", "actor_id", "receipt_id", "recorded_at"},
+		"statement_rows":              {"tenant_id", "book_id", "id", "statement_id", "row_number", "location", "occurred_on", "amount_minor", "description", "external_id", "lifecycle", "related_external_id", "raw_bytes"},
+		"statement_duplicates":        {"tenant_id", "book_id", "row_id", "canonical_row_id", "actor_id", "reason", "receipt_id", "recorded_at"},
+		"statement_matches":           {"tenant_id", "book_id", "id", "account_id", "actor_id", "reason", "receipt_id", "recorded_at"},
+		"statement_match_parts":       {"tenant_id", "book_id", "match_id", "part", "row_id", "line_id", "amount_minor"},
+		"statement_match_revocations": {"tenant_id", "book_id", "match_id", "actor_id", "reason", "receipt_id", "recorded_at"},
+		"statement_adjustments":       {"tenant_id", "book_id", "row_id", "entry_id", "actor_id", "receipt_id", "recorded_at"},
+		"statement_reviews":           {"tenant_id", "book_id", "statement_id", "revision", "outcome", "report_bytes", "actor_id", "reason", "receipt_id", "recorded_at"},
+		"accounting_periods":          {"tenant_id", "book_id", "id", "start_date", "end_date", "recorded_at"},
+		"accounting_period_events":    {"tenant_id", "book_id", "period_id", "revision", "event", "origin", "actor_id", "reason", "statement_reviews", "report_bytes", "open_items", "receipt_id", "recorded_at"},
 	}
 	for table, optional := range snapshotOptionalColumns {
 		if table != "accounts" {
@@ -492,7 +549,26 @@ func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder 
 		if e != nil {
 			return e
 		}
-		if table == "account_revisions" || table == "book_revisions" || table == "operation_decisions" { // Replay revisions in their original order.
+		if table == "accounts" || table == "account_revisions" {
+			// Backups made before account status existed hold active,
+			// ordinary accounts.
+			for _, row := range rows {
+				for name, value := range map[string]any{"status": "active", "heading": false} {
+					if _, ok := row[name]; !ok {
+						if strings.HasSuffix(s.Format, "-v6") {
+							return ErrInvalid
+						}
+						row[name] = raw(value)
+					}
+				}
+			}
+			normalizedTables[table], e = canonicalSnapshotTimes(raw(rows))
+			if e != nil {
+				return e
+			}
+		}
+		if table == "account_revisions" || table == "book_revisions" || table == "operation_decisions" || table == "payee_revisions" ||
+			table == "entry_payees" || table == "statement_reviews" || table == "accounting_period_events" { // Replay revisions in their original order.
 			sort.SliceStable(rows, func(i, j int) bool {
 				var x, y int64
 				json.Unmarshal(rows[i]["revision"], &x)
@@ -522,7 +598,14 @@ func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder 
 		_, err := tx.Exec(ctx, query, string(raw(row)))
 		return dbError(err)
 	}
-	retainAddresses := strings.HasSuffix(s.Format, "-v5")
+	retainAddresses := strings.HasSuffix(s.Format, "-v5") || strings.HasSuffix(s.Format, "-v6")
+	if slices.Contains(tableOrder, "accounting_periods") {
+		// Periods and their decisions are restored as retained; the original
+		// close records must not create them a second time.
+		if _, e = tx.Exec(ctx, "SELECT set_config('vult.restore_periods','retained',true)"); e != nil {
+			return dbError(e)
+		}
+	}
 	if retainAddresses {
 		if _, e = tx.Exec(ctx, "SELECT set_config('vult.restore_book_details','yes',true)"); e != nil {
 			return dbError(e)

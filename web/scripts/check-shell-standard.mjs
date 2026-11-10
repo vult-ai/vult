@@ -17,7 +17,7 @@ export const tokens = {
   "--vult-shell-header-gutter-wide": "24px",
   "--vult-shell-header-content-gap": "8px",
   "--vult-shell-switcher-max-width": "180px",
-  "--vult-shell-switcher-phone-max-width": "148px",
+  "--vult-shell-switcher-phone-max-width": "220px",
   "--vult-workspace-max-width": "1440px",
   "--vult-workspace-gutter": "16px",
 };

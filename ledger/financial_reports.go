@@ -19,8 +19,11 @@ type FinancialReportRequest = reporting.Request
 type FinancialReport struct {
 	RecordedState
 	reporting.Result
-	ExportCSV       string `json:"export_csv,omitempty"`
-	ExportAvailable bool   `json:"export_available"`
+	// PeriodNotes are the reopenings, and closes made with open review items,
+	// of every accounting period the report covers, with their reasons.
+	PeriodNotes     []PeriodNote `json:"period_notes,omitempty"`
+	ExportCSV       string       `json:"export_csv,omitempty"`
+	ExportAvailable bool         `json:"export_available"`
 }
 
 type FinancialContributionRead struct {
@@ -71,8 +74,16 @@ func (a TenantAdmin) FinancialReport(ctx context.Context, req FinancialReportReq
 		if err != nil {
 			return err
 		}
-		out, err = buildFinancialReport(in, req, includeCSV, state.RecordedState)
-		return err
+		if out, err = buildFinancialReport(in, req, state.RecordedState); err != nil {
+			return err
+		}
+		if out.PeriodNotes, err = periodNotes(ctx, tx, scope, out.Scope.Period.From, out.Scope.Period.To); err != nil {
+			return err
+		}
+		if includeCSV {
+			return attachReportCSV(&out)
+		}
+		return nil
 	})
 	if err != nil {
 		return FinancialReport{}, err
@@ -80,7 +91,7 @@ func (a TenantAdmin) FinancialReport(ctx context.Context, req FinancialReportReq
 	return out, nil
 }
 
-func buildFinancialReport(in reporting.Input, req FinancialReportRequest, includeCSV bool, state RecordedState) (FinancialReport, error) {
+func buildFinancialReport(in reporting.Input, req FinancialReportRequest, state RecordedState) (FinancialReport, error) {
 	in, err := scopeReportInput(in, req)
 	if err != nil {
 		return FinancialReport{}, err
@@ -89,23 +100,36 @@ func buildFinancialReport(in reporting.Input, req FinancialReportRequest, includ
 	if err != nil {
 		return FinancialReport{}, reportError(err)
 	}
-	out := FinancialReport{RecordedState: state, Result: result, ExportAvailable: true}
-	if includeCSV {
-		data, err := reporting.CSV(result)
-		if err != nil {
-			return FinancialReport{}, reportError(err)
-		}
-		var metadata bytes.Buffer
-		writer := csv.NewWriter(&metadata)
-		if err := writer.WriteAll([][]string{{"State revision", state.StateRevision}, {"State captured at", state.StateCapturedAt}, {"State knowledge cutoff", state.StateKnowledgeCutoff}}); err != nil {
-			return FinancialReport{}, err
-		}
-		if metadata.Len()+len(data) > reporting.MaxCSVBytes {
-			return FinancialReport{}, ErrLimit
-		}
-		out.ExportCSV = metadata.String() + string(data)
+	return FinancialReport{RecordedState: state, Result: result, ExportAvailable: true}, nil
+}
+
+// attachReportCSV writes the export: the state it was captured from, the
+// period notes that travel with its figures, then the report itself.
+func attachReportCSV(out *FinancialReport) error {
+	data, err := reporting.CSV(out.Result)
+	if err != nil {
+		return reportError(err)
 	}
-	return out, nil
+	rows := [][]string{{"State revision", out.StateRevision}, {"State captured at", out.StateCapturedAt}, {"State knowledge cutoff", out.StateKnowledgeCutoff}}
+	for _, n := range out.PeriodNotes {
+		rows = append(rows, []string{"Period note", n.From, n.Through, periodNoteLabel(n.Kind), reporting.SafeCSVText(n.Reason)})
+	}
+	var metadata bytes.Buffer
+	if err := csv.NewWriter(&metadata).WriteAll(rows); err != nil {
+		return err
+	}
+	if metadata.Len()+len(data) > reporting.MaxCSVBytes {
+		return ErrLimit
+	}
+	out.ExportCSV = metadata.String() + string(data)
+	return nil
+}
+
+func periodNoteLabel(kind string) string {
+	if kind == "reopened" {
+		return "Reopened"
+	}
+	return "Closed with open items"
 }
 
 // FinancialContributions reconstructs the requested snapshot and refuses a
@@ -230,15 +254,7 @@ func reportInputAt(ctx context.Context, tx pgx.Tx, scope Scope, book Book, req F
 	if err != nil {
 		return in, err
 	}
-	for _, account := range accounts {
-		// A stored subtype refines its matching class only. A contradictory
-		// role never overrides the account's authoritative accounting class.
-		kind := account.Class
-		if account.Class == "income" && account.Role == "other_income" || account.Class == "expense" && (account.Role == "other_expense" || account.Role == "cost_of_goods_sold") {
-			kind = account.Role
-		}
-		in.Accounts = append(in.Accounts, reporting.Account{ID: account.ID, Code: account.Code, GLCode: account.Code, Name: account.Name, Kind: kind, Role: account.Role, Revision: account.Revision})
-	}
+	addReportAccounts(&in, accounts)
 	period, comparison, err := reporting.PeriodFor(in, req)
 	if err != nil {
 		return in, reportError(err)
@@ -323,4 +339,46 @@ func scopeReportInput(in reporting.Input, req FinancialReportRequest) (reporting
 	digest := sha256.Sum256(data)
 	in.Provenance.LedgerRevision = hex.EncodeToString(digest[:])
 	return in, nil
+}
+
+// costOfSales reports whether an expense account is cost of sales: it has
+// the role itself, or sits under an account that has it, so subdividing Cost
+// of sales keeps every part of it in gross profit. Parents share the class.
+func costOfSales(a Account, byID map[string]Account) bool {
+	for depth := 0; depth < 8; depth++ {
+		if a.Role == "cost_of_sales" || a.Role == "cost_of_goods_sold" {
+			return true
+		}
+		parent, ok := byID[a.ParentAccountID]
+		if !ok {
+			return false
+		}
+		a = parent
+	}
+	return false
+}
+
+// addReportAccounts maps recorded accounts to report accounts. A stored
+// subtype refines its matching class only; parents become report rollups.
+func addReportAccounts(in *reporting.Input, accounts []Account) {
+	byID := map[string]Account{}
+	for _, account := range accounts {
+		byID[account.ID] = account
+	}
+	for _, account := range accounts {
+		// A stored subtype refines its matching class only. A contradictory
+		// role never overrides the account's authoritative accounting class.
+		kind := account.Class
+		if account.Class == "income" && account.Role == "other_income" || account.Class == "expense" && account.Role == "other_expense" {
+			kind = account.Role
+		}
+		if account.Class == "expense" && costOfSales(account, byID) {
+			kind = "cost_of_sales"
+		}
+		in.Accounts = append(in.Accounts, reporting.Account{ID: account.ID, Code: account.Code, GLCode: account.Code, Name: account.Name, Kind: kind, Role: account.Role, Revision: account.Revision, ParentID: account.ParentAccountID})
+		if account.ParentAccountID != "" {
+			// Reports roll each child into its recorded parent.
+			in.Provenance.HierarchyBasis = "recorded_account_parents"
+		}
+	}
 }

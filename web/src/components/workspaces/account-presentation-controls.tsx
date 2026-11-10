@@ -64,7 +64,7 @@ export function useAccountPresentation(bookId: string) {
       if (error instanceof Error && error.message.includes("Book changed"))
         throw error;
       throw new Error(
-        "Display preferences could not be saved in this browser. Your ledger is unchanged.",
+        "Display preferences could not be saved in this browser. The ledger is unchanged.",
       );
     }
   };

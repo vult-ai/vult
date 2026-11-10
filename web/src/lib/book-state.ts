@@ -103,11 +103,12 @@ export async function readBookState(
       ? selection
       : { view: readWorkspace(), range: selection };
   const confirmedRange = page.range;
-  // Books and Approvals read Book metadata through views the server has.
+  // Books, Approvals and Reconcile read Book metadata through views
+  // the server has; their own figures come from their own reads.
   const view =
     page.view === "books"
         ? "settings"
-        : page.view === "approvals"
+        : page.view === "approvals" || page.view === "reconcile"
           ? "documents"
           : page.view;
   const date = today(timeZone);

@@ -92,7 +92,7 @@ export function UpdateNotice({ latest, onDismiss }: { latest: string | null; onD
           <XClose aria-hidden />
         </button>
       </header>
-      <p className="vult-type-metadata">Run this in Terminal, or ask your agent to update Vult.</p>
+      <p className="vult-type-metadata">Run this in Terminal, or ask the agent to update Vult.</p>
       <div className="update-notice-command">
         <code>{updateCommand}</code>
         <button

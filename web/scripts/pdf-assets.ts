@@ -8,12 +8,13 @@ const root = dirname(require.resolve("pdfjs-dist/package.json"));
 const version = JSON.parse(
   readFileSync(join(root, "package.json"), "utf8"),
 ).version;
-export const pdfAssetBase = `/assets/pdfjs/${version}/`;
+// Keep this separate from the modern worker's immutable cached URL.
+export const pdfAssetBase = `/assets/pdfjs/${version}/legacy/`;
 
 /** Package-versioned, same-origin PDF runtime assets in dev and the Go bundle. */
 export function pdfAssets(): Plugin {
   const files = new Map<string, string>([
-    ["pdf.worker.min.mjs", join(root, "build/pdf.worker.min.mjs")],
+    ["pdf.worker.min.mjs", join(root, "legacy/build/pdf.worker.min.mjs")],
     ["LICENSE", join(root, "LICENSE")],
   ]);
   for (const folder of ["cmaps", "standard_fonts", "wasm", "iccs"])

@@ -129,7 +129,7 @@ export function AccountCodeEditor({
         >
           <Field
             label="GL code"
-            hint="Use the number from your chart of accounts. Leading zeros are kept."
+            hint="Use the number from the chart of accounts. Leading zeros are kept."
           >
             <input
               ref={codeInput}

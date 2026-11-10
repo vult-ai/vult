@@ -201,7 +201,7 @@ func TestHTTPMCPPreservesExactJournalAndLostReplyOutcome(t *testing.T) {
 	if e != nil {
 		t.Fatal("write catalog changed", e)
 	}
-	expectRemoteTools(t, catalog.Tools, []string{"create_account", "execute_proposal", "get_balance", "get_book", "get_exchange_rate", "get_journal", "get_operation_proposal", "get_request_outcome", "get_trial_balance", "list_accounts", "list_closed_periods", "list_journals", "post_journal", "prepare_operation", "reverse_journal", "revise_account", "search_book", "set_book_logo"})
+	expectRemoteTools(t, catalog.Tools, []string{"apply_starter_chart", "close_period", "create_account", "create_payee", "execute_proposal", "get_balance", "get_book", "get_cash_flow", "get_entry_payee", "get_exchange_rate", "get_journal", "get_operation_proposal", "get_period_review", "get_request_outcome", "get_statement_reconciliation", "get_trial_balance", "import_statement", "list_accounts", "list_closed_periods", "list_journals", "list_payees", "list_recurring_charges", "list_starter_charts", "list_statements", "mark_statement_duplicate", "match_statement", "post_journal", "prepare_operation", "reactivate_account", "record_statement_adjustment", "retire_account", "reverse_journal", "review_statement", "revise_account", "revise_payee", "revoke_statement_match", "search_book", "set_book_logo", "set_entry_payee", "suggest_statement_matches"})
 	for _, tool := range catalog.Tools {
 		if strings.Contains(tool.Name, "owner") || strings.Contains(tool.Name, "admin") {
 			t.Fatal("agent gained owner tools")
@@ -268,7 +268,7 @@ func TestHTTPMCPReadScopeAndSanitizedAdmissionFailure(t *testing.T) {
 	if e != nil {
 		t.Fatal("read catalog expanded", e)
 	}
-	expectRemoteTools(t, catalog.Tools, []string{"get_balance", "get_book", "get_exchange_rate", "get_journal", "get_operation_proposal", "get_request_outcome", "get_trial_balance", "list_accounts", "list_closed_periods", "list_journals", "search_book"})
+	expectRemoteTools(t, catalog.Tools, []string{"get_balance", "get_book", "get_cash_flow", "get_entry_payee", "get_exchange_rate", "get_journal", "get_operation_proposal", "get_period_review", "get_request_outcome", "get_statement_reconciliation", "get_trial_balance", "list_accounts", "list_closed_periods", "list_journals", "list_payees", "list_recurring_charges", "list_starter_charts", "list_statements", "search_book", "suggest_statement_matches"})
 	result, e := m.CallTool(ctx, &mcp.CallToolParams{Name: "create_account", Arguments: ledger.CreateAccount{RequestKey: "denied", Class: "asset", Code: "1000", Name: "Example"}})
 	if e == nil && !result.IsError {
 		t.Fatal("read credential gained write tool")

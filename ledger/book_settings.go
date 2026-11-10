@@ -174,10 +174,10 @@ func (a TenantAdmin) ReviseBook(ctx context.Context, actor string, q ReviseBookS
 func normalizeBookTables(s Snapshot, archive bool) (Snapshot, error) {
 	old := releasedSnapshotTables
 	book := bookSnapshotTables
-	prior, current := proposalSnapshotTables, snapshotTables
+	prior, details, current := proposalSnapshotTables, bookDetailSnapshotTables, snapshotTables
 	if archive {
 		old = append(append([]string{}, old...), archiveDocumentTables...)
-		prior, current = priorArchiveTables, archiveTables
+		prior, details, current = priorArchiveTables, bookDetailArchiveTables, archiveTables
 	}
 	names, restore := current, current
 	switch {
@@ -187,6 +187,8 @@ func normalizeBookTables(s Snapshot, archive bool) (Snapshot, error) {
 		names, restore = book, prior
 	case strings.HasSuffix(s.Format, "-v4"):
 		names, restore = prior, prior
+	case strings.HasSuffix(s.Format, "-v5"):
+		names, restore = details, details
 	}
 	if len(s.Tables) != len(names) {
 		return Snapshot{}, ErrInvalid

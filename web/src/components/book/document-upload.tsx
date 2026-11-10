@@ -36,13 +36,14 @@ export function useDocumentUpload(bookId: string, onAdded: (doc: BookDocument) =
 }
 
 /** Accepts files dropped anywhere on its children, with a visible target while dragging. */
-export function DropArea({ onFiles, label, children, className = "" }: { onFiles: (files: FileList) => void; label: string; children: ReactNode; className?: string }) {
+export function DropArea({ onFiles, label, children, className = "", hidden }: { onFiles: (files: FileList) => void; label: string; children: ReactNode; className?: string; hidden?: boolean }) {
   const [over, setOver] = useState(false);
   const depth = useRef(0);
   const files = (e: DragEvent) => [...e.dataTransfer.types].includes("Files");
   return (
     <div
       className={`document-drop-area ${className}`}
+      hidden={hidden}
       data-dragging={over || undefined}
       onDragEnter={(e) => { if (!files(e)) return; e.preventDefault(); depth.current++; setOver(true); }}
       onDragOver={(e) => { if (files(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }}

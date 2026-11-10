@@ -51,6 +51,9 @@ type CashFlowPolicy struct {
 	NoncashReviewConfirmed bool                 `json:"noncash_review_confirmed"`
 	Allocations            []CashFlowAllocation `json:"allocations"`
 	Noncash                []NoncashActivity    `json:"noncash"`
+	// Derived marks a policy built from recorded account roles rather than a
+	// reviewed allocation list. Its unexplained remainder is "Unclassified".
+	Derived bool `json:"derived_from_roles,omitempty"`
 }
 
 // Build preserves the five core calculations. Formal extension reports receive
@@ -63,6 +66,9 @@ func Build(in Input, request Request) (Result, error) {
 	case ChangesInEquity:
 		return BuildEquityChanges(in, request, EquityPolicy{})
 	case CashFlows:
+		if HasCashRole(in) {
+			return BuildCashFlows(in, request, RoleCashFlowPolicy(in))
+		}
 		return BuildCashFlows(in, request, CashFlowPolicy{})
 	case CashMovement:
 		return BuildCashMovement(in, request)
@@ -477,6 +483,7 @@ func BuildCashFlows(in Input, request Request, policy CashFlowPolicy) (Result, e
 		return r, nil
 	}
 	allocations := map[string][]CashFlowAllocation{}
+	openingBalance := map[string]bool{}
 	for _, a := range policy.Allocations {
 		p, ok := postings[a.PostingID]
 		if !ok || !cash[p.AccountID] || p.Treatment == "opening" || !extensionReference(a.TreatmentReference) {
@@ -491,6 +498,12 @@ func BuildCashFlows(in Input, request Request, policy CashFlowPolicy) (Result, e
 			if strings.TrimSpace(a.TransferGroup) == "" {
 				return r, &Error{Code: "invalid_cash_flow_transfer"}
 			}
+		case "opening_balance":
+			// The whole line establishes opening cash; it is never split.
+			if a.TransferGroup != "" || a.Amount != extensionSigned(p).String() {
+				return r, &Error{Code: "invalid_cash_flow_allocation"}
+			}
+			openingBalance[p.ID] = true
 		default:
 			return r, &Error{Code: "invalid_cash_flow_category"}
 		}
@@ -543,7 +556,9 @@ func BuildCashFlows(in Input, request Request, policy CashFlowPolicy) (Result, e
 			if p.Date <= period.period.To {
 				extensionAdd(&out, "closing", p, n, "cash_position", "")
 			}
-			if extensionIsOpening(period.period, p) {
+			// Opening balances recorded within the period are where its cash
+			// starts, not an inflow.
+			if extensionIsOpening(period.period, p) || openingBalance[p.ID] && p.Date <= period.period.To {
 				extensionAdd(&out, "opening", p, n, "cash_position", "")
 				continue
 			}
@@ -591,15 +606,21 @@ func BuildCashFlows(in Input, request Request, policy CashFlowPolicy) (Result, e
 	}
 	flows := Row{ID: "cash_flow:net", Label: "Net cash flows", Role: "section", Children: []Row{}}
 	extensionSumRows(&flows, rows("operating", "Operating activities"), rows("investing", "Investing activities"), rows("financing", "Financing activities"))
-	r.Rows = []Row{rows("opening", "Opening cash and cash equivalents"), flows, rows("exchange", "Exchange effects on cash"), rows("internal_transfer", "Reviewed internal transfers (net zero)"), rows("unresolved", "Unresolved cash movements"), rows("closing", "Closing cash and cash equivalents")}
+	transferLabel, unresolvedLabel := "Reviewed internal transfers (net zero)", "Unresolved cash movements"
+	if policy.Derived {
+		transferLabel, unresolvedLabel = "Transfers between cash accounts (net zero)", "Unclassified"
+	}
+	r.Rows = []Row{rows("opening", "Opening cash and cash equivalents"), flows, rows("exchange", "Exchange effects on cash"), rows("internal_transfer", transferLabel), rows("unresolved", unresolvedLabel), rows("closing", "Closing cash and cash equivalents")}
 	r.Rows[0].Role = "opening"
 	r.Rows[5].Role = "closing"
-	noncash := Row{ID: "cash_flow:noncash", Label: "Separately reviewed noncash activity", Role: "section", Children: []Row{}}
-	// Investing and financing disclosures may describe opposite sides of the
-	// same noncash transaction. They are not added into a false grand total.
-	noncash.Values = map[string]string{}
-	noncash.Children = []Row{rows("noncash_investing", "Noncash investing activity"), rows("noncash_financing", "Noncash financing activity")}
-	r.Rows = append(r.Rows, noncash)
+	if !policy.Derived {
+		noncash := Row{ID: "cash_flow:noncash", Label: "Separately reviewed noncash activity", Role: "section", Children: []Row{}}
+		// Investing and financing disclosures may describe opposite sides of the
+		// same noncash transaction. They are not added into a false grand total.
+		noncash.Values = map[string]string{}
+		noncash.Children = []Row{rows("noncash_investing", "Noncash investing activity"), rows("noncash_financing", "Noncash financing activity")}
+		r.Rows = append(r.Rows, noncash)
+	}
 	allBridge, allClassified, allTransfer := true, true, true
 	for _, v := range results {
 		allBridge = allBridge && v.bridge.Sign() == 0
@@ -607,13 +628,22 @@ func BuildCashFlows(in Input, request Request, policy CashFlowPolicy) (Result, e
 		allTransfer = allTransfer && v.transferValid
 	}
 	extensionCheck(&r, "cash_flow_bridge", extensionConstraintStatus(allBridge), "Opening cash plus reported movements and exchange effects reconciles to closing cash.")
-	extensionCheck(&r, "cash_flow_classification", extensionBoolStatus(allClassified), "Every cash posting component needs reviewed classification, including gross movements in zero-net entries.")
-	extensionCheck(&r, "cash_flow_internal_transfers", extensionConstraintStatus(allTransfer), "Each reviewed internal-transfer group must net to zero within every displayed period.")
-	extensionCheck(&r, "cash_flow_noncash_review", extensionBoolStatus(policy.NoncashReviewConfirmed), "Noncash investing and financing activity needs separate explicit review; it is excluded from cash totals.")
-	if !allTransfer {
-		r.Limitations = append(r.Limitations, "A stated internal-transfer group does not net to zero in the selected period.")
+	if policy.Derived {
+		extensionCheck(&r, "cash_flow_classification", extensionBoolStatus(allClassified), "Every cash line is classified by the account roles on the other side of its entry; a split that can't be made exactly is shown as Unclassified.")
+		extensionCheck(&r, "cash_flow_internal_transfers", extensionConstraintStatus(allTransfer), "Transfers between cash accounts net to zero within every displayed period.")
+		if !allTransfer {
+			r.Limitations = append(r.Limitations, "A transfer between cash accounts falls on different dates, so it does not net to zero inside the selected period.")
+		}
+		r.Limitations = append(r.Limitations, "Cash is every account with the cash role. Lines are classified by the roles of the accounts on the other side of each entry, using recorded Book-currency amounts.")
+	} else {
+		extensionCheck(&r, "cash_flow_classification", extensionBoolStatus(allClassified), "Every cash posting component needs reviewed classification, including gross movements in zero-net entries.")
+		extensionCheck(&r, "cash_flow_internal_transfers", extensionConstraintStatus(allTransfer), "Each reviewed internal-transfer group must net to zero within every displayed period.")
+		extensionCheck(&r, "cash_flow_noncash_review", extensionBoolStatus(policy.NoncashReviewConfirmed), "Noncash investing and financing activity needs separate explicit review; it is excluded from cash totals.")
+		if !allTransfer {
+			r.Limitations = append(r.Limitations, "A stated internal-transfer group does not net to zero in the selected period.")
+		}
+		r.Limitations = append(r.Limitations, "Direct cash-flow classification uses explicit reviewed policy and recorded book-currency carrying amounts. It does not qualify recognition, currency translation, disclosures or standards compliance.")
 	}
-	r.Limitations = append(r.Limitations, "Direct cash-flow classification uses explicit reviewed policy and recorded book-currency carrying amounts. It does not qualify recognition, currency translation, disclosures or standards compliance.")
 	extensionRecordMetrics(&r, periods, results)
 	Finalize(&r)
 	return r, nil

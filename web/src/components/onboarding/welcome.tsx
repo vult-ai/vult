@@ -19,7 +19,7 @@ import { withRecentSignIn } from "../../lib/recent-sign-in";
 import "./welcome.css";
 
 type Connection = { id: string; name: string; connection?: boolean; revoked_at?: string };
-type Agent = "claude" | "claude-code" | "other";
+type Agent = "any" | "claude" | "claude-code";
 
 const POLL_MS = 4000;
 const placeholderNames = new Set(["", "book"]);
@@ -46,6 +46,10 @@ export function welcomeEligible(book: Book) {
   const seen = readWelcome(book.id);
   if (seen === "done") return false;
   return seen === "started" || ((book.metadata_revision ?? 0) === 0 && placeholderNames.has(book.name.trim().toLowerCase()));
+}
+/** A Book that still has its placeholder name and was never set up. */
+export function needsName(book: Book) {
+  return (book.metadata_revision ?? 0) === 0 && placeholderNames.has(book.name.trim().toLowerCase());
 }
 export function finishWelcome(bookId: string) {
   writeWelcome(bookId, "done");
@@ -155,26 +159,26 @@ export function Welcome({
   const steps = [
     {
       n: 1,
-      title: "Create your Book",
+      title: "Create a Book",
       summary: setupDone && book ? `${book.name} · ${book.currency}` : "",
       lead: book
-        ? "This is how the Book appears to you and to your agent."
+        ? "This is how the Book appears to you and to the agent."
         : "A Book keeps the accounts of one person or one business, in one currency.",
       state: state(1, setupDone),
       onEdit: setupDone && !recorded ? () => setEditing(true) : undefined,
     },
     {
       n: 2,
-      title: "Connect your agent",
+      title: "Connect an agent",
       summary: agent ? `${agent.name} connected` : "",
-      lead: "Your agent records entries into this Book. You approve the connection once, in Vult.",
+      lead: "The agent records entries into this Book. You approve the connection once, in Vult.",
       state: state(2, !!agent),
     },
     {
       n: 3,
-      title: "Send your statements",
+      title: "Send statements",
       summary: recorded ? "Entries are arriving" : "",
-      lead: "Your agent reads them and records the entries. Anything it isn’t sure about waits for you.",
+      lead: "The agent reads them and records the entries. Anything it isn’t sure about waits for you.",
       state: state(3, recorded),
     },
   ];
@@ -182,7 +186,7 @@ export function Welcome({
 
   return (
     <section className="welcome" aria-labelledby={heading}>
-      <h1 id={heading}>{finished ? "Your Book is live" : "Set up your Book"}</h1>
+      <h1 id={heading}>{finished ? "The Book is live" : "Set up the Book"}</h1>
       <section className="welcome-card" aria-label="Book setup">
         <header className="welcome-card-header">
           <span className="welcome-card-address">{window.location.host}</span>
@@ -246,7 +250,7 @@ export function Welcome({
         </ol>
         <footer className="welcome-card-footer">
           <Lock01 aria-hidden="true" />
-          Your Books are private to your Vult.
+          Books stay in this Vult.
         </footer>
       </section>
       {!book ? null : finished ? (
@@ -275,7 +279,7 @@ export function PurposeChoice({ value, onChange }: { value: string; onChange: (v
       <legend>What is it for?</legend>
       {[
         { id: "business", label: "Business", detail: "A company’s income, expenses and what it owes" },
-        { id: "personal", label: "Personal", detail: "Your own accounts, cards and spending" },
+        { id: "personal", label: "Personal", detail: "Personal accounts, cards and spending" },
       ].map((option) => (
         <label key={option.id} className="welcome-purpose-choice" data-selected={value === option.id || undefined}>
           <input
@@ -312,7 +316,7 @@ export function CreateBook({ onCreated }: { tenant?: string; onCreated: (book: B
 
   async function create() {
     if (!ready) {
-      setError(!profile ? "Choose Personal or Business." : !name.trim() ? "Give your Book a name." : !currency ? "Choose a currency." : "Choose a timezone.");
+      setError(!profile ? "Choose Personal or Business." : !name.trim() ? "Name the Book." : !currency ? "Choose a currency." : "Choose a timezone.");
       return;
     }
     setBusy(true);
@@ -360,7 +364,7 @@ export function CreateBook({ onCreated }: { tenant?: string; onCreated: (book: B
           name="name"
           maxLength={120}
           autoComplete="organization"
-          placeholder={profile === "personal" ? "Your name" : "Your company’s name"}
+          placeholder={profile === "personal" ? "Full name" : "Company name"}
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
@@ -416,7 +420,7 @@ function BookSetupForm({ book, onSaved, onOtherCurrency }: { book: Book; onSaved
 
   async function save() {
     if (!ready) {
-      setError(!name.trim() ? "Give your Book a name." : !profile ? "Choose Personal or Business." : "Choose a timezone.");
+      setError(!name.trim() ? "Name the Book." : !profile ? "Choose Personal or Business." : "Choose a timezone.");
       return;
     }
     setBusy(true);
@@ -454,7 +458,7 @@ function BookSetupForm({ book, onSaved, onOtherCurrency }: { book: Book; onSaved
           name="name"
           maxLength={120}
           autoComplete="organization"
-          placeholder={profile === "personal" ? "Your name" : "Your company’s name"}
+          placeholder={profile === "personal" ? "Full name" : "Company name"}
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
@@ -480,19 +484,21 @@ function BookSetupForm({ book, onSaved, onOtherCurrency }: { book: Book; onSaved
   );
 }
 
+/* Any MCP agent first: the address works in every client. Clients whose
+   steps differ keep their own short example. */
 const agents: { id: Agent; label: string }[] = [
+  { id: "any", label: "Any MCP agent" },
   { id: "claude", label: "Claude" },
   { id: "claude-code", label: "Claude Code" },
-  { id: "other", label: "Other agents" },
 ];
 
 function AgentSetup({ address }: { address: string }) {
-  const [agent, setAgent] = useState<Agent>("claude");
+  const [agent, setAgent] = useState<Agent>("any");
   const tabs = useId();
   const command = `claude mcp add --transport http vult ${address}`;
   return (
     <div className="welcome-agent">
-      <div className="welcome-agent-tabs" role="radiogroup" aria-label="Your agent">
+      <div className="welcome-agent-tabs" role="radiogroup" aria-label="Agent">
         {agents.map((a) => (
           <label key={a.id} data-selected={agent === a.id || undefined}>
             <input type="radio" name={tabs} checked={agent === a.id} onChange={() => setAgent(a.id)} />
@@ -515,7 +521,7 @@ function AgentSetup({ address }: { address: string }) {
       {agent === "claude-code" && (
         <ol className="welcome-howto">
           <li>
-            Run this in your terminal:
+            Run this in a terminal:
             <CopyLine text={command} label="Copy command" />
           </li>
           <li>
@@ -523,13 +529,13 @@ function AgentSetup({ address }: { address: string }) {
           </li>
         </ol>
       )}
-      {agent === "other" && (
+      {agent === "any" && (
         <ol className="welcome-howto">
           <li>
             Add an MCP server with this address:
             <CopyLine text={address} label="Copy address" />
           </li>
-          <li>Your agent opens a Vult sign-in. Approve it there.</li>
+          <li>The agent opens a Vult sign-in. Approve it there.</li>
         </ol>
       )}
     </div>
@@ -545,7 +551,7 @@ function StatementHandover({ book, onUpload }: { book: Book; onUpload: () => voi
   return (
     <div className="welcome-handover">
       <ol className="welcome-howto">
-        <li>Attach your latest bank and card statements in your agent’s chat.</li>
+        <li>Attach the latest bank and card statements in the agent’s chat.</li>
         <li>
           Send it this:
           <CopyLine text={prompt} label="Copy message" wrap />
@@ -568,7 +574,7 @@ function CopyLine({ text, label, wrap = false }: { text: string; label: string; 
     const id = window.setTimeout(() => setCopied(false), 2000);
     return () => window.clearTimeout(id);
   }, [copied]);
-  if (!text) return <p className="welcome-fact">Your agent address isn’t available. Reload this page to try again.</p>;
+  if (!text) return <p className="welcome-fact">The agent address isn’t available. Reload this page to try again.</p>;
   return (
     <div className="welcome-copy" data-wrap={wrap || undefined}>
       <code>{text}</code>

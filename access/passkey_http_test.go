@@ -257,8 +257,8 @@ func TestPasskeyBrowserSetupSignInAndSessionBoundaries(t *testing.T) {
 	}
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "https://ledger.example.com/auth/login", nil))
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Unlock with your passkey") || strings.Contains(w.Body.String(), "<form") ||
-		!strings.Contains(w.Body.String(), `href="/auth/recover"`) || !strings.Contains(w.Body.String(), "one of your recovery codes") {
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Unlock with passkey") || strings.Contains(w.Body.String(), "<form") ||
+		!strings.Contains(w.Body.String(), `href="/auth/recover"`) || !strings.Contains(w.Body.String(), "one of the recovery codes") {
 		t.Fatal("passkey-only login offered a broken form", w.Code)
 	}
 	nonce = responseCookie(t, w, "__Host-vult-login")

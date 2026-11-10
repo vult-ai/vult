@@ -167,7 +167,7 @@ test("the profile menu preserves Appearance and opens personal settings without 
     );
     const dialog = document.querySelector('[role="dialog"][data-state="open"]');
     assert.ok(dialog);
-    assert.match(dialog.textContent, /Your settings/);
+    assert.match(dialog.textContent, /Personal settings/);
     assert.equal(document.querySelector("main"), main);
     assert.equal(draft.value, "Keep this");
     assert.equal(

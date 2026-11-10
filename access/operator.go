@@ -133,6 +133,15 @@ func (o Operator) ConfigureRoles(ctx context.Context, runtimeRole, authRole, own
 		"GRANT UPDATE(state,storage_id,key_id,ready_at,expires_at,used_at) ON public.documents TO " + r,
 		"GRANT EXECUTE ON FUNCTION access.owner_posting_allowed(uuid,uuid),access.owner_posting_consumer(uuid,uuid,uuid),access.hold_operation_owner(uuid,uuid,uuid,bigint) TO " + r,
 		"GRANT EXECUTE ON FUNCTION public.document_use(uuid,uuid,uuid),public.ledger_validate_balances(uuid,uuid,uuid),public.ledger_native_position(uuid,uuid,uuid,text,bigint,bigint) TO " + r,
+		// Accounts the owner changes directly or approves from an agent.
+		"GRANT INSERT ON public.accounts,public.account_revisions TO " + r,
+		// Accounting foundations: the owner records decisions directly and
+		// runs approved agent work in every table.
+		"GRANT SELECT,INSERT ON public.payees,public.payee_revisions,public.entry_payees,public.statements,public.statement_rows,public.statement_duplicates,public.statement_matches,public.statement_match_parts,public.statement_match_revocations,public.statement_adjustments,public.statement_reviews,public.accounting_periods,public.accounting_period_events TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.ledger_restoring(uuid,uuid),public.ledger_role_fits(text,text),public.ledger_period_closed(uuid,uuid,date),public.statement_line_amount(uuid,uuid,uuid,text,integer),public.statement_row_check(uuid,uuid,uuid),public.statement_line_check(uuid,uuid,uuid,text,integer),public.ledger_owner_decision(uuid,uuid),public.period_open_items(uuid,uuid,date,date),public.statement_entry_reversed(uuid,uuid,uuid),public.ledger_written_here(xid) TO " + r,
+		"GRANT EXECUTE ON FUNCTION access.owner_decision_allowed(uuid,uuid) TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.accounting_period_preview(uuid,uuid,text,jsonb) TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.statement_row_coverages(uuid,uuid,uuid,timestamptz),public.statement_explained(uuid,uuid,uuid,timestamptz),public.statement_current_reconciled(uuid,uuid,uuid),public.statement_line_allocated(uuid,uuid,uuid,text,integer,date,uuid[]),public.statement_line_allocations(uuid,uuid,uuid[],text,integer,date,uuid[]) TO " + r,
 	}
 	for _, sql := range statements {
 		if _, e = tx.Exec(ctx, sql); e != nil {

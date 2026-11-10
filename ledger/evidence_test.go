@@ -51,7 +51,7 @@ func TestEvidenceIsSeparateFromSourcesAndKeepsDetachHistory(t *testing.T) {
 	if ids := missingEvidence(t, db, s, ledger.MissingEvidenceQuery{}); len(ids) != 1 || ids[0] != entry.ID {
 		t.Fatal("source alone counted as evidence")
 	}
-	if err := db.Owner.ClosePeriod(db.Context, s.BookID, "2026-01-01", "2026-01-31"); err != nil {
+	if err := db.ClosePeriod(db.Context, s.BookID, "2026-01-01", "2026-01-31"); err != nil {
 		t.Fatal(err)
 	}
 	db.Call(t, s, "attach_evidence", ledger.AttachEvidence{RequestKey: "statement-link", EntryID: entry.ID, DocumentID: statement.ID, Role: "statement", Reason: "Bank-side record"})

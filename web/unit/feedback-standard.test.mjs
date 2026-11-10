@@ -37,7 +37,7 @@ test("the guard rejects each pattern the shared components replace", () => {
     ['<div className="save-notice">Saved.</div>', /hand-built notice/],
     ['<Button variant="destructive">Delete</Button>', /ConfirmAction/],
     ['<Button busy={busy}>{busy ? "Saving…" : "Save"}</Button>', /Keep a button’s label/],
-    ["<Notice>Saved to your Book</Notice>", /full stop/],
+    ["<Notice>Saved to the Book</Notice>", /full stop/],
     ["<Notice>Saved!</Notice>", /full stop/],
   ];
   for (const [source, rule] of cases)
@@ -58,7 +58,7 @@ test("a notice speaks once through the shared live region, and cautions stay qui
       React.createElement(
         "div",
         null,
-        React.createElement(Notice, null, "Saved to your Book."),
+        React.createElement(Notice, null, "Saved to the Book."),
         React.createElement(Notice, { tone: "caution" }, "This period is closed."),
       ),
     );
@@ -66,7 +66,7 @@ test("a notice speaks once through the shared live region, and cautions stay qui
     const regions = document.querySelectorAll("[data-vult-announcer]");
     assert.equal(regions.length, 1);
     assert.equal(regions[0].getAttribute("aria-live"), "polite");
-    assert.equal(regions[0].textContent, "Saved to your Book.");
+    assert.equal(regions[0].textContent, "Saved to the Book.");
     assert.equal(document.querySelectorAll('.vult-notice [role="status"], .vult-notice[role]').length, 0);
     assert.equal(document.querySelector('.vult-notice[data-tone="caution"]').textContent, "This period is closed.");
   }));

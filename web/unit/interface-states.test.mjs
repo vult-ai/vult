@@ -49,7 +49,7 @@ test("empty states share the anatomy, stay quiet, and keep icons for nothing-yet
       React.createElement(EmptyState, {
         scope: "region",
         title: "No matching transactions",
-        detail: "Adjust your search or filters.",
+        detail: "Adjust the search or filters.",
       }),
     );
     assert.equal(document.querySelector(".vult-state-icon"), null);

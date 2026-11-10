@@ -1,17 +1,18 @@
 import { useSyncExternalStore } from "react";
 
-/* Whether the Dashboard hides its amounts. Hidden until the viewer shows them,
-   remembered in this browser only, so a Book opened on a shared screen or a
-   call starts with its figures covered. Charts keep their shapes. */
+/* Whether the Dashboard hides its amounts. Shown unless the viewer hides them;
+   the choice is remembered in this browser only, so a browser that chose to
+   hide keeps its figures covered on a shared screen or a call. Charts keep
+   their shapes. */
 const key = "vult:amounts-hidden";
 const listeners = new Set<() => void>();
 let hidden: boolean | undefined;
 
 function read() {
   try {
-    return localStorage.getItem(key) !== "shown";
+    return localStorage.getItem(key) === "hidden";
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -32,7 +33,7 @@ export function useAmountsHidden() {
       return () => listeners.delete(listener);
     },
     () => (hidden ??= read()),
-    () => true,
+    () => false,
   );
 }
 

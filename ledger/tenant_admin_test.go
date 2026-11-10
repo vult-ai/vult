@@ -33,6 +33,9 @@ func tenantOwner(t *testing.T, db *testutil.Database) (ledger.TenantAdmin, ledge
 	if e != nil || c.TenantID != tenant {
 		t.Fatal("connection did not use its owner's tenant", e)
 	}
+	if e := db.EnsureBookOwner(db.Context, book.ID); e != nil {
+		t.Fatal(e)
+	}
 	return owner, book, ledger.Scope{TenantID: c.TenantID, BookID: c.BookID, ActorID: c.ActorID, ConnectionID: c.ID, Access: c.Access}
 }
 
@@ -86,7 +89,7 @@ func TestTenantAdministrationBoundaries(t *testing.T) {
 				if c, e := tc.owner.CreateConnection(db.Context, id, "Example grant", "write"); !errors.Is(e, ledger.ErrNotFound) || !reflect.DeepEqual(c, ledger.Connection{}) {
 					t.Fatal("foreign or missing Book accepted a grant", e)
 				}
-				if e := tc.owner.ClosePeriod(db.Context, id, "2026-01-01", "2026-01-31"); !errors.Is(e, ledger.ErrNotFound) {
+				if e := tc.owner.ClosePeriod(db.Context, id, "2026-01-01", "2026-01-31", ""); !errors.Is(e, ledger.ErrNotFound) {
 					t.Fatal("foreign or missing Book accepted a close", e)
 				}
 				if v, e := tc.owner.Export(db.Context, id); !errors.Is(e, ledger.ErrNotFound) || !reflect.DeepEqual(v, ledger.Export{}) {
@@ -136,7 +139,7 @@ func TestTenantAdministrationBoundaries(t *testing.T) {
 			t.Fatal("multiple-Book listing included another tenant")
 		}
 	}
-	if e = alpha.ClosePeriod(db.Context, ab.ID, "2026-01-01", "2026-01-31"); e != nil {
+	if e = alpha.ClosePeriod(db.Context, ab.ID, "2026-01-01", "2026-01-31", "Example close with review items acknowledged"); e != nil {
 		t.Fatal("own period close failed", e)
 	}
 	var otherClosed int
@@ -177,7 +180,7 @@ func TestTenantAdministrationRequiresExplicitScope(t *testing.T) {
 		"connections":       func() error { _, e := owner.Connections(db.Context); return e },
 		"connection":        func() error { _, e := owner.Connection(db.Context, id); return e },
 		"revoke":            func() error { return owner.Revoke(db.Context, id) },
-		"close":             func() error { return owner.ClosePeriod(db.Context, id, "2026-01-01", "2026-01-31") },
+		"close":             func() error { return owner.ClosePeriod(db.Context, id, "2026-01-01", "2026-01-31", "") },
 		"export":            func() error { _, e := owner.Export(db.Context, id); return e },
 		"verify":            func() error { _, e := owner.Verify(db.Context, id); return e },
 	}
@@ -213,7 +216,7 @@ func TestTenantAdministrationReusesOnePooledConnection(t *testing.T) {
 			t.Fatal("pooled owner listing crossed tenants", e)
 		}
 		day := fmt.Sprintf("2026-02-%02d", i+1)
-		if e = owner.ClosePeriod(db.Context, book.ID, day, day); e != nil {
+		if e = owner.ClosePeriod(db.Context, book.ID, day, day, ""); e != nil {
 			t.Fatal(e)
 		}
 		var current int

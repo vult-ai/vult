@@ -71,7 +71,7 @@ func (a TenantAdmin) browserState(ctx context.Context, book, view, from, to, uni
 	}
 	var out BrowserState
 	err := a.withBookRead(ctx, book, func(tx pgx.Tx, scope Scope, header Book) error {
-		out = BrowserState{SchemaVersion: 1, Version: 1, ReadView: view, Bootstrap: metadata, Book: header, Currencies: Currencies(), Accounts: []ActivityAccount{}, Transactions: []ActivityEntry{}, HierarchyBasis: "flat_recorded_accounts", SourceCoverage: "unknown", CashStatus: "not_requested", Capabilities: map[string]bool{"dashboard": true, "financial_reports": true, "account_balances": true, "activity": true, "stored_account_parents": false}}
+		out = BrowserState{SchemaVersion: 1, Version: 1, ReadView: view, Bootstrap: metadata, Book: header, Currencies: Currencies(), Accounts: []ActivityAccount{}, Transactions: []ActivityEntry{}, HierarchyBasis: "flat_recorded_accounts", SourceCoverage: "unknown", CashStatus: "not_requested", Capabilities: map[string]bool{"dashboard": true, "financial_reports": true, "account_balances": true, "activity": true, "stored_account_parents": true}}
 		state, err := captureReadState(ctx, tx, scope, header, recordedReadScope{AllAccepted: metadata})
 		if err != nil {
 			return err
@@ -92,7 +92,7 @@ func (a TenantAdmin) browserState(ctx context.Context, book, view, from, to, uni
 				switch class {
 				case "other_income":
 					class = "income"
-				case "other_expense", "cost_of_goods_sold":
+				case "other_expense", "cost_of_sales", "cost_of_goods_sold":
 					class = "expense"
 				}
 				out.Accounts = append(out.Accounts, ActivityAccount{ID: account.ID, Code: account.ID, GLCode: account.GLCode, Name: account.Name, Kind: class, Role: account.Role, Revision: account.Revision})

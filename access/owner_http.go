@@ -94,7 +94,7 @@ func (h *OwnerHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var operation, key string
 	var canonical json.RawMessage
-	var call func(ledger.TenantAdmin) (json.RawMessage, error)
+	var call func(ledger.TenantAdmin, string) (json.RawMessage, error)
 	switch {
 	case len(parts) == 4 && parts[3] == "books":
 		var q struct {
@@ -109,7 +109,7 @@ func (h *OwnerHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		operation, key = "create_book", q.Key
 		canonical, _ = json.Marshal(q)
-		call = func(o ledger.TenantAdmin) (json.RawMessage, error) {
+		call = func(o ledger.TenantAdmin, _ string) (json.RawMessage, error) {
 			v, e := o.CreateBook(r.Context(), q.Name, q.Currency, q.Scale)
 			b, _ := json.Marshal(v)
 			return b, e
@@ -124,7 +124,7 @@ func (h *OwnerHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		operation, key = "revoke_connection", q.Key
 		canonical, _ = json.Marshal(struct{ Key, Connection string }{q.Key, parts[4]})
-		call = func(o ledger.TenantAdmin) (json.RawMessage, error) {
+		call = func(o ledger.TenantAdmin, _ string) (json.RawMessage, error) {
 			if e := o.Revoke(r.Context(), parts[4]); e != nil {
 				return nil, e
 			}
@@ -135,15 +135,18 @@ func (h *OwnerHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Key     string `json:"request_key"`
 			From    string `json:"from"`
 			Through string `json:"through"`
+			Reason  string `json:"reason,omitempty"`
 		}
 		if strictjson.Decode(body, &q) != nil {
 			ownerFailure(w, ledger.ErrInvalid)
 			return
 		}
 		operation, key = "close_period", q.Key
-		canonical, _ = json.Marshal(struct{ Key, Book, From, Through string }{q.Key, parts[4], q.From, q.Through})
-		call = func(o ledger.TenantAdmin) (json.RawMessage, error) {
-			if e := o.ClosePeriod(r.Context(), parts[4], q.From, q.Through); e != nil {
+		canonical, _ = json.Marshal(struct{ Key, Book, From, Through, Reason string }{q.Key, parts[4], q.From, q.Through, q.Reason})
+		// A close is the owner's recorded decision, with the owner as actor.
+		call = func(o ledger.TenantAdmin, who string) (json.RawMessage, error) {
+			args, _ := json.Marshal(ledger.ClosePeriod{RequestKey: q.Key, From: q.From, Through: q.Through, Reason: q.Reason})
+			if _, e := o.AccountChange(r.Context(), parts[4], who, "close_period", args); e != nil {
 				return nil, e
 			}
 			return json.RawMessage(`{"closed":true}`), nil
@@ -152,7 +155,7 @@ func (h *OwnerHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ownerFailure(w, ledger.ErrNotFound)
 		return
 	}
-	result, e := h.s.OwnerRequest(r.Context(), session.Value, tenant, key, operation, canonical, h.admit, call)
+	result, e := h.s.OwnerRequestAs(r.Context(), session.Value, tenant, key, operation, canonical, h.admit, call)
 	if e != nil {
 		ownerFailure(w, e)
 		return

@@ -1,4 +1,4 @@
-import { BookOpen01, Stamp, Dataflow03, Folder, SquaresFour, Wallet01, File06 } from "../../design-system/icons";
+import { BookOpen01, Stamp, Dataflow03, Folder, SquaresFour, Wallet01, File06, Scales02 } from "../../design-system/icons";
 import type { NavigationItem } from "../shell/navigation";
 import {
   readWorkspace,
@@ -19,6 +19,7 @@ export const bookNavigation: readonly NavigationItem[] = [
   { id: "approvals", label: "Approvals", icon: Stamp, href: "/approvals" },
   { id: "transactions", label: "Activity", icon: Dataflow03, href: "/activity", groupStart: true },
   { id: "accounts", label: "Accounts", icon: Wallet01, href: "/accounts" },
+  { id: "reconcile", label: "Reconcile", icon: Scales02, href: "/reconcile" },
   { id: "statements", label: "Statements", icon: File06, href: "/statements" },
   documentWorkspace,
 ];

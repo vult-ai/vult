@@ -160,7 +160,7 @@ func runBrowser(ctx context.Context, args []string, out io.Writer) error {
 	// terminal. Opening and setup can be started by an agent: secrets are shown
 	// only in the browser, and the first setup still needs the owner's approval.
 	if reset && (!term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd()))) {
-		return errors.New("browser reset requires your interactive owner terminal")
+		return errors.New("browser reset requires the owner's interactive terminal")
 	}
 	c, err := local.NewClient()
 	if err != nil {

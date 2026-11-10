@@ -25,6 +25,7 @@ const pages = new Set([
   "settings",
   "books",
   "approvals",
+  "reconcile",
 ]);
 const reserved = new Set([
   ...pages,

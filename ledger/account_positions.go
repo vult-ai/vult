@@ -23,6 +23,12 @@ type AccountPositionRead struct {
 	PeriodMinor     string  `json:"period_change_minor"`
 	PostingCount    int64   `json:"posting_count"`
 	ThroughSequence int64   `json:"through_sequence"`
+	// ParentID is the recorded display parent's ID; parents never come from names.
+	ParentID string `json:"parent_id,omitempty"`
+	// Status is "retired" for a retired account and omitted while active.
+	Status string `json:"status,omitempty"`
+	// Heading marks an account that groups others and takes no postings.
+	Heading bool `json:"heading,omitempty"`
 }
 
 type positionReadScope struct {
@@ -36,7 +42,7 @@ type positionReadScope struct {
 // cutoff. A missing native revision never becomes a complete zero balance.
 func readAccountPositions(ctx context.Context, tx pgx.Tx, scope Scope, q positionReadScope) ([]AccountPositionRead, error) {
 	rows, err := tx.Query(ctx, `WITH selected AS MATERIALIZED (
- SELECT id,code,name,class,role,revision,currency,native_scale,currency_revision,native_origin_revision
+ SELECT id,code,name,class,role,revision,currency,native_scale,currency_revision,native_origin_revision,parent_account_id,status,heading
  FROM public.accounts WHERE tenant_id=$1 AND book_id=$2
  AND (NOT $6::boolean OR (class='asset' AND role='cash'))
  AND ($7::uuid[] IS NULL OR id=ANY($7::uuid[])) ORDER BY id LIMIT $4
@@ -54,7 +60,7 @@ func readAccountPositions(ctx context.Context, tx pgx.Tx, scope Scope, q positio
  ), capacity AS MATERIALIZED (
  SELECT (SELECT count(*) FROM selected)>=$4 OR (SELECT count(*) FROM history)>100000 overflow
  ), positions AS (
- SELECT a.id,a.code,a.name,a.class,a.role,a.revision,a.currency,a.native_scale,a.native_origin_revision,
+ SELECT a.id,a.code,a.name,a.class,a.role,a.revision,a.currency,a.native_scale,a.native_origin_revision,a.parent_account_id,a.status,a.heading,
  coalesce(bool_and(h.measurement_account_id IS NOT NULL AND h.native_currency=a.currency
    AND h.native_scale=a.native_scale AND h.measurement_currency_revision=a.currency_revision
    AND h.native_amount_minor IS NOT NULL) FILTER(WHERE h.id IS NOT NULL),true) measurements_complete,
@@ -65,14 +71,15 @@ func readAccountPositions(ctx context.Context, tx pgx.Tx, scope Scope, q positio
  count(h.id) posting_count,coalesce(max(h.sequence),0) last_sequence
  FROM allowed a LEFT JOIN history h ON h.account_id=a.id
  WHERE NOT (SELECT overflow FROM capacity)
- GROUP BY a.id,a.code,a.name,a.class,a.role,a.revision,a.currency,a.native_scale,a.native_origin_revision
+ GROUP BY a.id,a.code,a.name,a.class,a.role,a.revision,a.currency,a.native_scale,a.native_origin_revision,a.parent_account_id,a.status,a.heading
  ) SELECT id::text,code,name,class,coalesce(role,''),revision,coalesce(currency,''),native_scale,
  CASE WHEN currency IS NULL THEN 'not_recorded'
    WHEN native_origin_revision IS NULL OR NOT measurements_complete THEN 'incomplete' ELSE 'complete' END,
  CASE WHEN currency IS NOT NULL AND native_origin_revision IS NOT NULL AND measurements_complete
-   THEN native_minor::text END,book_minor::text,period_minor::text,posting_count,last_sequence,false
+   THEN native_minor::text END,book_minor::text,period_minor::text,posting_count,last_sequence,false,
+ coalesce(parent_account_id::text,''),CASE status WHEN 'active' THEN '' ELSE status END,heading
  FROM positions UNION ALL
- SELECT '','','','','',0::bigint,'',NULL::integer,'',NULL::text,'0','0',0::bigint,0::bigint,true
+ SELECT '','','','','',0::bigint,'',NULL::integer,'',NULL::text,'0','0',0::bigint,0::bigint,true,'','',false
  FROM capacity WHERE overflow ORDER BY 1`,
 		scope.TenantID, scope.BookID, q.Through, q.Limit+1, q.Cutoff, q.CashOnly, q.AccountIDs, q.From)
 	if err != nil {
@@ -83,7 +90,7 @@ func readAccountPositions(ctx context.Context, tx pgx.Tx, scope Scope, q positio
 	for rows.Next() {
 		var a AccountPositionRead
 		var overflow bool
-		if err := rows.Scan(&a.ID, &a.GLCode, &a.Name, &a.Kind, &a.Role, &a.Revision, &a.Currency, &a.Scale, &a.NativeStatus, &a.NativeMinor, &a.BalanceMinor, &a.PeriodMinor, &a.PostingCount, &a.ThroughSequence, &overflow); err != nil {
+		if err := rows.Scan(&a.ID, &a.GLCode, &a.Name, &a.Kind, &a.Role, &a.Revision, &a.Currency, &a.Scale, &a.NativeStatus, &a.NativeMinor, &a.BalanceMinor, &a.PeriodMinor, &a.PostingCount, &a.ThroughSequence, &overflow, &a.ParentID, &a.Status, &a.Heading); err != nil {
 			return nil, dbError(err)
 		}
 		if overflow {

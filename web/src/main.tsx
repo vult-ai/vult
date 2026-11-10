@@ -228,7 +228,11 @@ function BookWorkspace({
   useEffect(() => {
     const changed = (event: Event) => { if ((event as CustomEvent).detail === selectedBook.id) void load(); };
     window.addEventListener("vult-account-code-changed", changed);
-    return () => window.removeEventListener("vult-account-code-changed", changed);
+    window.addEventListener("vult-accounts-changed", changed);
+    return () => {
+      window.removeEventListener("vult-account-code-changed", changed);
+      window.removeEventListener("vult-accounts-changed", changed);
+    };
   }, [selectedBook.id, load]);
   const previousSearch = useRef(search);
   const modalReturn = useRef<HTMLElement | null>(null);
@@ -312,7 +316,7 @@ function BookWorkspace({
     // Only pages that show an entry carry it in the address; elsewhere a
     // save must not move the address to Activity.
     setDetail("", ["transactions", "statements", "accounts"].includes(workspace) ? "replace" : "none");
-    toast.success("Saved to your Book.");
+    toast.success("Saved to the Book.");
     void load();
   }
   const book = state?.book;
@@ -691,7 +695,7 @@ function BookWorkspace({
                             <EmptyState
                               scope="region"
                               title="No matching transactions"
-                              detail="Adjust your search or filters."
+                              detail="Adjust the search or filters."
                             />
                           ) : (
                             <EmptyState
@@ -993,11 +997,11 @@ function App({
     return (
       <AppStateScreen>
         {loading ? (
-          <LoadingState scope="page" label="Opening your Books…" />
+          <LoadingState scope="page" label="Opening Books…" />
         ) : (
           <FailureState
             scope="page"
-            error={error === missingBookLink ? new APIError("Check the address, or open the Book from your list.", 404) : error}
+            error={error === missingBookLink ? new APIError("Check the address, or open the Book from the list.", 404) : error}
             resource="app"
             onRetry={catalogRetry.retry}
             pending={catalogRetry.running}
@@ -1007,7 +1011,7 @@ function App({
                   title: "No Book at this address",
                   secondaryAction: (
                     <Button color="primary" onClick={() => window.location.assign("/")}>
-                      Open your Books
+                      Open Books
                     </Button>
                   ),
                 }
@@ -1116,7 +1120,7 @@ function NewBookWelcome({
   if (status === "checking")
     return (
       <AppStateScreen>
-        <LoadingState scope="page" label="Opening your Book…" />
+        <LoadingState scope="page" label="Opening the Book…" />
       </AppStateScreen>
     );
   if (status === "entrance")

@@ -313,7 +313,7 @@ func TestRemoteProposalStaleApprovalPostsNothing(t *testing.T) {
 		t.Fatal("prepare operation", err)
 	}
 	if err := f.sessions.WithOwner(f.db.Context, f.session, f.tenant, true, func(owner ledger.TenantAdmin) error {
-		return owner.ClosePeriod(f.db.Context, scope.BookID, "2026-01-01", "2026-01-31")
+		return owner.ClosePeriod(f.db.Context, scope.BookID, "2026-01-01", "2026-01-31", "Example close with review items acknowledged")
 	}); err != nil {
 		t.Fatal(err)
 	}

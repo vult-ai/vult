@@ -210,7 +210,7 @@ export function Approvals({
 
       {loading && !rows.length ? <LoadingState scope="region" label="Loading approvals…" />
         : !error && !open_.length && !pending.length ? (
-          <EmptyState scope="region" icon={CheckDone01} title="All clear" detail="When an agent prepares an entry that needs your approval, it waits here until you decide." />
+          <EmptyState scope="region" icon={CheckDone01} title="All clear" detail="When an agent prepares an entry that needs approval, it waits here until you decide." />
         ) : (
           <>
             {open_.length > 0 && <h2 className="approvals-group vult-type-metadata text-tertiary">Waiting for you</h2>}
@@ -229,10 +229,10 @@ export function Approvals({
                         onChange={() => setPicked((s) => { const n = new Set(s); n.has(r.id) ? n.delete(r.id) : n.add(r.id); return n; })} />
                       {isOpen ? <ChevronDown className="size-4 text-tertiary" aria-hidden /> : <ChevronRight className="size-4 text-tertiary" aria-hidden />}
                       <span className="approval-row-text">
-                        <span className="vult-type-label text-primary">{r.description || "Proposed entry"}</span>
-                        <span className="vult-type-metadata text-tertiary">
-                          Prepared {formatReadableDateTime(r.created_at)} · <RecordDate value={r.accounting_date} />
-                          {sum !== undefined && <> · {money(sum.toString(), book)}</>}
+                        <span className="approval-title vult-type-label text-primary">{r.description || "Proposed entry"}</span>
+                        {sum !== undefined && <span className="approval-sum vult-type-ui text-primary">{money(sum.toString(), book)}</span>}
+                        <span className="approval-meta vult-type-metadata text-tertiary">
+                          <RecordDate value={r.accounting_date} /> · Prepared {formatReadableDateTime(r.created_at)}
                         </span>
                         {d?.duplicate_of ? <span className="approval-duplicate vult-type-metadata">Duplicate of a newer copy below</span> : null}
                       </span>
@@ -290,6 +290,8 @@ export function Approvals({
   );
 }
 
+const accountChangeLabel: Record<string, string> = { create: "New account", revise: "Revised", retire: "Retired", reactivate: "Reactivated" };
+
 function ProposalDetail({ state, names, failure, onDecide }: {
   state: ProposalState;
   names: Map<string, string>;
@@ -307,7 +309,53 @@ function ProposalDetail({ state, names, failure, onDecide }: {
   return (
     <div className="approval-detail">
       {p.operation === "reverse_journal" && <p className="vult-type-metadata text-secondary">Reverses an existing entry in full.</p>}
-      <table className="approval-lines vult-type-ui">
+      {!!v.account_changes?.length && (
+        <table className="approval-lines approval-account-changes vult-type-ui">
+          <caption className="sr-only">Changes to the chart of accounts</caption>
+          <thead className="vult-type-metadata"><tr><th scope="col">Account</th><th scope="col">Change</th><th scope="col">Parent</th></tr></thead>
+          <tbody>
+            {v.account_changes.map((c, i) => (
+              <tr key={i}>
+                <th scope="row">{c.code ? `${c.code} · ${c.name}` : c.name}</th>
+                <td>{accountChangeLabel[c.change]}{c.heading ? " · heading" : ""}</td>
+                <td className="text-tertiary">{c.parent_account_id ? name(c.parent_account_id) : c.parent_code || "None"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {v.payee_change && (
+        <p className="vult-type-ui">
+          {v.payee_change.change === "link"
+            ? v.payee_change.counterpart === "payee"
+              ? `Records ${v.payee_change.display_name} as who this entry was with.`
+              : "Records who this entry was with as unknown."
+            : `${v.payee_change.change === "create" ? "Adds" : "Revises"} the payee ${v.payee_change.display_name}${v.payee_change.status === "retired" ? ", retired" : ""}.`}
+        </p>
+      )}
+      {v.statement_change && (
+        <p className="vult-type-ui">
+          {{
+            import: `Imports the statement for ${v.statement_change.period_start} to ${v.statement_change.period_end}, ${v.statement_change.rows ?? 0} rows. It posts nothing.`,
+            match: `Records that ${v.statement_change.row_ids?.length ?? 0} statement ${v.statement_change.row_ids?.length === 1 ? "row is" : "rows are"} the same money as ${v.statement_change.line_ids?.length ?? 0} posted ${v.statement_change.line_ids?.length === 1 ? "line" : "lines"}${v.statement_change.amount_minor ? `, ${amount(v.statement_change.amount_minor)}` : ""}.`,
+            revoke: `Undoes a statement match${v.statement_change.reason ? `: ${v.statement_change.reason}` : "."}`,
+            adjust: "Links a statement row to the entry posted for it.",
+            duplicate: `Marks a statement row as repeating another${v.statement_change.reason ? `: ${v.statement_change.reason}` : "."}`,
+            review: `Records the statement for ${v.statement_change.period_start} to ${v.statement_change.period_end} as ${v.statement_change.outcome === "reconciled" ? "reconciled" : "needing work"}${v.statement_change.reason ? `: ${v.statement_change.reason}` : "."}`,
+          }[v.statement_change.change]}
+        </p>
+      )}
+      {v.period_change && (
+        <p className="vult-type-ui">
+          {v.period_change.change === "reopen"
+            ? `Reopens ${v.period_change.from} to ${v.period_change.through} so it accepts entries again: ${v.period_change.reason}`
+            : `Closes ${v.period_change.from} to ${v.period_change.through} so it accepts no new entries.${Object.values(v.period_change.open_items ?? {}).some((n) => n > 0) ? ` Still open: ${Object.entries(v.period_change.open_items ?? {}).filter(([, n]) => n > 0).map(([k, n]) => `${n} ${k.replaceAll("_", " ")}`).join(", ")}. Reason: ${v.period_change.reason || "none given"}` : ""}`}
+        </p>
+      )}
+      {v.entries_affected > 0 && v.account_changes?.some((c) => c.change === "retire") && (
+        <p className="vult-type-metadata text-secondary">The remaining balance moves in this entry, recorded with the retirement.</p>
+      )}
+      {((!v.account_changes && !v.payee_change && !v.statement_change && !v.period_change) || v.lines.length > 0) && <table className="approval-lines vult-type-ui">
         <caption className="sr-only">Lines of the proposed entry and the balance after each</caption>
         <thead className="vult-type-metadata"><tr><th scope="col">Account</th><th scope="col">Debit</th><th scope="col">Credit</th><th scope="col">Balance after</th></tr></thead>
         <tbody>
@@ -323,7 +371,7 @@ function ProposalDetail({ state, names, failure, onDecide }: {
             );
           })}
         </tbody>
-      </table>
+      </table>}
       {!!p.open_questions?.length && (
         <div className="approval-question vult-type-ui">
           <HelpCircle className="size-4" aria-hidden />

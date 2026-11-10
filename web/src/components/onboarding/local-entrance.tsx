@@ -7,6 +7,7 @@ import { writeHeaders } from "../../lib/session";
 import { settingsPost } from "../../lib/settings-requests";
 import { withRecentSignIn } from "../../lib/recent-sign-in";
 import { LOCAL_PROGRAM } from "../../lib/local-program";
+import { needsName } from "./welcome";
 import { Entrance, type AgentEvent, type EntranceDraft, type Journey } from "./entrance";
 
 type Activity = {
@@ -204,13 +205,32 @@ export function LocalEntrance({ book: existing, onOpen }: { book?: Book; onOpen:
 
   if (draft === undefined) return null;
   const book = bookRef.current;
+  // A Book that exists but was never named starts at naming it, not inside it.
+  const unnamed = existing && needsName(existing) ? existing : undefined;
   return (
     <Entrance
-      start={existing ? "inside" : "book"}
+      start={existing && !unnamed ? "inside" : "book"}
       draft={draft}
-      book={existing ? { name: existing.name, profile: existing.profile, currency: existing.currency } : undefined}
+      book={existing && !unnamed ? { name: existing.name, profile: existing.profile, currency: existing.currency } : undefined}
+      unnamed={unnamed ? { profile: existing?.profile, currency: unnamed.currency } : undefined}
       journey={journey}
       createBook={async ({ name, profile, currency, timezone }) => {
+        if (unnamed) {
+          // Naming a Book changes its settings, which need a recent sign-in.
+          bookRef.current = await withRecentSignIn(() =>
+            settingsPost<Book>("settings", {
+              book_id: unnamed.id,
+              idempotency_key: settingsKey.current,
+              revision: unnamed.metadata_revision ?? 0,
+              name,
+              founder: "",
+              profile,
+              accounting_timezone: timezone,
+            }),
+          );
+          remember(unnamed.id, "started");
+          return;
+        }
         const created = await withRecentSignIn(async () =>
           fetchJSON<Book>("/api/v1/local/books", {
             method: "POST",

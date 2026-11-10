@@ -116,7 +116,7 @@ test("the real host keeps a legacy dashboard preview on its canonical Activity r
       );
       assert.doesNotMatch(
         document.body.textContent,
-        /couldn’t refresh your activity/,
+        /couldn’t refresh the activity/,
       );
     } finally {
       globalThis.fetch = saved;

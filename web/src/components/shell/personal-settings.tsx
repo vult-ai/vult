@@ -78,7 +78,7 @@ export function PersonalSettings({
         : "Changes apply here but could not be saved in this browser.");
   return (
     <Dialog
-      title="Your settings"
+      title="Personal settings"
       description={null}
       open={open}
       onOpenChange={onOpenChange}
@@ -161,7 +161,7 @@ export function PersonalSettings({
                 autoComplete="nickname"
                 value={profile.display_name}
                 maxLength={80}
-                placeholder="Your name"
+                placeholder="Full name"
                 onChange={(event) => onName(event.currentTarget.value)}
               />
             </NativeFieldControl>
@@ -173,7 +173,7 @@ export function PersonalSettings({
             >
               <p className="vult-type-label">Browser settings found</p>
               <p className="vult-type-metadata">
-                Review this browser’s copy before saving it to your profile.
+                Review this browser’s copy before saving it to the profile.
               </p>
               {!reviewing ? (
                 <Button
@@ -272,7 +272,7 @@ export function PersonalSettings({
                 Appearance
               </label>
               <p className="vult-type-metadata">
-                Follow your system or choose a theme.
+                Follow the system or choose a theme.
               </p>
             </div>
             <Select

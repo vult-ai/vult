@@ -6,7 +6,7 @@
     "context": {
       "resource": "dashboard"
     },
-    "message": "We couldn’t load your dashboard.",
+    "message": "We couldn’t load the dashboard.",
     "recovery": "retry",
     "outcome": "read"
   },
@@ -18,7 +18,7 @@
       "resource": "dashboard",
       "retained": "view"
     },
-    "message": "We couldn’t refresh your dashboard.",
+    "message": "We couldn’t refresh the dashboard.",
     "recovery": "retry",
     "outcome": "read"
   },
@@ -29,7 +29,7 @@
     "context": {
       "resource": "dashboard"
     },
-    "message": "We couldn’t connect. Check your connection.",
+    "message": "We couldn’t connect. Check the internet connection.",
     "recovery": "retry",
     "outcome": "read"
   },
@@ -37,7 +37,7 @@
     "id": "session-ended",
     "status": 401,
     "intent": "read",
-    "message": "Your session ended. Confirm it’s you to continue.",
+    "message": "Session ended. Confirm it’s you to continue.",
     "recovery": "confirm",
     "outcome": "rejected"
   },
@@ -69,7 +69,7 @@
     "id": "uncertain-save",
     "status": 503,
     "intent": "write",
-    "message": "Your change may already be saved. Check before trying again.",
+    "message": "The change may already be saved. Check before trying again.",
     "recovery": "review",
     "outcome": "unknown"
   },
@@ -85,7 +85,7 @@
     "id": "validation",
     "status": 400,
     "intent": "write",
-    "message": "Check your details and try again.",
+    "message": "Check the details and try again.",
     "recovery": "review",
     "outcome": "rejected"
   },
@@ -227,7 +227,7 @@
     "id": "busy-save",
     "status": 429,
     "intent": "write",
-    "message": "Your change may already be saved. Check before trying again.",
+    "message": "The change may already be saved. Check before trying again.",
     "recovery": "review",
     "outcome": "unknown"
   },

@@ -22,7 +22,7 @@ const CopyLife = 24 * time.Hour
 func DocumentCopiesFolder(create bool) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil || !filepath.IsAbs(home) {
-		return "", errors.New("Vult couldn't find your home folder for document copies")
+		return "", errors.New("Vult couldn't find the home folder for document copies")
 	}
 	folder := filepath.Join(home, "Library", "Application Support", "Vult", "Documents")
 	if !create {

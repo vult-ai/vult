@@ -1,0 +1,40 @@
+/* The labeled toolbar Statements shows on narrow screens. Each control says
+   what it is; touch targets are 44px on phones. */
+.statement-compact-tools { display: none; }
+@media (max-width: 900px) {
+  .statement-compact-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; grid-row: 1; min-width: 0; padding: 2px; }
+  /* The report names itself here, so the heading below keeps only the
+     currency and scope on screen. */
+  .statement-workbench .statement-workbench-identity h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .statement-workbench .statement-context-currency > [aria-hidden] { display: none; }
+  .statement-compact-control { min-width: 0; max-width: 100%; }
+  .statement-compact-control > * { min-width: 0; }
+  .statement-compact-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .statement-compact-name { margin-inline-end: 6px; color: var(--color-text-tertiary); white-space: nowrap; }
+  .statement-compact-report { flex: none; }
+  .statement-compact-compare { flex: 0 1 auto; }
+  .statement-compact-more { flex: none; margin-inline-start: auto; }
+  .statement-compact-period { flex: none; min-width: 0; }
+  .statement-compact-period .statement-period {
+    display: inline-flex; align-items: center; gap: 6px; width: 100%; height: auto; min-height: var(--vult-control-height-sm); padding: 0 10px;
+    border: 1px solid var(--vult-control-border); border-radius: var(--radius-md); background: var(--vult-control-secondary-background);
+    box-shadow: var(--vult-control-shadow); color: var(--color-text-primary); cursor: pointer;
+  }
+  .statement-compact-period .statement-period svg { flex: none; width: var(--vult-control-icon-size); height: var(--vult-control-icon-size); color: var(--color-text-secondary); }
+  .statement-compact-period .statement-period-label { position: static; min-width: 0; overflow: hidden; font-size: var(--text-vult-ui); line-height: var(--text-vult-ui--line-height); text-overflow: ellipsis; white-space: nowrap; }
+}
+/* Report and date on the first row, comparison and More on the second. On
+   phones every target is at least 44px tall. */
+@media (max-width: 900px) {
+  .statement-compact-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .statement-compact-tools > * { min-width: 0; }
+  .statement-compact-control { width: 100%; justify-content: space-between; }
+  .statement-compact-more { width: auto; margin: 0; }
+}
+@media (max-width: 640px) {
+  .statement-compact-control, .statement-compact-period .statement-period { min-height: 44px; }
+}
+.statement-compact-menu-heading { padding: 8px 12px 4px; color: var(--color-text-tertiary); font-size: var(--text-vult-metadata); line-height: var(--text-vult-metadata--line-height); }
+@media (hover: hover) and (pointer: fine) {
+  .statement-compact-period .statement-period:hover { background: var(--vult-control-secondary-hover); }
+}

@@ -33,7 +33,7 @@ func runUpdate(ctx context.Context, args []string, out io.Writer) error {
 	client := &http.Client{Timeout: 10 * time.Second}
 	release, err := update.LatestRelease(ctx, client, update.ManifestURL)
 	if err != nil {
-		return errors.New("could not check for a newer Vult release; check your connection and try again")
+		return errors.New("could not check for a newer Vult release; check the connection and try again")
 	}
 	latest := release.Version
 	status := update.Status{Current: daemon.Version, Latest: latest, Available: update.Newer(daemon.Version, latest)}
@@ -78,10 +78,10 @@ func installUpdate(ctx context.Context, release update.Release, backup string, c
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = bytes.NewReader(script), out, os.Stderr
 	fmt.Fprintln(out, "Complete or cancel the macOS approval prompt. Vult waits for the installer to finish.")
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("the update was canceled before installation; your backup is at %s: %w", backup, err)
+		return fmt.Errorf("the update was canceled before installation; the backup is at %s: %w", backup, err)
 	}
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("the update did not complete; inspect the system install log before retrying; your backup is at %s: %w", backup, err)
+		return fmt.Errorf("the update did not complete; inspect the system install log before retrying; the backup is at %s: %w", backup, err)
 	}
 	fmt.Fprintf(out, "Vult %s is installed. Run %s open to continue.\n", release.Version, local.BinaryPath)
 	return nil

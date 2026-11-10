@@ -40,6 +40,7 @@ access/oidc.go
 access/oidc_test.go
 access/operator.go
 access/owner.go
+access/owner_change_scope_test.go
 access/owner_http.go
 access/owner_resources.go
 access/owner_test.go
@@ -134,14 +135,18 @@ docs/releases/0.4.0.md
 docs/releases/0.5.0.md
 docs/releases/0.5.1.md
 docs/releases/0.5.2.md
+docs/releases/0.6.0.md
 docs/reports.md
 docs/search.md
 docs/server.md
+docs/user/accounts.md
 docs/user/agent-reference.md
 docs/user/backup-and-restore.md
 docs/user/connect-an-agent.md
 docs/user/edition.json
 docs/user/get-started.md
+docs/user/payees.md
+docs/user/reconcile.md
 docs/user/record-transactions.md
 docs/user/review-your-book.md
 docs/user/understand-numbers.md
@@ -186,6 +191,7 @@ internal/daemon/native.go
 internal/daemon/native_platform_default.go
 internal/daemon/native_platform_linux.go
 internal/daemon/owner_authorization_test.go
+internal/daemon/period_decisions_test.go
 internal/daemon/proposals_darwin_test.go
 internal/daemon/protected_darwin.go
 internal/daemon/protected_linux.go
@@ -253,6 +259,8 @@ internal/operationref/reference.go
 internal/operationref/reference_test.go
 internal/reporting/calendar_projection.go
 internal/reporting/calendar_projection_test.go
+internal/reporting/cash_flow_roles.go
+internal/reporting/cash_flow_roles_test.go
 internal/reporting/cash_movement.go
 internal/reporting/cash_movement_test.go
 internal/reporting/core.go
@@ -282,8 +290,12 @@ ledger/account_codes_test.go
 ledger/account_detail.go
 ledger/account_history.go
 ledger/account_measurements.go
+ledger/account_owner.go
 ledger/account_positions.go
 ledger/account_reads_test.go
+ledger/account_status.go
+ledger/accounting_foundations_test.go
+ledger/accounting_guards_test.go
 ledger/activity_reads.go
 ledger/activity_reads_test.go
 ledger/admin.go
@@ -300,6 +312,9 @@ ledger/book_settings.go
 ledger/browser_catalog.go
 ledger/browser_state.go
 ledger/browser_state_test.go
+ledger/cash_flow_reads.go
+ledger/cash_flow_reads_test.go
+ledger/chart_of_accounts_test.go
 ledger/citations.go
 ledger/citations_test.go
 ledger/closed_periods.go
@@ -336,6 +351,12 @@ ledger/migrations/0003_documents.sql
 ledger/migrations/0004_recorded_book.sql
 ledger/migrations/0005_proposing_agents.sql
 ledger/migrations/0006_owner_recovery_codes.sql
+ledger/migrations/0007_accounting_foundations.sql
+ledger/payees.go
+ledger/payees_test.go
+ledger/period_security_test.go
+ledger/periods.go
+ledger/periods_test.go
 ledger/postings.go
 ledger/postings_test.go
 ledger/proposal_decisions.go
@@ -353,6 +374,13 @@ ledger/search_benchmark_test.go
 ledger/search_integrity_test.go
 ledger/search_test.go
 ledger/snapshot_times_test.go
+ledger/starter_chart_rules_test.go
+ledger/starter_charts.go
+ledger/statement_allocation_work_test.go
+ledger/statement_coverage_work_test.go
+ledger/statement_suggestions_test.go
+ledger/statements.go
+ledger/statements_test.go
 ledger/store.go
 ledger/store_test.go
 ledger/tenant_admin.go
@@ -394,6 +422,8 @@ scripts/tests/test_go_notices.py
 scripts/tests/test_installer.py
 scripts/tests/test_native_interface.py
 scripts/tests/test_ubuntu_installer.py
+server/account_changes.go
+server/account_changes_test.go
 server/account_reads.go
 server/account_reads_test.go
 server/activity_reads.go
@@ -449,6 +479,7 @@ server/owner_connections.go
 server/owner_connections_test.go
 server/owner_requests.go
 server/owner_settings_test.go
+server/period_decisions_test.go
 server/postings.go
 server/postings_test.go
 server/proposal_review_test.go
@@ -523,6 +554,7 @@ web/src/components/book/book-address-settings.tsx
 web/src/components/book/book-data-settings.tsx
 web/src/components/book/book-logo-settings.tsx
 web/src/components/book/book-navigation.ts
+web/src/components/book/book-payee-settings.tsx
 web/src/components/book/book-period-settings.css
 web/src/components/book/book-period-settings.tsx
 web/src/components/book/book-setup-settings.tsx
@@ -530,6 +562,8 @@ web/src/components/book/book-switcher.tsx
 web/src/components/book/copy-current-view.tsx
 web/src/components/book/document-upload.css
 web/src/components/book/document-upload.tsx
+web/src/components/book/document-viewer.css
+web/src/components/book/document-viewer.tsx
 web/src/components/book/documents.css
 web/src/components/book/documents.tsx
 web/src/components/book/entry-accounting-details.tsx
@@ -538,6 +572,7 @@ web/src/components/book/entry-document.tsx
 web/src/components/book/entry-identity.css
 web/src/components/book/entry-identity.tsx
 web/src/components/book/entry-overview.tsx
+web/src/components/book/entry-payee.tsx
 web/src/components/book/entry-preview.css
 web/src/components/book/entry-preview.tsx
 web/src/components/book/entry-relationships.tsx
@@ -583,6 +618,8 @@ web/src/components/onboarding/theme-switcher.tsx
 web/src/components/onboarding/timezone-search-aliases.json
 web/src/components/onboarding/welcome.css
 web/src/components/onboarding/welcome.tsx
+web/src/components/reconcile/reconcile.css
+web/src/components/reconcile/reconcile.tsx
 web/src/components/shell/app-shell.css
 web/src/components/shell/app-shell.tsx
 web/src/components/shell/book-finder.css
@@ -609,6 +646,8 @@ web/src/components/statements/report-inspector.tsx
 web/src/components/statements/report-period-picker.tsx
 web/src/components/statements/report-scope-status.ts
 web/src/components/statements/report-table.tsx
+web/src/components/statements/statement-compact-tools.css
+web/src/components/statements/statement-compact-tools.tsx
 web/src/components/statements/statement-tools.css
 web/src/components/statements/statement-tools.tsx
 web/src/components/statements/statements-workspace.tsx
@@ -682,6 +721,7 @@ web/src/components/workspaces/account-group-activity.tsx
 web/src/components/workspaces/account-ledger.css
 web/src/components/workspaces/account-ledger.tsx
 web/src/components/workspaces/account-presentation-controls.tsx
+web/src/components/workspaces/account-status-dialogs.tsx
 web/src/components/workspaces/account-tree.css
 web/src/components/workspaces/account-tree.tsx
 web/src/components/workspaces/accounts-entry-inspector.css
@@ -695,6 +735,7 @@ web/src/components/workspaces/dashboard.css
 web/src/components/workspaces/period-picker.css
 web/src/components/workspaces/period-picker.tsx
 web/src/components/workspaces/settings.tsx
+web/src/components/workspaces/starter-chart-offer.tsx
 web/src/components/workspaces/user-preferences.tsx
 web/src/components/workspaces/workspace-frame.tsx
 web/src/components/workspaces/workspaces.css
@@ -798,6 +839,7 @@ web/src/design-system/use-retained-presence.ts
 web/src/design-system/vult-logo-mark.tsx
 web/src/design-system/vult-wordmark.tsx
 web/src/lib/account-activity.ts
+web/src/lib/account-changes.ts
 web/src/lib/account-codes.ts
 web/src/lib/account-detail-read.ts
 web/src/lib/account-hierarchy-activity.ts
@@ -825,6 +867,7 @@ web/src/lib/dashboard-period.ts
 web/src/lib/dashboard-projection.ts
 web/src/lib/date-format.ts
 web/src/lib/display-preferences.ts
+web/src/lib/document-engine.ts
 web/src/lib/documentation.ts
 web/src/lib/documents.ts
 web/src/lib/entry-documents.ts
@@ -847,6 +890,7 @@ web/src/lib/passkey-signin.ts
 web/src/lib/performance-series.ts
 web/src/lib/period-step.ts
 web/src/lib/proposals.ts
+web/src/lib/read-document.ts
 web/src/lib/recent-sign-in.ts
 web/src/lib/report-period.ts
 web/src/lib/resource-links.ts
@@ -855,6 +899,7 @@ web/src/lib/settings-requests.ts
 web/src/lib/shared-institutions.ts
 web/src/lib/startup.ts
 web/src/lib/statement-cash-movement.ts
+web/src/lib/statements.ts
 web/src/lib/system-accounts.ts
 web/src/lib/transaction-journal.ts
 web/src/lib/transaction-view.ts
@@ -875,6 +920,8 @@ web/src/style.css
 web/src/styles/book.css
 web/src/styles/multicurrency.css
 web/tests/fixtures/dashboard-errors.ts
+web/tests/fixtures/document-viewer.html
+web/tests/fixtures/document-viewer.tsx
 web/tests/fixtures/document-viewer-image.png
 web/tests/fixtures/document-viewer-unreadable.pdf
 web/tests/fixtures/entrance-preview.tsx
@@ -894,6 +941,7 @@ web/tests/fixtures/states.html
 web/tests/fixtures/states.tsx
 web/tests/fixtures/synthetic-hosting.pdf
 web/tests/journey.spec.ts
+web/preview-tests/document-viewer.spec.ts
 web/tsconfig.json
 web/typography-legacy.json
 web/unit/account-activity.test.mjs
@@ -951,6 +999,7 @@ web/unit/detail-request.test.mjs
 web/unit/dialog-standard.test.mjs
 web/unit/dialog.test.mjs
 web/unit/documents-readonly.test.mjs
+web/unit/document-engine.test.mjs
 web/unit/durable-personal-settings.test.mjs
 web/unit/entrance.test.mjs
 web/unit/entry-account-codes.test.mjs
@@ -1027,6 +1076,7 @@ web/unit/personal-settings.test.mjs
 web/unit/product-terms.test.mjs
 web/unit/read-cancellation.test.mjs
 web/unit/read-retry.test.mjs
+web/unit/reconcile.test.mjs
 web/unit/report-export-read.test.mjs
 web/unit/report-scope-status.test.mjs
 web/unit/report-url.test.mjs
@@ -1069,3 +1119,4 @@ web/unit/workspace-batch-reads.test.mjs
 web/unit/workspace-sketches.test.mjs
 web/visual-legacy.json
 web/vite.config.ts
+web/playwright.viewer.config.ts

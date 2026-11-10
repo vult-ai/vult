@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vult-ai/vult/access"
 	"github.com/vult-ai/vult/documents"
 	"github.com/vult-ai/vult/internal/local"
 	"github.com/vult-ai/vult/internal/strictjson"
@@ -350,20 +351,17 @@ func (s *Server) owner(ctx context.Context, uid uint32, method string, input []b
 			Status string `json:"status"`
 		}{"revoked"}), nil
 	case "period_close":
-		var q struct {
-			BookID  string `json:"book_id"`
-			From    string `json:"from"`
-			Through string `json:"through"`
-		}
+		var q local.PeriodCloseRequest
 		if decode(&q) != nil {
 			return nil, ledger.ErrInvalid
 		}
-		if e := s.Admin.ClosePeriod(ctx, q.BookID, q.From, q.Through); e != nil {
-			return nil, e
+		var actor string
+		if err := s.Admin.DB.QueryRow(ctx, `SELECT i.id::text FROM access.identities i JOIN access.owners o ON o.identity_id=i.id
+ JOIN public.books b ON b.tenant_id=o.tenant_id WHERE b.id=$1 AND i.issuer=$2 AND i.subject=$3`, q.BookID, access.BuiltinIssuer, localOwnerSubject).Scan(&actor); err != nil {
+			return nil, ledger.ErrDenied
 		}
-		return marshal(struct {
-			Status string `json:"status"`
-		}{"closed"}), nil
+		period, err := s.Admin.ClosePeriodDecision(ctx, q.BookID, actor, ledger.ClosePeriod{RequestKey: q.RequestKey, From: q.From, Through: q.Through, Reason: q.Reason})
+		return marshal(period), err
 	case "verify", "export":
 		var q struct {
 			BookID string `json:"book_id"`
@@ -452,6 +450,10 @@ func (s *Server) owner(ctx context.Context, uid uint32, method string, input []b
 	return nil, ledger.ErrInvalid
 }
 func safeError(e error) string {
+	var refused *ledger.RefusedError
+	if errors.As(e, &refused) {
+		return refused.Error()
+	}
 	for _, known := range []error{ledger.ErrInvalid, ledger.ErrDenied, ledger.ErrConflict, ledger.ErrNotFound, ledger.ErrUncertain, ledger.ErrLimit, ledger.ErrArchive, ledger.ErrArchiveCleanup, ledger.ErrApprovalRequired, ledger.ErrProposalStale, ledger.ErrProposalExpired, ledger.ErrUploadExpired, documents.ErrUnavailable, documents.ErrIntegrity, documents.ErrMediaType} {
 		if errors.Is(e, known) {
 			return known.Error()

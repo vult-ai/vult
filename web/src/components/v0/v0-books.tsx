@@ -33,7 +33,7 @@ export function V0Books({
           </Button>
         }
       />
-      <Surface title="Your Books">
+      <Surface title="Books">
         <div className="v0-record-list">
           {books.map((b) => (
             <div className="v0-record-row" key={b.id}>

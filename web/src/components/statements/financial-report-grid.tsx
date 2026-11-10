@@ -76,23 +76,34 @@ function FinancialReportGridContent({ display, rows, expanded, onToggle, onInspe
   const selectedColumn = display.columns.find(c => c.id === selection?.column) || display.columns[0];
   const selected = selectedRow && selectedColumn ? displayCell(display, selectedRow, selectedColumn) : undefined;
   const [savedWidths, setSavedWidths] = useViewState<Record<string, number>>(STATEMENT_WIDTHS_KEY, {}, { storage: "local", valid: validStatementWidths });
+  const [viewport, setViewport] = useState({ width: 0, accountBase: 320 });
+  // On a phone the account names give way to the first amount column; the
+  // rest of a wide report scrolls inside the grid's own frame.
+  const narrow = viewport.width > 0 && viewport.width < 480;
   const columnSizes = useMemo(() => [{ id: "account", min: 160, preferred: 320, max: GRID_WIDTH_PREFERENCE_LIMIT }, ...display.columns.map(column => {
     const longest = reportFlatRows(display.rows).reduce((length, { row }) => {
       const value = displayCell(display, row, column).value;
       return value === undefined ? length : Math.max(length, money(value, report.book).length);
     }, 0);
-    const min = Math.max(128, longest * 9 + 40);
+    const min = narrow ? Math.max(84, longest * 8 + 24) : Math.max(128, longest * 9 + 40);
     const heading = Math.ceil(compactColumnPeriod(display, column).length * 6.5 + 32);
     return { id: column.id, min, preferred: Math.max(184, min, heading), max: Math.max(GRID_WIDTH_PREFERENCE_LIMIT, min, heading) };
-  })], [display]);
-  const [viewport, setViewport] = useState({ width: 0, accountBase: 320 });
+  })], [display, narrow]);
   const idleWidths = resolveColumnWidths(columnSizes, savedWidths);
   const amountMinimum = Math.max(...columnSizes.slice(1).map(size => size.min), 0);
   const unfreezeAccounts = viewport.width > 0 && idleWidths.account + amountMinimum > viewport.width;
   // Keep the same coordinate system throughout a resize and after release.
   // While frozen, Account cannot grow so wide that it hides every amount.
-  const sizes = columnSizes.map((size, index) => index === 0 && viewport.width > 0 && !unfreezeAccounts
-    ? { ...size, max: Math.min(size.max, Math.max(size.min, viewport.width - amountMinimum)) } : size);
+  const firstAmount = columnSizes[1]?.min ?? 0;
+  const sizes = columnSizes.map((size, index) => {
+    if (narrow && index > 0) return { ...size, preferred: size.min };
+    if (index === 0 && narrow) {
+      const cap = Math.max(96, viewport.width - firstAmount);
+      return { ...size, min: 96, preferred: cap, max: cap };
+    }
+    return index === 0 && viewport.width > 0 && !unfreezeAccounts
+      ? { ...size, max: Math.min(size.max, Math.max(size.min, viewport.width - amountMinimum)) } : size;
+  });
   const layout = useColumnLayout({ columns: sizes, view: STATEMENT_WIDTHS_KEY, available: viewport.width, scroll: grid,
     external: { identity: JSON.stringify([identity, viewport.accountBase]), widths: savedWidths, update: setSavedWidths } });
   const { widths, extent } = layout;
@@ -227,7 +238,7 @@ function FinancialReportGridContent({ display, rows, expanded, onToggle, onInspe
           <span className="financial-grid-header-label">{compactColumnPeriod(display, column)}</span>{resizer(column.id, `${column.label}, ${columnPeriod(display, column)}`)}
         </th>)}</tr>}</thead>
         <tbody>{rows.map(({ row, depth }, ri) => <tr key={row.id} className={`financial-grid-row financial-grid-row-${row.role}`} data-report-row={row.id} data-selected-row={row.id === selectedRow?.id || undefined} aria-rowindex={rowOffset + ri + headingRows + 1}>
-          <th scope="row" aria-colindex={1}><div className="financial-grid-account" style={{ paddingInlineStart: `${depth * 16}px` }}>
+          <th scope="row" aria-colindex={1}><div className="financial-grid-account" style={{ paddingInlineStart: `calc(${depth} * var(--financial-grid-indent, 16px))` }}>
             {row.children.length ? <button type="button" className="financial-grid-disclosure vult-focus-target" aria-label={`${expanded.has(row.id) ? "Collapse" : "Expand"} ${row.label}`} aria-expanded={expanded.has(row.id)} onClick={() => onToggle(row)}>{expanded.has(row.id) ? <ChevronDown aria-hidden /> : <ChevronRight aria-hidden />}</button> : <span className="financial-grid-disclosure-space" />}
             <Tooltip title={<span className="financial-grid-name-tooltip">{row.gl_code?.trim() && <><span className="vult-code">{row.gl_code.trim()}</span>{" · "}</>}{row.label}</span>} placement="top start" motion="none" isOpen={nameHelp === row.id} onOpenChange={open => open ? revealName(row) : setNameHelp(undefined)}>
               <TooltipTrigger excludeFromTabOrder className="financial-grid-label" aria-label={`Select ${accountCodeLabel(row.label, row.gl_code)}`} onMouseEnter={() => revealName(row)} onMouseLeave={() => setNameHelp(undefined)} onFocus={() => revealName(row)} onBlur={() => setNameHelp(undefined)} onPress={() => { const column = selectedColumn || display.columns[0]; if (column) { choose(row, column); const target = buttons.current.get(key(row.id, column.id)); if (target) { target.focus({ preventScroll: true }); reveal(target); } } }}>

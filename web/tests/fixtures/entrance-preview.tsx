@@ -27,7 +27,7 @@ const journey: Journey = {
   connection: params.has("hosted") ? { kind: "server", address: "https://books.example.com/mcp" } : { kind: "local", program: "vult" },
   waitForAgent: async () => {
     await wait(2500);
-    return "Claude Code";
+    return "Example agent";
   },
   approveAgent: () => wait(500),
   addStatement: () => wait(900),

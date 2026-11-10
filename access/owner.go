@@ -20,6 +20,17 @@ type OwnerAdmission func(context.Context, pgx.Tx, string, string, json.RawMessag
 // OwnerRequest retains an exact result atomically with an owner change. The key
 // is scoped to identity and tenant; it never overlaps agent financial receipts.
 func (s *Service) OwnerRequest(ctx context.Context, session, tenant, key, operation string, input json.RawMessage, admit OwnerAdmission, call func(ledger.TenantAdmin) (json.RawMessage, error)) (json.RawMessage, error) {
+	if call == nil {
+		return nil, ledger.ErrInvalid
+	}
+	return s.OwnerRequestAs(ctx, session, tenant, key, operation, input, admit, func(owner ledger.TenantAdmin, _ string) (json.RawMessage, error) {
+		return call(owner)
+	})
+}
+
+// OwnerRequestAs is OwnerRequest for a change recorded with the signed-in
+// owner's identity as its actor.
+func (s *Service) OwnerRequestAs(ctx context.Context, session, tenant, key, operation string, input json.RawMessage, admit OwnerAdmission, call func(ledger.TenantAdmin, string) (json.RawMessage, error)) (json.RawMessage, error) {
 	if !ownerKeyPattern.MatchString(key) || len(operation) < 1 || len(operation) > 64 || len(input) < 2 || len(input) > 8192 || !json.Valid(input) || call == nil {
 		return nil, ledger.ErrInvalid
 	}
@@ -46,7 +57,7 @@ func (s *Service) OwnerRequest(ctx context.Context, session, tenant, key, operat
 				return ErrDenied
 			}
 		}
-		result, e = call(owner)
+		result, e = call(owner, who)
 		if e != nil {
 			return e
 		}

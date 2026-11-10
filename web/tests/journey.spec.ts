@@ -60,21 +60,26 @@ test("owner journey: create a Book, close a period, read sources and figures, si
   })();
   await expect(page).toHaveURL(new RegExp(`/${household}$`));
   await expect(page.getByRole("heading", { name: "Income and spending" })).toBeVisible();
-  // Amounts start hidden; one click shows them.
+  // Amounts show by default; one click hides them, and one shows them again.
+  await expect(page.getByRole("listitem", { name: /income €0\.00, expenses €0\.00/ }).first()).toBeAttached();
+  await page.getByRole("button", { name: "Hide amounts" }).filter({ hasText: "Hide amounts" }).click();
   await expect(page.getByRole("listitem", { name: /income ••••••, expenses ••••••/ }).first()).toBeAttached();
   await page.getByRole("button", { name: "Show amounts" }).filter({ hasText: "Show amounts" }).click();
   await expect(page.getByRole("listitem", { name: /income €0\.00, expenses €0\.00/ }).first()).toBeAttached();
 
-  // Close January 2026 in the new Book; the confirmation names the year.
+  // Close January 2026 in the new Book: the review names the year and,
+  // with nothing recorded, finds nothing open.
   await page.goto(`/${household}/settings?tab=accounting`);
   await page.getByLabel("From").fill("2026-01-01");
   await page.getByLabel("Through").fill("2026-01-31");
-  await page.getByRole("button", { name: "Close period" }).click();
-  const confirm = page.getByRole("dialog", { name: "Close this period?" });
+  await page.getByRole("button", { name: "Review and close" }).click();
+  const confirm = page.getByRole("dialog", { name: "Close this period" });
   await expect(confirm).toContainText("2026");
+  await expect(confirm).toContainText("Nothing is open");
   await confirm.getByRole("button", { name: "Close period" }).click();
   await expect(confirm).toBeHidden();
-  await expect(page.getByRole("listitem").filter({ hasText: "January 1, 2026 – January 31, 2026" })).toBeVisible();
+  await expect(page.getByText("January 1, 2026 – January 31, 2026")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reopen" })).toBeVisible();
   // Saving settings keeps the address on Settings.
   await expect(page).toHaveURL(new RegExp(`/${household}/settings`));
 

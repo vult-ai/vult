@@ -28,7 +28,7 @@ func CurrentDesktopSession() (DesktopSession, error) {
 	var session DesktopSession
 	uid := os.Getuid()
 	if uid == 0 || uid != os.Geteuid() {
-		return session, errors.New("browser setup requires your unprivileged desktop session")
+		return session, errors.New("browser setup requires an unprivileged desktop session")
 	}
 	account, err := user.LookupId(strconv.Itoa(uid))
 	if err != nil || account.Username == ServiceUser || account.Username == BrowserUser || !filepath.IsAbs(account.HomeDir) || filepath.Clean(account.HomeDir) != account.HomeDir {
@@ -96,7 +96,7 @@ func CurrentDesktopSession() (DesktopSession, error) {
 		}
 		env = append(env, "WAYLAND_DISPLAY="+wayland, "XDG_SESSION_TYPE=wayland")
 	} else if display == "" {
-		return session, errors.New("browser setup requires your graphical desktop")
+		return session, errors.New("browser setup requires a graphical desktop")
 	} else {
 		env = append(env, "XDG_SESSION_TYPE=x11")
 	}

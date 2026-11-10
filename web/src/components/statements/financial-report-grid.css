@@ -78,7 +78,7 @@
   .statements-workspace .statement-main-inspecting .statement-inspector-content { max-height: 65dvh; }
 }
 @media (max-width: 600px) {
-  .financial-grid { --financial-grid-account-base: 176px; }
+  .financial-grid { --financial-grid-account-base: 176px; --financial-grid-indent: 8px; }
   .financial-grid tbody th { position: static; }
   .financial-grid thead tr:first-child > th:first-child { inset-inline-start: auto; }
   .financial-grid-year-label { inset-inline-start: 16px; }

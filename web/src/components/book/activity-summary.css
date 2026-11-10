@@ -121,3 +121,20 @@
 
 /* Income and expenses each keep their own line, so the headline has one height. */
 .activity-summary .activity-summary-figures .vult-headline-aside { flex-direction: column; align-items: flex-start; gap: 4px !important; }
+
+/* Phones: the strip above the table takes two short lines. The net and its in
+   and out share the first; what it covers takes the second. */
+@media (max-width: 640px) {
+  .activity-summary-strip { padding-block-end: 8px; }
+  .activity-summary-strip .vult-headline[data-stacked] {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "figure aside" "caption caption";
+    align-items: baseline;
+    gap: 2px 12px;
+  }
+  .activity-summary-strip .vult-headline > p:first-child { display: contents; }
+  .activity-summary-strip .vult-headline-figure { grid-area: figure; font-size: var(--text-vult-log-metric); }
+  .activity-summary-strip .vult-headline-caption { grid-area: caption; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-vult-metadata); }
+  .activity-summary-strip .vult-headline-aside { grid-area: aside; justify-content: flex-end; flex-wrap: nowrap; gap: 10px !important; font-size: var(--text-vult-metadata); }
+}

@@ -208,7 +208,7 @@ func TestClosedPeriodAndReversalDate(t *testing.T) {
 	db, book, s, a, b := setup(t)
 	var entry ledger.Entry
 	json.Unmarshal(db.Call(t, s, "post_journal", post(a.ID, b.ID, "original")), &entry)
-	if e := db.Owner.ClosePeriod(db.Context, book.ID, "2026-01-01", "2026-01-31"); e != nil {
+	if e := db.ClosePeriod(db.Context, book.ID, "2026-01-01", "2026-01-31"); e != nil {
 		t.Fatal(e)
 	}
 	if _, e := db.Store.Call(db.Context, s, "post_journal", value(post(a.ID, b.ID, "closed"))); e == nil {
@@ -223,7 +223,7 @@ func TestBackupRestoreKeepsExactRowsAndDropsGrants(t *testing.T) {
 	db, book, s, a, b := setup(t)
 	db.Call(t, s, "post_journal", post(a.ID, b.ID, "saved"))
 	db.Call(t, s, "revise_account", ledger.ReviseAccount{RequestKey: "rename", AccountID: a.ID, ExpectedRevision: 1, Code: "1010", Name: "Revised example"})
-	if e := db.Owner.ClosePeriod(db.Context, book.ID, "2026-01-01", "2026-01-31"); e != nil {
+	if e := db.ClosePeriod(db.Context, book.ID, "2026-01-01", "2026-01-31"); e != nil {
 		t.Fatal(e)
 	}
 	snapshot, e := db.Owner.Snapshot(db.Context)
@@ -280,7 +280,7 @@ func TestBackupRestoreKeepsMultipleBooks(t *testing.T) {
 	}{{firstScope, firstDebit, firstCredit}, {secondScope, secondDebit, secondCredit}} {
 		db.Call(t, entry.scope, "post_journal", post(entry.debit.ID, entry.credit.ID, "saved"))
 	}
-	if e := db.Owner.ClosePeriod(db.Context, firstBook.ID, "2026-01-01", "2026-01-31"); e != nil {
+	if e := db.ClosePeriod(db.Context, firstBook.ID, "2026-01-01", "2026-01-31"); e != nil {
 		t.Fatal(e)
 	}
 	snapshot, e := db.Owner.Snapshot(db.Context)
@@ -365,8 +365,17 @@ func TestRealPeriodLockWaitRechecksCommittedClose(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer closing.Rollback(context.Background())
-	closing.Exec(db.Context, "SELECT set_config('vult.tenant_id',$1,true),set_config('vult.book_id',$2,true)", s.TenantID, s.BookID)
-	if _, e = closing.Exec(db.Context, "INSERT INTO public.closed_periods(tenant_id,book_id,id,start_date,end_date) VALUES($1,$2,$3,'2026-01-01','2026-01-31')", s.TenantID, book.ID, ledger.ID()); e != nil {
+	closing.Exec(db.Context, "SELECT set_config('vult.tenant_id',$1,true),set_config('vult.book_id',$2,true),set_config('vult.actor_id',$3,true)", s.TenantID, s.BookID, s.ActorID)
+	period := ledger.ID()
+	r, e := receipt(db, closing, s, "close_period", "concurrent-close")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = closing.Exec(db.Context, "INSERT INTO public.accounting_periods(tenant_id,book_id,id,start_date,end_date) VALUES($1,$2,$3,'2026-01-01','2026-01-31')", s.TenantID, book.ID, period); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = closing.Exec(db.Context, `INSERT INTO public.accounting_period_events(tenant_id,book_id,period_id,revision,event,origin,actor_id,receipt_id)
+ VALUES($1,$2,$3,1,'closed','decision',$4,$5)`, s.TenantID, book.ID, period, s.ActorID, r); e != nil {
 		t.Fatal(e)
 	}
 	result := make(chan error, 1)

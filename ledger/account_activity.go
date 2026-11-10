@@ -104,6 +104,34 @@ func buildAccountActivity(in accountHistory) (AccountActivityRead, error) {
 		sort.Strings(ids)
 		sets[strings.Join(ids, "\x00")] = ids
 	}
+	// A recorded parent's group is the parent and every account beneath it.
+	children := map[string][]string{}
+	for _, account := range in.Accounts {
+		if account.ParentID != "" {
+			children[account.ParentID] = append(children[account.ParentID], account.ID)
+		}
+	}
+	for _, account := range in.Accounts {
+		if len(children[account.ID]) == 0 {
+			continue
+		}
+		ids, seen := []string{}, map[string]bool{}
+		for stack := []string{account.ID}; len(stack) > 0; {
+			id := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			ids = append(ids, id)
+			stack = append(stack, children[id]...)
+		}
+		sort.Strings(ids)
+		sets[strings.Join(ids, "\x00")] = ids
+	}
+	if len(children) > 0 {
+		out.HierarchyBasis = "recorded_account_parents"
+	}
 	if len(all) > 0 {
 		sort.Strings(all)
 		sets[strings.Join(all, "\x00")] = all

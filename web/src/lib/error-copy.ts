@@ -2,17 +2,17 @@
 export const errorCopy = {
   recordsUnverified: "We couldn’t verify these records.",
   reviewUnavailable: "We couldn’t check this. Review before trying again.",
-  connection: "We couldn’t connect. Check your connection.",
+  connection: "We couldn’t connect. Check the internet connection.",
   unavailable: "We couldn’t finish that. Try again in a moment.",
   featureUnavailable: "This view isn’t available yet.",
   access: "You don’t have permission to do that.",
   signIn: "Sign in to continue.",
-  sessionEnded: "Your session ended. Confirm it’s you to continue.",
+  sessionEnded: "Session ended. Confirm it’s you to continue.",
   missing: "We can’t open this right now.",
   actionUnavailable: "We can’t make that change right now.",
-  validation: "Check your details and try again.",
+  validation: "Check the details and try again.",
   conflict: "Check the saved version before trying again.",
-  uncertain: "Your change may already be saved. Check before trying again.",
+  uncertain: "The change may already be saved. Check before trying again.",
   busy: "Give us a moment, then try again.",
   fileTooLarge: "This file is too large. Choose a smaller one.",
   fileType: "This file type isn’t supported.",
@@ -44,15 +44,15 @@ export const errorCopy = {
  * action button. They state only what the failure proves; they never guess.
  */
 export const failureStateCopy = {
-  connection: "Check your internet connection.",
+  connection: "Check the internet connection.",
   unavailable: "This is usually temporary.",
   busy: "Vult is busy right now. This is usually temporary.",
   unsupported: "This view isn’t available yet.",
   missing: "Check the address, or open it again from Vult.",
-  access: "Your account doesn’t have access to this.",
+  access: "This account doesn’t have access here.",
   signIn: "You’re signed out.",
-  signedOut: "Sign in to open your Books.",
-  sessionEnded: "For your security, Vult asks you to confirm it’s you.",
+  signedOut: "Sign in to open Books.",
+  sessionEnded: "For security, Vult asks you to confirm it’s you.",
   recordsUnverified:
     "We couldn’t verify these records. Review them before relying on these figures.",
 } as const;

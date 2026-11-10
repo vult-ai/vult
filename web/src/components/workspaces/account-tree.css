@@ -706,6 +706,11 @@
   flex-wrap: wrap;
   gap: 4px 8px;
 }
+.account-status-badge {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-vult-metadata);
+  white-space: nowrap;
+}
 .account-detail-header-minimal .account-detail-title {
   flex: 1 1 auto;
   flex-wrap: nowrap;
@@ -753,4 +758,11 @@
 .account-tree-search-filter {
   display: flex;
   min-width: 0;
+}
+
+/* Phones: the panel keeps a narrow inset, as every collection does there. */
+@media (width < 640px) {
+  .accounts-inspector-layout .collection-inspector-collection {
+    padding: 8px 4px;
+  }
 }

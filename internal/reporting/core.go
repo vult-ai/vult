@@ -727,12 +727,42 @@ func buildPerformance(in Input, r *Result, values func(Period) map[string]*big.I
 		prior = values(*r.Scope.Comparison)
 	}
 	income := section(in, "income", "Income", []string{"income"}, current, prior, r.Scope.Period, r.Scope.Comparison, true)
-	expenses := section(in, "expenses", "Expenses", []string{"expense"}, current, prior, r.Scope.Period, r.Scope.Comparison, true)
-	r.Rows = append(r.Rows, income, expenses)
+	// Cost of sales comes from the accounts' recorded role, never from codes
+	// or names. Without such accounts the statement keeps its two sections.
+	costIn, otherIn := in, in
+	costIn.Accounts, otherIn.Accounts = nil, nil
+	for _, a := range in.Accounts {
+		if a.Kind == "cost_of_sales" {
+			costIn.Accounts = append(costIn.Accounts, a)
+		} else {
+			otherIn.Accounts = append(otherIn.Accounts, a)
+		}
+	}
+	expenses := section(otherIn, "expenses", "Expenses", []string{"expense"}, current, prior, r.Scope.Period, r.Scope.Comparison, true)
 	profit := new(big.Int).Sub(integer(income.Values["current"]), integer(expenses.Values["current"]))
 	previous := zero()
 	if prior != nil {
 		previous.Sub(integer(income.Values["prior"]), integer(expenses.Values["prior"]))
+	}
+	if len(costIn.Accounts) == 0 {
+		r.Rows = append(r.Rows, income, expenses)
+	} else {
+		costs := section(costIn, "cost_of_sales", "Cost of sales", []string{"expense"}, current, prior, r.Scope.Period, r.Scope.Comparison, true)
+		grossNow := new(big.Int).Sub(integer(income.Values["current"]), integer(costs.Values["current"]))
+		grossBefore := zero()
+		if prior != nil {
+			grossBefore.Sub(integer(income.Values["prior"]), integer(costs.Values["prior"]))
+		}
+		gross := simpleRow("total:gross_profit", "Gross profit", "total", valueColumns(grossNow, grossBefore, prior != nil), &Drilldown{AccountIDs: sortedIDs(append(filterIDs(in, "income"), filterIDs(costIn, "expense")...)), From: r.Scope.Period.From, To: r.Scope.Period.To, ExcludeClosing: true, ExcludeOpening: true})
+		r.Rows = append(r.Rows, income, costs, gross, expenses)
+		profit.Sub(grossNow, integer(expenses.Values["current"]))
+		if prior != nil {
+			previous.Sub(grossBefore, integer(expenses.Values["prior"]))
+		}
+		defer func() {
+			r.Reconciliation["cost_of_sales"], r.Reconciliation["gross_profit"] = costs.Values["current"], grossNow.String()
+			r.Reconciliation["expenses"] = new(big.Int).Add(integer(costs.Values["current"]), integer(expenses.Values["current"])).String()
+		}()
 	}
 	r.Rows = append(r.Rows, simpleRow("total:result", "Recorded result", "total", valueColumns(profit, previous, prior != nil), &Drilldown{AccountIDs: filterIDs(in, "income", "expense"), From: r.Scope.Period.From, To: r.Scope.Period.To, ExcludeClosing: true, ExcludeOpening: true}))
 	r.Reconciliation = map[string]string{"income": income.Values["current"], "expenses": expenses.Values["current"], "result": profit.String()}
@@ -934,4 +964,9 @@ func SafeCSVText(s string) string {
 		return "'" + s
 	}
 	return s
+}
+
+func sortedIDs(ids []string) []string {
+	sort.Strings(ids)
+	return ids
 }

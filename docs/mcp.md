@@ -23,12 +23,11 @@ Use its returned connection UUID in the client configuration:
 }
 ```
 
-The example is the generic JSON shape used by many MCP clients. For Claude Code,
-Claude Desktop and Codex, put the same executable and argument array into that
-product's MCP configuration format. Do not add credentials, recovery keys,
+The example is the generic JSON shape most MCP clients use. A client with its
+own configuration format takes the same executable and argument array. Do not add credentials, recovery keys,
 database URLs or environment overrides. A connection name is just a label.
 
-For Codex, the equivalent `config.toml` entry is:
+For example, the equivalent Codex `config.toml` entry is:
 
 ```toml
 [mcp_servers.vult]
@@ -38,7 +37,7 @@ startup_timeout_sec = 90
 ```
 
 Allow time for the native approval prompt when configuring a client startup
-timeout. For Claude Code, `MCP_TIMEOUT=90000 claude` allows 90 seconds.
+timeout; Claude Code, for example, reads `MCP_TIMEOUT=90000` as 90 seconds.
 
 Starting a bridge requests native administrator approval. Approving a session
 permits that bridge to use the connection for up to eight hours. The credential
@@ -114,20 +113,43 @@ authority. A URL alone does not mean a client has transferred a file.
 | Tool | Access | Purpose |
 | --- | --- | --- |
 | `get_book` | read | Currency, precision and selected Book identity |
-| `list_accounts` | read | Permanent IDs and current display revisions |
+| `list_accounts` | read | Permanent IDs, current display revisions, parents and retired status |
+| `list_starter_charts` | read | The versioned starter charts and the accounts each one creates |
 | `get_journal` | read | One entry and every line |
 | `list_journals` | read | Sequence-ordered pages: up to 100 locally, 20 remotely |
 | `get_balance` | read | Signed debit-positive minor-unit balance |
+| `list_payees` | read | The Book's payees, their current names, status and linked entries |
+| `get_entry_payee` | read | An entry's payee decision and its history |
+| `list_recurring_charges` | read | Recurring charges derived from payees and entries |
+| `create_payee` | write | Create a person or organization the Book deals with |
+| `revise_payee` | write | Rename, re-kind or retire a payee with a reason |
+| `set_entry_payee` | write | Record an entry's payee, or that it is unknown |
 | `get_trial_balance` | read | All balances, optionally through an accounting date |
-| `list_closed_periods` | read | Date ranges the owner closed; nothing can be posted inside them |
+| `get_cash_flow` | read | The direct-method cash-flow statement for a period |
+| `list_statements` | read | Imported bank and card statements with their latest review |
+| `get_statement_reconciliation` | read | One statement compared with the Book: matched, not in the Book, outstanding and the remaining difference |
+| `suggest_statement_matches` | read | Suggested matches and duplicates; nothing is recorded |
+| `import_statement` | write | Record a statement and its rows, cited to its document |
+| `match_statement` | write | Record that statement rows and posted lines are the same money |
+| `revoke_statement_match` | write | Undo a match with a reason |
+| `record_statement_adjustment` | write | Link a statement row to the entry posted because of it |
+| `mark_statement_duplicate` | write | Record that a row repeats another |
+| `review_statement` | write | Sign off a statement as reconciled or needing work |
+| `list_closed_periods` | read | Accounting periods with every close and reopening; nothing can be posted inside a closed one |
+| `get_period_review` | read | What's still open in a date range before closing it |
+| `close_period` | write | Close a period with nothing open; with open items only the owner closes |
+| `reopen_period` | prepared | Reopen a closed period with a reason; only the owner reopens, so an agent prepares it with `prepare_operation` |
 | `get_exchange_rate` | read | A historical reference rate for one currency pair and date, ready to use as a line valuation |
 | `get_request_outcome` | read | This connection actor's retained request result |
 | `create_account` | write | Create an account and its first display revision |
-| `revise_account` | write | Change labels or accounting role using an expected revision |
+| `revise_account` | write | Change labels, accounting role or display parent using an expected revision |
+| `retire_account` | write | Retire an account, recording the transfer of any remaining balance with it |
+| `reactivate_account` | write | Return a retired account to use with a new revision |
+| `apply_starter_chart` | write | Create a starter chart's accounts in a Book with no accounts |
 | `set_book_logo` | write | Set or remove the image shown beside the Book in the switcher |
 | `post_journal` | write | Post general debits and credits atomically |
 | `reverse_journal` | write | Post a complete linked reversal |
-| `prepare_operation` | write | Retain a validated journal or reversal preview without posting |
+| `prepare_operation` | write | Retain a validated journal, reversal or account change preview without recording it |
 | `get_operation_proposal` | read | Inspect exact work, its decision and any committed outcome |
 | `execute_proposal` | write | Complete a proposal approved under the earlier executor contract |
 | `add_document` | write | Prepare an original; local companion also streams its bytes |
@@ -147,6 +169,37 @@ Account IDs are permanent; account codes are optional display attributes. Omit
 `code` explicitly: retain the current value, assign a supported code, or use
 `""` to clear it. Empty codes are not unique; nonempty codes remain unique within
 the Book. A code change never changes existing postings or receipts.
+
+A display parent groups accounts of the same class, at most four levels deep;
+reports roll children into their parents. A revision that omits
+`parent_account_id` keeps the parent, and `""` clears it. Parents never move a
+balance and are never inferred from names or codes.
+
+A retired account takes no new lines. It must hold nothing in any unit when it
+retires: `retire_account` either finds it empty, or records an ordinary
+transfer of the exact remaining balance to `destination_account_id` on
+`transfer_date` together with the retirement. The transfer has its own
+`post_journal` receipt under the retirement's request key followed by
+`/transfer`. Without a destination, a holding account is refused as an invalid
+request whose message states the remaining balance and asks where it went.
+
+An account marked `heading` groups others and takes no new postings; a
+reversal can still correct a line posted before it became a heading. An
+expense account with the `cost_of_sales` role, or beneath one, is reported as
+cost of sales, with gross profit in the profit and loss statement.
+
+A payee is a permanent identity; its name and status are revisions, and two
+payees with the same name stay separate. Who an entry was with is a separate,
+revisioned decision (`set_entry_payee`): a payee, or explicitly unknown. An
+entry with no decision reads as `not_recorded`. Linking never changes the
+entry, its receipt or its source text, and a change to an earlier decision
+needs a reason. Recurring charges are derived from the current decisions and
+never stored: the same payee at a regular weekly, monthly, quarterly or
+yearly interval, for amounts within a fifth of their median, still current.
+
+Starter charts (`business-v1`, `personal-v1`) are fixed, versioned lists of
+ordinary accounts with roles, parents and headings. `apply_starter_chart` creates them
+only in a Book that has no accounts, and its receipt names the chart.
 
 On this computer, the service also keeps a short record of what each agent
 does in a Book: the originals it opens, the accounts and entries it writes, the

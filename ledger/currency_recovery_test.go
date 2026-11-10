@@ -168,7 +168,7 @@ func TestCurrencyPopulatedRecoveryKeepsMeasurementsAndRejectsLoss(t *testing.T) 
 	quoteOn(&q, "0.001")
 	db.Call(t, s, "post_journal", q)
 	snapshot, err := db.Owner.Snapshot(db.Context)
-	if err != nil || snapshot.Format != "vult-ledger-backup-v5" {
+	if err != nil || snapshot.Format != "vult-ledger-backup-v6" {
 		t.Fatal("currency snapshot format missing", err)
 	}
 	want, err := db.Owner.Export(db.Context, book.ID)

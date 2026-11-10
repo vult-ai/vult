@@ -1050,7 +1050,7 @@ export function AccountActivityList({
                     accountIdentity(account.name).label
                   }
                   accountSuffix={(account) =>
-                    accountIdentity(account.name).suffix
+                    [accountIdentity(account.name).suffix, account.status === "retired" ? "Retired" : ""].filter(Boolean).join(" · ")
                   }
                   icon={(account) => (
                     <AccountAvatar

@@ -212,8 +212,16 @@ func (d *Database) requireReleasedShape(t *testing.T) {
 // that an upgrade adds to the single-Book fixture. It returns the fixed code.
 func AssertReleasedSnapshotUpgrade(t *testing.T, before, after ledger.Snapshot, book ledger.Book) string {
 	t.Helper()
-	emptyTables := []string{"book_revisions", "operation_proposals", "operation_decisions", "operation_consumptions", "book_identity_revisions", "book_logo_images"}
-	if len(after.Tables) != len(before.Tables)+len(emptyTables)+1 {
+	emptyTables := []string{"book_revisions", "operation_proposals", "operation_decisions", "operation_consumptions", "book_identity_revisions", "book_logo_images",
+		"payees", "payee_revisions", "entry_payees", "statements", "statement_rows", "statement_duplicates", "statement_matches",
+		"statement_match_parts", "statement_match_revocations", "statement_adjustments", "statement_reviews"}
+	// Each original close is kept as a period, so periods are empty only
+	// when the released Book closed none.
+	if bytes.Equal(before.Tables["closed_periods"], []byte("[]")) {
+		emptyTables = append(emptyTables, "accounting_periods", "accounting_period_events")
+	}
+	// Nineteen tables added since the released format, plus Book addresses.
+	if len(after.Tables) != len(before.Tables)+19+1 {
 		t.Fatal("upgrade changed the expected backup table set")
 	}
 	for _, table := range emptyTables {
@@ -222,7 +230,12 @@ func AssertReleasedSnapshotUpgrade(t *testing.T, before, after ledger.Snapshot, 
 		}
 	}
 	for table, rows := range before.Tables {
-		if !bytes.Equal(rows, after.Tables[table]) {
+		retained := after.Tables[table]
+		if table == "accounts" || table == "account_revisions" {
+			// Every existing account becomes active; nothing else changes.
+			rows, retained = withoutActiveStatus(t, rows, false), withoutActiveStatus(t, retained, true)
+		}
+		if !bytes.Equal(rows, retained) {
 			t.Fatal("upgrade rewrote retained data", table)
 		}
 	}
@@ -238,4 +251,22 @@ func AssertReleasedSnapshotUpgrade(t *testing.T, before, after ledger.Snapshot, 
 		t.Fatal("upgrade did not allocate exactly one fixed address for the existing Book")
 	}
 	return addresses[0].Code
+}
+
+// withoutActiveStatus normalizes account rows for comparison, removing the
+// active status and ordinary heading setting every upgraded account carries.
+func withoutActiveStatus(t *testing.T, data []byte, upgraded bool) []byte {
+	t.Helper()
+	var rows []map[string]json.RawMessage
+	if json.Unmarshal(data, &rows) != nil {
+		t.Fatal("invalid account backup rows")
+	}
+	for _, row := range rows {
+		if _, present := row["status"]; upgraded != present || upgraded && (string(row["status"]) != `"active"` || string(row["heading"]) != "false") {
+			t.Fatal("upgrade did not keep an existing account active and ordinary")
+		}
+		delete(row, "status")
+		delete(row, "heading")
+	}
+	return releasedJSON(t, rows)
 }

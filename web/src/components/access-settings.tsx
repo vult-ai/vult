@@ -45,7 +45,7 @@ const statusNames: Record<AgentStatus, string> = { active: "Active", quiet: "Idl
 /** The three access levels, in the words the owner chooses between. */
 const levels: { value: Access; label: string; detail: string }[] = [
   { value: "read", label: "Read", detail: "View only." },
-  { value: "propose", label: "Propose", detail: "Drafts entries for your approval." },
+  { value: "propose", label: "Propose", detail: "Drafts entries for approval." },
   { value: "write", label: "Record", detail: "Posts entries directly." },
 ];
 type Grant = { connection: Connection; bookID: string; access: Access };
@@ -242,7 +242,7 @@ export function AccessSettings({
                 <EmptyState
                   scope="region"
                   title="No agents connected"
-                  detail={mode === "local" ? "Run vult mcp install, then approve it with your passkey." : "Add your Vult address to your agent as an MCP server."}
+                  detail={mode === "local" ? "Run vult mcp install, then approve it with the passkey." : "Add this Vult address to the agent as an MCP server."}
                 />
               )}
             </div>

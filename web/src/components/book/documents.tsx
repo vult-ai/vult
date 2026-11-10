@@ -1,8 +1,8 @@
 import "./documents.css";
 import { SearchFilter } from "../../design-system/search-filter";
 import { CollectionToolbar, CollectionTitle } from "../../design-system/collection-toolbar";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Download01, File06 } from "../../design-system/icons";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ArrowLeft, Download01, File06 } from "../../design-system/icons";
 import { APIError, type Book } from "../../lib/api";
 import {
   documentContentURL,
@@ -16,6 +16,7 @@ import {
   type DocumentUse,
 } from "../../lib/documents";
 import { CollectionTable } from "../../design-system/collection-table";
+import { DocumentViewer } from "./document-viewer";
 import { Button } from "../../design-system/catalog/components/vult-ui/button";
 import { ErrorMessage } from "../form";
 import { NameLink } from "../ui/name-link";
@@ -35,6 +36,13 @@ type Props = {
   /** Opens an entry that uses the document. */
   onOpenEntry?: (id: string) => void;
 };
+
+/** What the reader can show: PDF pages, images, or nothing for other files. */
+function viewerKind(mediaType: string): "pdf" | "image" | "unsupported" {
+  const type = mediaType.split(";")[0].trim().toLowerCase();
+  if (type === "application/pdf") return "pdf";
+  return ["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"].includes(type) ? "image" : "unsupported";
+}
 
 /** The originals kept with this Book. The owner can add files here (drop them
  * anywhere on the page or choose them); agents add and link documents as they
@@ -133,11 +141,26 @@ function DocumentLibrary({ book, refreshKey = 0, query = "", documentSelection, 
     return () => c.abort();
   }, [active, book.id, documentSelection]);
   const waiting = loading || (!page && !error);
+  // Narrow workspaces show one column: the list, or the selected source's
+  // details. Uploads in progress appear under the list.
+  const frame = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(false);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const width = frame.current?.getBoundingClientRect().width || 0;
+      if (width) setCompact(width < 760);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (frame.current) observer.observe(frame.current);
+    return () => observer.disconnect();
+  }, []);
+  const showPanel = !compact || !!selected || upload.items.length > 0;
 
   return (
-    <div className="sources-workspace collection-inspector" data-selected={selected ? "true" : undefined}
+    <div ref={frame} className="sources-workspace collection-inspector" data-selected={selected ? "true" : undefined} data-compact={compact || undefined}
       onKeyDown={(e) => { if (e.key === "Escape" && selected) { e.preventDefault(); selectDocument(null); } }}>
-      <DropArea onFiles={(files) => { selectDocument(null); upload.add(files); }} label={`Drop to add to ${book.name}`} className="sources-library collection-inspector-collection">
+      <DropArea onFiles={(files) => { selectDocument(null); upload.add(files); }} label={`Drop to add to ${book.name}`} className="sources-library collection-inspector-collection" hidden={compact && !!selected}>
         <CollectionTable
           ariaLabel="Sources"
           testId="book-documents"
@@ -156,7 +179,11 @@ function DocumentLibrary({ book, refreshKey = 0, query = "", documentSelection, 
           activeRowId={selected?.id}
           pageResetKey={JSON.stringify([needle, refreshKey, cursorReset])}
           onRowAction={selectDocument}
-          columns={[
+          // A narrow workspace shows one column that holds the whole row: the
+          // name, then type, size, when it was added and whether it is used.
+          columns={compact ? [
+            { id: "summary", label: "Source", kind: "text" as const, width: 320, fill: true, isRowHeader: true },
+          ] : [
             { id: "name", label: "Name", kind: "text" as const, width: 280, minWidth: 180, isRowHeader: true },
             { id: "type", label: "Type", kind: "status" as const },
             { id: "size", label: "Size", kind: "money" as const },
@@ -177,10 +204,22 @@ function DocumentLibrary({ book, refreshKey = 0, query = "", documentSelection, 
             // A failed read says nothing about whether sources exist; the notice above explains.
             : error && !rows.length ? null
             : needle ? <EmptyState scope="region" title={`No sources match “${needle}”`} detail="Try fewer words, or remove the search to see every source." />
-            : <EmptyState scope="region" icon={File06} title={`No sources in ${book.name} yet`} detail="Drop receipts, invoices and statements here, or let your agent add them as it records your Book." />
+            : <EmptyState scope="region" icon={File06} title={`No sources in ${book.name} yet`} detail="Drop receipts, invoices and statements here, or let the agent add them as it records the Book." />
           }
           renderCell={(d, column) =>
-            column.id === "name" ? (
+            column.id === "summary" ? (
+              <span className="book-cell source-row-summary">
+                <span className="document-preview-name">
+                  <File06 className="size-4" aria-hidden />
+                  <NameLink type="button" className="entry-link vult-type-label vult-focus-target vult-focus-contained" title={d.name}
+                    aria-label={`Inspect ${d.name}`} aria-current={selected?.id === d.id ? "true" : undefined}
+                    onClick={(e) => { e.stopPropagation(); selectDocument(d); }} name={d.name} />
+                </span>
+                <span className="source-row-meta vult-type-metadata text-tertiary">
+                  {mediaLabel(d.media_type)} · {formatSize(d.size)} · <RecordDate value={d.created_at.slice(0, 10)} /> · {d.used_at ? "In use" : "Not yet used"}
+                </span>
+              </span>
+            ) : column.id === "name" ? (
               <span className="book-cell document-preview-name">
                 <File06 className="size-4" aria-hidden />
                 <NameLink type="button" className="entry-link vult-type-label vult-focus-target vult-focus-contained" title={d.name}
@@ -194,9 +233,12 @@ function DocumentLibrary({ book, refreshKey = 0, query = "", documentSelection, 
           }
         />
       </DropArea>
-      <aside className="source-sidebar collection-inspector-panel" aria-label={selected ? "Source details" : "Add files"}>
+      <aside className="source-sidebar collection-inspector-panel" aria-label={selected ? "Source details" : "Add files"} hidden={!showPanel}>
         <header className="source-sidebar-header collection-inspector-header">
-          <h2 className="vult-type-label text-primary">{selected ? selected.name : "Add files"}</h2>
+          {compact && selected && (
+            <Button size="sm" color="tertiary" onClick={() => selectDocument(null)} aria-label="Back to sources"><ArrowLeft aria-hidden /></Button>
+          )}
+          <h2 className="vult-type-label text-primary">{selected ? selected.name : compact ? "Adding files" : "Add files"}</h2>
         </header>
         <div className="collection-inspector-body source-sidebar-body">
           {selected ? <DocumentDetail key={selected.id} doc={selected} book={book} onOpenEntry={onOpenEntry} />
@@ -224,6 +266,15 @@ function DocumentDetail({ doc, book, onOpenEntry }: { doc: BookDocument; book: B
   }, [doc.id, book.id]);
   return (
     <div className="source-detail">
+      {/* The original itself first: PDF pages and images open in the passive
+          reader, so the owner sees the document without downloading it. */}
+      <DocumentViewer
+        key={`${book.id}:${doc.id}:${doc.sha256}`}
+        src={documentContentURL(doc.id, book.id)}
+        name={doc.name}
+        kind={viewerKind(doc.media_type)}
+        presentation="preview"
+      />
       <dl className="source-detail-facts vult-type-ui">
         <div><dt className="text-tertiary">Type</dt><dd>{mediaLabel(doc.media_type)}</dd></div>
         <div><dt className="text-tertiary">Size</dt><dd>{formatSize(doc.size)}</dd></div>

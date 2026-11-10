@@ -9,7 +9,7 @@ import { SettingsRow, SettingsSection } from "../ui/settings-section";
 export function BookDataSettings({ book }: { book: Book }) {
   return (
     <SettingsSection
-      title="Download your data" icon={Download01}
+      title="Download data" icon={Download01}
       description="Open formats, anytime."
     >
       <SettingsRow

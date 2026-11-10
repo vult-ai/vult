@@ -83,7 +83,7 @@ test("unavailable history keeps balances, draws no invented charts, and retries 
   try {
    await render(React.createElement(AccountActivityList,{accounts:positions,book,refreshKey:"retry"}));
    await React.act(async()=>new Promise(resolve=>setTimeout(resolve,20)));
-   assert.match(document.body.textContent,/load your activity/);
+   assert.match(document.body.textContent,/load the activity/);
    assert.match(document.body.textContent,/\$50\.00/);
    assert.equal(document.querySelectorAll("svg[data-activity-scale]").length,0);
    const retry=[...document.querySelectorAll("button")].find(button=>button.textContent==="Try again");

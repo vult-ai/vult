@@ -496,6 +496,10 @@ func ServeNative(ctx context.Context) error {
 	}
 	defer admin.Close()
 	if e = verifyOrInitializeSchema(startup, admin, "vult_runtime", conf.State); e != nil {
+		var refusal *ledger.UpgradeRefusal
+		if errors.As(e, &refusal) {
+			return refusal
+		}
 		return errors.New("ledger schema needs recovery or a supported forward upgrade")
 	}
 	runtimePool, e := pool(startup, "vult_runtime", conf.RuntimePassword, "vult")

@@ -36,16 +36,16 @@ func validAgentRequest(s string) bool {
 
 var agentPage = template.Must(template.New("agent").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect {{.Client}} · Vult</title>` + authHead + `<script src="/auth/particles.js" defer></script></head><body>` + authBar + `<main>
 <h1>Connect {{.Client}}</h1>
-<p><strong>An app on this computer</strong> calls itself “{{.Client}}” and asked to use Vult. Allow it only if you just asked your agent to use Vult.</p>
+<p><strong>An app on this computer</strong> calls itself “{{.Client}}” and asked to use Vult. Allow it only if you just asked an agent to use Vult.</p>
 <form method="post" action="/auth/agent">
 <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="request" value="{{.Request}}">
 <label>Book<select name="book">{{range .Books}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
 <fieldset><legend>It may</legend>
 <label><input type="radio" name="access" value="write" checked> Record: post entries directly</label>
-<label><input type="radio" name="access" value="propose"> Propose: draft entries for your approval</label>
+<label><input type="radio" name="access" value="propose"> Propose: draft entries for approval</label>
 <label><input type="radio" name="access" value="read"> Read: view only</label>
 </fieldset>
-<p>It can't manage your Books, your sign-in or other agents. Access lasts 8 hours; your agent asks again after that.</p>
+<p>It can't manage Books, sign-in or other agents. Access lasts 8 hours; the agent asks again after that.</p>
 <button name="decision" value="allow" type="submit">Allow</button>
 <button name="decision" value="deny" type="submit">Don't allow</button>
 </form></main></body></html>`))
@@ -116,7 +116,7 @@ func (h *HTTP) agentRoute(w http.ResponseWriter, r *http.Request) {
 	cookie(w, agentCookie, "", -1)
 	client, err := h.agents.AgentClient(r.Context(), session, request)
 	if err != nil {
-		agentNotice(w, http.StatusNotFound, "This request has ended", "It was already answered, or it expired after 10 minutes. Ask your agent to try again.", "/", "Open Vult")
+		agentNotice(w, http.StatusNotFound, "This request has ended", "It was already answered, or it expired after 10 minutes. Ask the agent to try again.", "/", "Open Vult")
 		return
 	}
 	if r.Method == http.MethodPost {
@@ -135,11 +135,11 @@ func (h *HTTP) agentRoute(w http.ResponseWriter, r *http.Request) {
 			book, access = form.Get("book"), form.Get("access")
 		}
 		if err := h.agents.DecideAgent(r.Context(), session, request, book, access, deny); err != nil {
-			agentNotice(w, http.StatusConflict, "That didn't go through", "Nothing was changed. Ask your agent to try again.", "/", "Open Vult")
+			agentNotice(w, http.StatusConflict, "That didn't go through", "Nothing was changed. Ask the agent to try again.", "/", "Open Vult")
 			return
 		}
 		if deny {
-			agentNotice(w, http.StatusOK, client+" was not connected", "It has no access to your Books. You can close this page.", "", "")
+			agentNotice(w, http.StatusOK, client+" was not connected", "It has no access to the Books. You can close this page.", "", "")
 			return
 		}
 		if h.local {
@@ -147,7 +147,7 @@ func (h *HTTP) agentRoute(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
-		agentNotice(w, http.StatusOK, client+" is connected", "Go back to "+client+". It continues on its own, and anything it records waits for your approval in Vult.", "/", "Open Vult")
+		agentNotice(w, http.StatusOK, client+" is connected", "Go back to "+client+". It continues on its own, and anything it records waits for approval in Vult.", "/", "Open Vult")
 		return
 	}
 	type choice struct{ ID, Name string }
@@ -172,7 +172,7 @@ func (h *HTTP) agentRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(books) == 0 {
-		agentNotice(w, http.StatusOK, "Create your Book first", client+" records into a Book. Create one, then come back to this page.", "/", "Create your Book")
+		agentNotice(w, http.StatusOK, "Create a Book first", client+" records into a Book. Create one, then come back to this page.", "/", "Create a Book")
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

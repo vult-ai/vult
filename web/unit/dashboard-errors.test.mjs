@@ -74,7 +74,7 @@ test("a failed Dashboard period retries one snapshot and retains the confirmed f
       await React.act(async () => notices()[0].querySelector("button").click());
       assert.deepEqual(reads, ["/api/v1/state", "/api/v1/state"]);
       assert.equal(notices().length, 1);
-      assert.match(notices()[0].textContent, /We couldn’t refresh your dashboard\./);
+      assert.match(notices()[0].textContent, /We couldn’t refresh the dashboard\./);
     } finally { globalThis.fetch = original; }
   });
 });
@@ -106,7 +106,7 @@ test("a metadata-only workspace still exposes its dashboard error and retry", as
       workspaceRead: { failure: responseFailure(503, {}), pending: false, retry: async () => { retries++; } },
     }));
     const failure = () => document.querySelector('.vult-state[data-kind="failure"][data-scope="page"]');
-    assert.equal(failure().querySelector(".vult-state-title").textContent, "Couldn’t load your dashboard");
+    assert.equal(failure().querySelector(".vult-state-title").textContent, "Couldn’t load the dashboard");
     await React.act(async () => failure().querySelector("button").click());
     assert.equal(retries, 1);
     assert.ok(failure());

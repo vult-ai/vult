@@ -13,6 +13,7 @@ const V0Books = lazy(() => import("../v0/v0-books").then(m => ({default:m.V0Book
 const Settings = lazy(() => import("./settings").then(m => ({default:m.Settings})));
 const Documents = lazy(() => import("../book/documents").then(m => ({default:m.Documents})));
 const Approvals = lazy(() => import("../approvals/approvals").then(m => ({default:m.Approvals})));
+const Reconcile = lazy(() => import("../reconcile/reconcile").then(m => ({default:m.Reconcile})));
 type Props = {
   workspaceRead?: WorkspaceReadState;
   books?: Book[];
@@ -49,6 +50,7 @@ export default function BookScreens(props: Props) {
   const [accountsReady, setAccountsReady] = useState(props.page === "accounts");
   const [settingsReady, setSettingsReady] = useState(props.page === "settings");
   const [approvalsReady, setApprovalsReady] = useState(props.page === "approvals");
+  const [reconcileReady, setReconcileReady] = useState(props.page === "reconcile");
   const accountState = props.state.read_view === "accounts" ? props.state : undefined;
   const accountSnapshot = useRef<State | undefined>(undefined);
   if (accountSnapshot.current?.book?.id !== props.book.id) accountSnapshot.current = undefined;
@@ -58,6 +60,7 @@ export default function BookScreens(props: Props) {
     if (props.page === "accounts") setAccountsReady(true);
     if (props.page === "settings") setSettingsReady(true);
     if (props.page === "approvals") setApprovalsReady(true);
+    if (props.page === "reconcile") setReconcileReady(true);
   }, [props.page]);
   return (
     <Suspense fallback={<LoadingState scope="page" label="Loading…" />}>
@@ -65,6 +68,11 @@ export default function BookScreens(props: Props) {
         {approvalsReady && (
           <Approvals book={props.book} state={props.state.bootstrap ? financialState : props.state} active={props.page === "approvals"} refreshKey={props.saveRevision}
             initialProposal={new URLSearchParams(window.location.search).get("proposal")} onWaitingChange={props.onWaitingChange} />
+        )}
+      </div>
+      <div className="workspace-pane" hidden={props.page !== "reconcile"} inert={props.page !== "reconcile"}>
+        {reconcileReady && (
+          <Reconcile key={props.book.id} book={props.book} active={props.page === "reconcile"} refreshKey={props.saveRevision} onInspect={props.onInspect} />
         )}
       </div>
       <div
@@ -88,7 +96,7 @@ export default function BookScreens(props: Props) {
             ? <V0Overview page={props.page} state={props.state} book={props.book} onNavigate={props.onNavigate} onShowTransactions={props.onShowTransactions} onInspect={props.onInspect} workspaceRead={props.workspaceRead}/>
             : props.workspaceRead?.failure
               ? <FailureState scope="page" error={props.workspaceRead.failure} intent="read" resource="dashboard" pending={props.workspaceRead.pending} onRetry={props.workspaceRead.retry}/>
-              : <LoadingState scope="page" label="Loading your dashboard…" />
+              : <LoadingState scope="page" label="Loading the dashboard…" />
         )}
       </div>
       <div
@@ -102,7 +110,7 @@ export default function BookScreens(props: Props) {
             : <LoadingState scope="page" label="Loading accounts…" />
         )}
         {accountsReady && accountSnapshot.current && (
-          <div hidden={!accountState && props.page === "accounts"}>
+          <div className="v0-accounts-mount" hidden={!accountState && props.page === "accounts"}>
             <V0Accounts
               finderSelection={props.finderSelection}
               accountSearch={props.accountSearch}

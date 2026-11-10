@@ -114,7 +114,7 @@ func TestLocalAgentApprovalNeedsARecentPasskeySignIn(t *testing.T) {
 	if len(agents.decided) != 1 || agents.decided[0] != request+" "+book.ID+" write allow" {
 		t.Fatal("the approval did not reach the ledger service as chosen", agents.decided)
 	}
-	if w := do(http.MethodGet, "/auth/agent?request="+strings.Repeat("x", 43), nil, raw, false); w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "Ask your agent to try again") {
+	if w := do(http.MethodGet, "/auth/agent?request="+strings.Repeat("x", 43), nil, raw, false); w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "Ask the agent to try again") {
 		t.Fatal("an ended request did not explain what to do", w.Code)
 	}
 

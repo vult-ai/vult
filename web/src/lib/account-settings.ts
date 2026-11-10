@@ -210,7 +210,7 @@ export function createAccountSettingsStore(
       };
       publish(
         "signed-out",
-        "Sign in again to load your personal settings.",
+        "Sign in again to load personal settings.",
         false,
       );
       onSignedOut();

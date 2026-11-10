@@ -178,7 +178,7 @@ export function LegalIdentitySettings({
       <h3>Legal identity</h3>
       <p className="muted">
         Optional facts about the person or organization this Book represents.
-        These choices do not change your entries or establish tax treatment.
+        These choices do not change entries or establish tax treatment.
       </p>
       {content}
     </section>

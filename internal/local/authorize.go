@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/vult-ai/vult/internal/strictjson"
+	"github.com/vult-ai/vult/ledger"
 )
 
 type Authorization struct {
@@ -89,11 +90,23 @@ func OwnerPrompt(action string, payload any) (string, error) {
 			return "", errors.New("invalid browser setup request")
 		}
 		if action == "browser_reset" {
-			return "Reset Vult browser sign-in. Existing passkeys and browser sign-ins will stop working. Your Books are preserved.", nil
+			return "Reset Vult browser sign-in. Existing passkeys and browser sign-ins will stop working. Books are preserved.", nil
 		}
-		return "Finish setting up Vult on this Mac. Your browser opens next, where you create the passkey that protects your Vult.", nil
+		return "Finish setting up Vult on this Mac. The browser opens next, where you create the passkey that protects Vult.", nil
 	}
 	prompt := "Vult requires administrator approval for " + strings.ReplaceAll(action, "_", " ") + "."
+	if action == "period_close" {
+		data, err := json.Marshal(payload)
+		var q PeriodCloseRequest
+		if err != nil || strictjson.Decode(data, &q) != nil || !ledger.ValidID(q.BookID) || !ledger.ValidDate(q.From) || !ledger.ValidDate(q.Through) || q.From > q.Through || len(q.Reason) > 4000 {
+			return "", errors.New("invalid period close request")
+		}
+		prompt += " Book " + q.BookID + ", " + q.From + " through " + q.Through + "."
+		if q.Reason != "" {
+			prompt += " Reason: " + q.Reason
+		}
+		return prompt, nil
+	}
 	if action == "archive_backup" {
 		data, err := json.Marshal(payload)
 		var q ArchiveRequest

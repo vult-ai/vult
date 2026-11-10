@@ -65,7 +65,7 @@ func TestProposalSocketPreservesApprovalStaleAndExpiry(t *testing.T) {
 	q := ledger.ExecuteProposal{ProposalID: p.ID, SHA256: p.SHA256}
 	assertError(q, ledger.ErrApprovalRequired)
 	assertError(ledger.ExecuteProposal{ProposalID: p.ID, SHA256: strings.Repeat("0", 64)}, ledger.ErrProposalStale)
-	if err := db.Owner.ClosePeriod(ctx, scope.BookID, "2026-01-01", "2026-01-31"); err != nil {
+	if err := db.ClosePeriod(ctx, scope.BookID, "2026-01-01", "2026-01-31"); err != nil {
 		t.Fatal(err)
 	}
 	assertError(q, ledger.ErrProposalStale)

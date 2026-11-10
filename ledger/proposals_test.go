@@ -149,7 +149,7 @@ func TestOperationDependenciesRejectClosedPeriodsButNotBalanceChanges(t *testing
 			db, _, s, a, b := setup(t)
 			p := prepareOperation(t, db, s, "prepare", "post_journal", post(a.ID, b.ID, "prepared-post"))
 			approveOperation(t, db, s, p, s)
-			if err := db.Owner.ClosePeriod(db.Context, s.BookID, "2026-01-01", "2026-01-31"); err != nil {
+			if err := db.ClosePeriod(db.Context, s.BookID, "2026-01-01", "2026-01-31"); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := db.Store.Call(db.Context, s, "execute_proposal", value(ledger.ExecuteProposal{ProposalID: p.ID, SHA256: p.SHA256})); !errors.Is(err, ledger.ErrProposalStale) {

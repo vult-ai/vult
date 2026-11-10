@@ -15,28 +15,28 @@ type LocalRecovery interface {
 	TakeBackupKey(ctx context.Context, session string) (string, error)
 }
 
-var recoveryPage = template.Must(template.New("recovery").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="vult-login-csrf" content="{{.CSRF}}"><title>Save your recovery codes · Vult</title>` + authHead + `<script src="/auth/particles.js" defer></script><script src="/auth/recovery.js" defer></script></head><body>` + authBar + `<main class="recovery">
+var recoveryPage = template.Must(template.New("recovery").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="vult-login-csrf" content="{{.CSRF}}"><title>Save recovery codes · Vult</title>` + authHead + `<script src="/auth/particles.js" defer></script><script src="/auth/recovery.js" defer></script></head><body>` + authBar + `<main class="recovery">
 <section id="codes-step" aria-labelledby="codes-title">
-<h1 id="codes-title">Save your recovery codes</h1>
-<p>If you ever lose {{.Lost}}, these codes are the only way back into your Vult.</p>
+<h1 id="codes-title">Save recovery codes</h1>
+<p>If you ever lose {{.Lost}}, these codes are the only way back in.</p>
 <ul class="rules"><li>Each code works once.</li><li>Keep them in a password manager or another safe place.</li><li>Never share them. Vult will never ask for them.</li></ul>
 <div id="codes-notice" class="notice-slot" aria-live="polite"><div></div></div>
 <div class="code-actions"><button class="secondary" id="recovery-copy" type="button" hidden>` + copyIcon("when-ready") + checkMarkIcon("when-copied") + `<span>Copy codes</span></button><a class="button secondary" id="recovery-download" download="vult-recovery-codes.txt" href="{{.Download}}">` + downloadIcon() + `Download</a></div>
 <ol class="codes" id="recovery-codes" aria-label="Recovery codes">{{range .Codes}}<li><code>{{.}}</code></li>{{end}}</ol>
-{{if .BackupKey}}<h2>Backup key</h2><p class="fine start">Unlocks your encrypted backups.</p><p class="key"><code id="backup-key">{{.BackupKey}}</code></p>{{end}}
+{{if .BackupKey}}<h2>Backup key</h2><p class="fine start">Unlocks encrypted backups.</p><p class="key"><code id="backup-key">{{.BackupKey}}</code></p>{{end}}
 <p class="saved-note">You won’t see these codes again after this page.</p>
 <button id="recovery-continue" type="button" disabled aria-describedby="recovery-hint">I’ve saved my codes</button>
-<p class="gate-hint" id="recovery-hint">Copy or download your codes to continue, or <button type="button" id="recovery-written">I wrote them down</button>.</p>
+<p class="gate-hint" id="recovery-hint">Copy or download the codes to continue, or <button type="button" id="recovery-written">I wrote them down</button>.</p>
 </section>
 <section id="protected-step" aria-labelledby="protected-title" hidden>
-<h1 id="protected-title">Your account is protected</h1>
-<p id="protected-lede">{{if and .HasPasskey .HasAuthenticator}}You sign in with your passkey or authenticator app. If you ever lose them, a recovery code gets you back in.{{else if .HasPasskey}}You sign in with your passkey. If you ever lose it, a recovery code gets you back in.{{else}}You sign in with your authenticator app. If you ever lose it, a recovery code gets you back in.{{end}}</p>
+<h1 id="protected-title">This account is protected</h1>
+<p id="protected-lede">{{if and .HasPasskey .HasAuthenticator}}You sign in with a passkey or authenticator app. If you ever lose them, a recovery code gets you back in.{{else if .HasPasskey}}You sign in with a passkey. If you ever lose it, a recovery code gets you back in.{{else}}You sign in with an authenticator app. If you ever lose it, a recovery code gets you back in.{{end}}</p>
 <div id="protected-notice" class="notice-slot" aria-live="polite"><div></div></div>
-<ul class="summary" aria-label="How your account is protected"><li data-state="{{if .HasPasskey}}on{{else}}off{{end}}"><span>Passkey</span><span class="state">{{if .HasPasskey}}Set up{{else}}Not set up{{end}}</span></li><li id="summary-authenticator" data-state="{{if .HasAuthenticator}}on{{else}}off{{end}}"><span>Authenticator app</span><span class="state">{{if .HasAuthenticator}}Set up{{else}}Not set up{{end}}</span></li><li data-state="on"><span>Recovery codes</span><span class="state">Saved</span></li></ul>
-{{if .OfferAuthenticator}}<div class="backup" id="backup-offer"><h2>Add an authenticator app as a backup</h2><p>Get a sign-in code on your phone if this device isn’t with you.</p><button class="link" type="button" id="backup-start">Add an authenticator app →</button></div>{{end}}
+<ul class="summary" aria-label="How this account is protected"><li data-state="{{if .HasPasskey}}on{{else}}off{{end}}"><span>Passkey</span><span class="state">{{if .HasPasskey}}Set up{{else}}Not set up{{end}}</span></li><li id="summary-authenticator" data-state="{{if .HasAuthenticator}}on{{else}}off{{end}}"><span>Authenticator app</span><span class="state">{{if .HasAuthenticator}}Set up{{else}}Not set up{{end}}</span></li><li data-state="on"><span>Recovery codes</span><span class="state">Saved</span></li></ul>
+{{if .OfferAuthenticator}}<div class="backup" id="backup-offer"><h2>Add an authenticator app as a backup</h2><p>Get a sign-in code on a phone if this device isn’t with you.</p><button class="link" type="button" id="backup-start">Add an authenticator app →</button></div>{{end}}
 <button id="protected-continue" type="button">{{if .OfferAuthenticator}}Continue without a backup{{else}}Continue{{end}}</button>
 </section>
-{{if .OfferAuthenticator}}<section id="authenticator-setup" class="enroll" aria-labelledby="authenticator-title" hidden><h1 id="authenticator-title">Set up your authenticator</h1><ol class="steps"><li>Open your authenticator app.</li><li>Scan the QR code or enter the setup key.</li><li>Enter the 6-digit code to finish.</li></ol><div class="enroll-panel"><div class="manual"><code id="authenticator-secret" aria-label="Setup key"></code></div><div id="authenticator-qr" class="qr"></div></div><div id="authenticator-status" class="notice-slot" aria-live="polite"><div></div></div><div class="otp-heading"><label for="authenticator-code">Authenticator code</label></div><div class="otp" id="authenticator-otp"><input id="authenticator-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" spellcheck="false"><div class="slots" id="authenticator-slots" aria-hidden="true"><span class="slot"></span><span class="slot"></span><span class="slot" data-separator></span><span class="slot"></span><span class="slot"></span><span class="slot"></span></div></div><button id="authenticator-verify" type="button" disabled>Verify and continue</button><div class="links"><button class="link end" id="authenticator-cancel" type="button">Cancel</button></div></section>{{end}}
+{{if .OfferAuthenticator}}<section id="authenticator-setup" class="enroll" aria-labelledby="authenticator-title" hidden><h1 id="authenticator-title">Set up an authenticator</h1><ol class="steps"><li>Open an authenticator app.</li><li>Scan the QR code or enter the setup key.</li><li>Enter the 6-digit code to finish.</li></ol><div class="enroll-panel"><div class="manual"><code id="authenticator-secret" aria-label="Setup key"></code></div><div id="authenticator-qr" class="qr"></div></div><div id="authenticator-status" class="notice-slot" aria-live="polite"><div></div></div><div class="otp-heading"><label for="authenticator-code">Authenticator code</label></div><div class="otp" id="authenticator-otp"><input id="authenticator-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" spellcheck="false"><div class="slots" id="authenticator-slots" aria-hidden="true"><span class="slot"></span><span class="slot"></span><span class="slot" data-separator></span><span class="slot"></span><span class="slot"></span><span class="slot"></span></div></div><button id="authenticator-verify" type="button" disabled>Verify and continue</button><div class="links"><button class="link end" id="authenticator-cancel" type="button">Cancel</button></div></section>{{end}}
 </main></body></html>`))
 
 // The codes are kept before setup continues: copying, downloading or writing
@@ -70,7 +70,7 @@ const recoveryScript = `"use strict";
       keep();
       clearTimeout(timer);
       timer = setTimeout(() => { delete copy.dataset.copied; if (label) label.textContent = "Copy codes"; }, 2000);
-    }, () => say($("codes-notice"), { title: "Couldn’t copy", detail: "Download your codes instead." })));
+    }, () => say($("codes-notice"), { title: "Couldn’t copy", detail: "Download the codes instead." })));
   }
   $("recovery-download")?.addEventListener("click", keep);
   $("recovery-written")?.addEventListener("click", keep);
@@ -114,7 +114,7 @@ const recoveryScript = `"use strict";
       show("authenticator-setup");
       code?.focus?.();
     } catch {
-      say($("protected-notice"), { title: "Couldn’t start authenticator setup", detail: "Sign in again, then add it from your account.", tone: "warning" });
+      say($("protected-notice"), { title: "Couldn’t start authenticator setup", detail: "Sign in again, then add it from the account.", tone: "warning" });
     }
     start.disabled = false;
   });
@@ -151,23 +151,23 @@ const recoveryScript = `"use strict";
         otp?.setAttribute("data-invalid", "");
         paint();
         say(status, json.error === "invalid_code"
-          ? { title: "Code not accepted", detail: "Enter the latest code from your authenticator app. If it keeps failing, check that your phone sets its time automatically." }
+          ? { title: "Code not accepted", detail: "Enter the latest code from the authenticator app. If it keeps failing, check that the phone sets its time automatically." }
           : json.error === "too_many_attempts" ? { title: "Too many attempts", detail: "Wait five minutes, then try again.", tone: "warning" }
-          : { title: "Authenticator wasn’t added", detail: "Sign in again, then add it from your account." });
+          : { title: "Authenticator wasn’t added", detail: "Sign in again, then add it from the account." });
       } else {
         // Back to the summary, now with the authenticator ticked.
         const row = $("summary-authenticator");
         if (row) { row.dataset.state = "on"; row.querySelector(".state").textContent = "Set up"; }
         $("backup-offer")?.remove();
         const lede = $("protected-lede");
-        if (lede) lede.textContent = "You sign in with your passkey or authenticator app. If you ever lose them, a recovery code gets you back in.";
+        if (lede) lede.textContent = "You sign in with a passkey or authenticator app. If you ever lose them, a recovery code gets you back in.";
         const next = $("protected-continue");
         if (next) next.textContent = "Continue";
         show("protected-step");
         say($("protected-notice"), { title: "Authenticator added", tone: "success" });
       }
     } catch {
-      say(status, { title: "Authenticator wasn’t added", detail: "Check your connection and try again." });
+      say(status, { title: "Authenticator wasn’t added", detail: "Check the connection and try again." });
     }
     checking = false;
     if (verify) { verify.textContent = "Verify and continue"; verify.disabled = digits().length !== 6; }
@@ -222,11 +222,11 @@ func (h *HTTP) recoveryRoute(w http.ResponseWriter, r *http.Request) {
 	}
 	hasPasskey := h.passkeys != nil && h.passkeys.HasPasskey(r.Context())
 	hasAuthenticator := h.totp != nil && h.totp.Ready(r.Context())
-	lost := "your authenticator"
+	lost := "the authenticator"
 	if hasPasskey && hasAuthenticator {
-		lost = "your sign-in methods"
+		lost = "the sign-in methods"
 	} else if hasPasskey {
-		lost = "your passkey"
+		lost = "the passkey"
 	}
 	// The page also adds a backup authenticator, so it needs the sign-in nonce.
 	nonce := Random()

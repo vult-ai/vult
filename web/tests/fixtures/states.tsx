@@ -491,7 +491,7 @@ const loadingCases: { id: string; title: string; labels: Record<Scope, string> }
     id: "loading",
     title: "Loading data",
     labels: {
-      page: "Opening your Books…",
+      page: "Opening Books…",
       region: "Loading transactions…",
       inline: "Loading entry…",
     },
@@ -502,7 +502,7 @@ const loadingCases: { id: string; title: string; labels: Record<Scope, string> }
     labels: {
       page: "Opening Example Studio…",
       region: "Loading report…",
-      inline: "Checking your connection…",
+      inline: "Checking the connection…",
     },
   },
 ];
@@ -577,7 +577,7 @@ function EmptySection() {
               <EmptyState
                 scope={scope}
                 title="No matching transactions"
-                detail="Adjust your search or filters."
+                detail="Adjust the search or filters."
               />
             )
           }
@@ -708,7 +708,7 @@ function NoticeSection() {
       <SectionHeader
         title="Notices"
         rules={[
-          ["Success", "A change is saved. Past tense, then where it went or what stays: “Saved to your Book.”"],
+          ["Success", "A change is saved. Past tense, then where it went or what stays: “Saved to the Book.”"],
           ["Info", "Something worth knowing that needs no action."],
           ["Caution", "A condition to respect before acting, and how to change it. Read with the page, not announced."],
           ["Placement", "Inline next to what changed. Floating only for changes made in a dialog that has closed."],
@@ -718,10 +718,10 @@ function NoticeSection() {
       />
       <CaseFrame id="notice-tones" title="Tones">
         <div className="gallery-stack">
-          <Notice tone="success">Saved to your Book.</Notice>
+          <Notice tone="success">Saved to the Book.</Notice>
           <Notice tone="success">Access updated.</Notice>
           <Notice tone="info">
-            Latest details loaded. Your changes are kept; review them before
+            Latest details loaded. Changes are kept; review them before
             saving.
           </Notice>
           <Notice tone="caution">
@@ -762,7 +762,7 @@ function NoticeSection() {
             placement="floating"
             onDismiss={() => setFloating(false)}
           >
-            Saved to your Book.
+            Saved to the Book.
           </Notice>
         )}
       </CaseFrame>

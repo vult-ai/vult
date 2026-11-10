@@ -8,6 +8,7 @@ import { financialReportCSV } from "./financial-report-export";
 export const reportDefinitions = [
   { id: "balance_sheet", label: "Balance Sheet", group: "Financial statements", position: true },
   { id: "profit_loss", label: "Profit & Loss", group: "Financial statements", position: false },
+  { id: "cash_flows", label: "Cash flow", group: "Financial statements", position: false },
   { id: "trial_balance", label: "Trial Balance", group: "Accounting reports", position: true },
   { id: "general_ledger", label: "General Ledger", group: "Accounting reports", position: false },
   { id: "journal", label: "Journal", group: "Accounting reports", position: false },
@@ -108,7 +109,10 @@ export type FinancialReport = RecordedState & {
   export_csv?: string;
   /** Separate permission; compact browser reads omit the duplicate CSV text. */
   export_available?: boolean;
+  /** Reopenings, and closes made with open review items, of the periods covered. */
+  period_notes?: PeriodNote[];
 };
+export type PeriodNote = { period_id: string; from: string; through: string; kind: "reopened" | "closed_with_open_items"; reason: string; at: string };
 export type ReportContribution = {
   posting_id: string;
   entry_id: string;

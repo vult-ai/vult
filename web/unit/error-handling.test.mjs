@@ -136,7 +136,7 @@ test("read retry keeps the same notice, draft, receipt and prior content until s
     assert.equal(document.querySelector(".error-notice"), frame);
     assert.equal(frame.dataset.state, "retrying");
     assert.equal(frame.querySelector("button"), button);
-    assert.match(frame.textContent, /couldn’t refresh your dashboard/);
+    assert.match(frame.textContent, /couldn’t refresh the dashboard/);
     assert.equal(frame.querySelectorAll(".error-notice-copy p").length, 1);
     assert.equal(frame.querySelector("details, summary, .error-notice-title"), null);
     assert.doesNotMatch(frame.textContent, /previous view|still in the form|Response:|Reference:/);
@@ -297,7 +297,7 @@ test("debugging codes remain available to code but never appear in the user noti
     );
     assert.equal(
       notice.textContent,
-      "Your change may already be saved. Check before trying again.",
+      "The change may already be saved. Check before trying again.",
     );
   });
 });

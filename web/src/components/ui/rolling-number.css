@@ -11,6 +11,8 @@
   user-select: text;
 }
 .rolling-number-text::selection { color: transparent; }
+/* The fraction's own colour must not show through the invisible copy. */
+.rolling-number-text .rolling-fraction { color: transparent; }
 .rolling-char { white-space: pre; }
 .rolling-digit {
   position: relative;

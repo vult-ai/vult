@@ -157,7 +157,7 @@ test("a confirmed startup renders the book immediately without a duplicate read 
       );
       assert.equal(document.querySelector("h1").textContent, "Activity");
       assert.equal(document.querySelector(".onboarding"), null);
-      assert.ok(!document.body.textContent.includes("Opening your book"));
+      assert.ok(!document.body.textContent.includes("Opening the Book"));
       assert.equal(reads, 0);
     } finally {
       globalThis.fetch = originalFetch;

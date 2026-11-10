@@ -32,3 +32,12 @@ func TestPlainArchiveApprovalDisclosesOriginalsAndBook(t *testing.T) {
 		t.Fatal("plain export approval omitted its effect", err)
 	}
 }
+
+func TestPeriodClosePromptNamesTheRangeAndReason(t *testing.T) {
+	q := map[string]string{"book_id": "11111111-1111-4111-8111-111111111111", "request_key": "example-close",
+		"from": "2026-01-01", "through": "2026-01-31", "reason": "The final receipt is still outstanding"}
+	prompt, err := OwnerPrompt("period_close", q)
+	if err != nil || !strings.Contains(prompt, q["book_id"]) || !strings.Contains(prompt, q["from"]) || !strings.Contains(prompt, q["through"]) || !strings.Contains(prompt, q["reason"]) {
+		t.Fatal("approval omitted the close decision", prompt, err)
+	}
+}

@@ -9,7 +9,7 @@ const { Tabs, TabPanel } = createRequire(import.meta.url)(
 const items = [
   { id: "book", label: "Book" },
   { id: "preferences", label: "Preferences" },
-  { id: "data", label: "Your data" },
+  { id: "data", label: "Data" },
 ];
 
 test("the shared strip follows native selection without replacing its surface or mounted drafts", async () => {
@@ -33,20 +33,17 @@ test("the shared strip follows native selection without replacing its surface or
       ),
     );
     const strip = document.querySelector('[role="tablist"]');
+    const indicator = strip.querySelector('.vult-tab-strip-indicator');
     const tabs = [...document.querySelectorAll('[role="tab"]')];
     const draft = document.querySelector('input[aria-label="Book draft"]');
     draft.value = "Keep this unsaved value";
-    assert.equal(strip.style.getPropertyValue("--vult-tab-count"), "3");
-    assert.equal(strip.style.getPropertyValue("--vult-active-tab"), "0");
+    assert.ok(indicator);
 
     for (const index of [2, 1, 2, 0]) {
       await React.act(async () => tabs[index].click());
       assert.equal(document.querySelector('[role="tablist"]'), strip);
       assert.equal(tabs[index].getAttribute("aria-selected"), "true");
-      assert.equal(
-        strip.style.getPropertyValue("--vult-active-tab"),
-        String(index),
-      );
+      assert.equal(strip.querySelector('.vult-tab-strip-indicator'), indicator);
       assert.equal(draft.isConnected, true);
       assert.equal(draft.value, "Keep this unsaved value");
     }

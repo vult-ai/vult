@@ -57,7 +57,28 @@ export type Proposal = {
     lines: ProposalLine[];
     sources: { document_id: string }[] | null;
     accounts: AccountEffect[] | null;
+    /** Chart changes an account proposal makes; absent for journal entries. */
+    account_changes?: AccountChange[];
+    /** The payee or entry payee decision a payee proposal makes. */
+    payee_change?: { change: "create" | "revise" | "link"; payee_id?: string; revision: number; display_name?: string; kind?: string; status?: string; entry_id?: string; counterpart?: "payee" | "unknown" };
+    statement_change?: { change: "import" | "match" | "revoke" | "adjust" | "duplicate" | "review"; period_start?: string; period_end?: string; rows?: number; row_ids?: string[]; line_ids?: string[]; amount_minor?: string; outcome?: "reconciled" | "needs_work"; reason?: string };
+    period_change?: { change: "close" | "reopen"; period_id?: string; from: string; through: string; reason?: string; open_items?: Record<string, number> };
   };
+};
+/** One account a proposal creates, revises, retires or reactivates. A created
+ * account and its parent are named by code until they are recorded. */
+export type AccountChange = {
+  change: "create" | "revise" | "retire" | "reactivate";
+  account_id?: string;
+  revision: number;
+  class: string;
+  code: string;
+  name: string;
+  role?: string;
+  parent_account_id?: string;
+  parent_code?: string;
+  status?: "retired";
+  heading?: boolean;
 };
 export type Decision = {
   proposal_id: string;

@@ -86,10 +86,21 @@ func TestPortableArchiveRequiresTheRecordedBookMigration(t *testing.T) {
 	if err := source.Admin.QueryRow(source.Context, "SELECT jsonb_object_agg(filename,sha256) FROM public.schema_receipts").Scan(&receipts); err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Format != "vult-documents-backup-v5" || len(receipts) != 6 || receipts[folded] == "" {
+	if snapshot.Format != "vult-documents-backup-v6" || len(receipts) != 7 || receipts[folded] == "" {
 		t.Fatal("the archive did not identify the current Book format")
 	}
-	for _, mode := range []string{"valid", "earlier-release", "changed", "missing", "gap", "prerelease", "split-prerelease", "extra", "wrong-format"} {
+	// The previous release wrote the same archive without the accounting
+	// foundation tables.
+	previous := func(s ledger.Snapshot) ledger.Snapshot {
+		s.Format, s.Tables = "vult-documents-backup-v5", maps.Clone(s.Tables)
+		for _, name := range []string{"payees", "payee_revisions", "entry_payees", "statements", "statement_rows", "statement_duplicates",
+			"statement_matches", "statement_match_parts", "statement_match_revocations", "statement_adjustments", "statement_reviews",
+			"accounting_periods", "accounting_period_events"} {
+			delete(s.Tables, name)
+		}
+		return s
+	}
+	for _, mode := range []string{"valid", "previous-release", "missing-foundations", "earlier-release", "changed", "missing", "gap", "prerelease", "split-prerelease", "extra", "wrong-format"} {
 		t.Run(mode, func(t *testing.T) {
 			hashes, input := maps.Clone(receipts), snapshot
 			switch mode {
@@ -105,12 +116,19 @@ func TestPortableArchiveRequiresTheRecordedBookMigration(t *testing.T) {
 			case "split-prerelease":
 				hashes[folded] = splitRecordedBookSHA256
 				hashes["0005_owner_document_uploads.sql"] = "0bc0d8b59186554c876a70525ca826bdf069d039300c01d18b25d4f58810eb1b"
+			case "previous-release":
+				delete(hashes, "0007_accounting_foundations.sql")
+				input = previous(input)
+			case "missing-foundations":
+				delete(hashes, "0007_accounting_foundations.sql")
 			case "earlier-release":
 				// A backup from before agents could propose restores unchanged.
 				delete(hashes, "0005_proposing_agents.sql")
 				delete(hashes, "0006_owner_recovery_codes.sql")
+				delete(hashes, "0007_accounting_foundations.sql")
+				input = previous(input)
 			case "extra":
-				hashes["0006_unknown.sql"] = hashes[folded]
+				hashes["0008_unknown.sql"] = hashes[folded]
 			case "wrong-format":
 				input.Format = "vult-documents-backup-v1"
 			}
@@ -121,7 +139,7 @@ func TestPortableArchiveRequiresTheRecordedBookMigration(t *testing.T) {
 			target := testutil.New(t)
 			destination, _ := restoreVault(t)
 			err := target.Owner.RestoreArchive(target.Context, destination, bytes.NewReader(data), nil)
-			if mode == "valid" || mode == "earlier-release" {
+			if mode == "valid" || mode == "previous-release" || mode == "earlier-release" {
 				if err != nil {
 					t.Fatal("archive could not be restored", err)
 				}

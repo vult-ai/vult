@@ -266,7 +266,9 @@ func (a TenantAdmin) ChangeAccess(ctx context.Context, id, access string) error 
 	return nil
 }
 
-func (a TenantAdmin) ClosePeriod(ctx context.Context, book, from, through string) error {
+// ClosePeriod records a close as the signed-in owner, keeping its reason and
+// review. Older schemas keep their original close path.
+func (a TenantAdmin) ClosePeriod(ctx context.Context, book, from, through, reason string) error {
 	if !a.valid() {
 		return ErrDenied
 	}
@@ -285,8 +287,25 @@ func (a TenantAdmin) ClosePeriod(ctx context.Context, book, from, through string
 	if e = setScope(ctx, tx, Scope{TenantID: a.tenantID, BookID: book}); e != nil {
 		return dbError(e)
 	}
-	if _, e = tx.Exec(ctx, "INSERT INTO public.closed_periods(tenant_id,book_id,id,start_date,end_date) VALUES($1,$2,$3,$4,$5)", a.tenantID, book, ID(), from, through); e != nil {
+	var actor string
+	var importing bool
+	if e = tx.QueryRow(ctx, "SELECT public.ledger_import_owner()").Scan(&importing); e != nil {
 		return dbError(e)
+	}
+	query := "SELECT access.require_owner($1,true)::text"
+	if importing {
+		query = "SELECT identity_id::text FROM access.owners WHERE tenant_id=$1"
+	}
+	if e = tx.QueryRow(ctx, query, a.tenantID).Scan(&actor); e != nil || !ValidID(actor) {
+		return ErrDenied
+	}
+	owner, e := TenantTransaction(tx, a.tenantID)
+	if e != nil {
+		return e
+	}
+	q := ClosePeriod{RequestKey: ID(), From: from, Through: through, Reason: reason}
+	if _, e = owner.AccountChange(ctx, book, actor, "close_period", raw(q)); e != nil {
+		return e
 	}
 	return dbError(tx.Commit(ctx))
 }

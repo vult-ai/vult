@@ -70,7 +70,7 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
         authSetup.hidden = false;
         code?.focus?.();
       } catch {
-        say(status, { title: "Couldn’t start authenticator setup", detail: "Close this tab and run vult setup again, or ask your agent to." });
+        say(status, { title: "Couldn’t start authenticator setup", detail: "Close this tab and run vult setup again, or ask the agent to." });
         authSwitch.disabled = false;
       }
     });
@@ -116,7 +116,7 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
       if (checking || !code || !authStatus) return;
       const value = digits();
       if (!/^[0-9]{6}$/.test(value)) {
-        say(authStatus, { title: "Enter the 6-digit code", detail: "Use the latest code from your authenticator app." });
+        say(authStatus, { title: "Enter the 6-digit code", detail: "Use the latest code from the authenticator app." });
         return;
       }
       say(authStatus, null);
@@ -132,9 +132,9 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
           code.value = "";
           otp?.setAttribute("data-invalid", "");
           say(authStatus, result.error === "invalid_code"
-            ? { title: "Code not accepted", detail: "Enter the latest code from your authenticator app. If it keeps failing, check that your phone sets its time automatically.", invalidCode: true }
+            ? { title: "Code not accepted", detail: "Enter the latest code from the authenticator app. If it keeps failing, check that the phone sets its time automatically.", invalidCode: true }
             : result.error === "too_many_attempts" ? { title: "Too many attempts", detail: "Wait five minutes, then try again.", tone: "warning" }
-            : { title: "Setup wasn’t confirmed", detail: "Close this tab and run vult setup again, or ask your agent to." });
+            : { title: "Setup wasn’t confirmed", detail: "Close this tab and run vult setup again, or ask the agent to." });
         } else if (result.signed_in === true && window.vultContinuation?.(result.continue)) {
           setup = "";
           try { sessionStorage.removeItem(setupKey); } catch { /* Nothing kept. */ }
@@ -143,10 +143,10 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
           else window.vultOpen(result.continue);
           return;
         } else {
-          say(authStatus, { title: "Setup wasn’t confirmed", detail: "Close this tab and run vult setup again, or ask your agent to." });
+          say(authStatus, { title: "Setup wasn’t confirmed", detail: "Close this tab and run vult setup again, or ask the agent to." });
         }
       } catch {
-        say(authStatus, { title: "Setup wasn’t confirmed", detail: "Check your connection and try again." });
+        say(authStatus, { title: "Setup wasn’t confirmed", detail: "Check the connection and try again." });
       }
       busy(false);
       code.focus?.();
@@ -230,11 +230,11 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
     if (recovering) {
       const input = document.getElementById("passkey-recovery-code");
       if (!window.isSecureContext || !input || !/^[A-Za-z0-9_-]{22}$/.test(input.value)) {
-        say(status, { title: "Enter a recovery code", detail: "Use one of your saved codes at this installation’s secure address." });
+        say(status, { title: "Enter a recovery code", detail: "Use one of the saved codes at this installation’s secure address." });
         return;
       }
       button.disabled = true;
-      say(status, { title: "Checking your recovery code…", tone: "neutral" });
+      say(status, { title: "Checking the recovery code…", tone: "neutral" });
       try {
         const result = await request("/auth/passkeys/recover", { code: input.value });
         if (!/^[A-Za-z0-9_-]{43}$/.test(result.setup_token || "")) throw new Error("Recovery was not confirmed");
@@ -244,7 +244,7 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
         recovering = false;
         registering = true;
         button.textContent = "Create replacement passkey";
-        say(status, { title: "Code accepted", detail: "Your old sign-ins and passkeys are revoked. Create a replacement passkey to sign in.", tone: "success" });
+        say(status, { title: "Code accepted", detail: "Old sign-ins and passkeys are revoked. Create a replacement passkey to sign in.", tone: "success" });
       } catch {
         say(status, { title: "Code not accepted", detail: "If you already used this code, try another saved code." });
       }
@@ -263,7 +263,7 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
     const waiting = dial ? shownOthers() : [];
     for (const node of waiting) node.hidden = true;
     if (dial) dial.dataset.phase = "reading";
-    say(status, { title: "Waiting for your device…", tone: "neutral" });
+    say(status, { title: "Waiting for the device…", tone: "neutral" });
     const path = registering ? "/auth/passkeys/register" : "/auth/passkeys/login";
     try {
       const options = await request(path + "/options", registering ? { setup_token: setup } : {});
@@ -295,8 +295,8 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
       }
       say(status, registering && setupMissing
         ? { title: "Passkey not created", detail: "Try again, or use an authenticator app.", tone: "neutral" }
-        : registering ? { title: "Passkey setup wasn’t confirmed", detail: "Try signing in with your passkey, or request a fresh setup code." }
-        : { title: "Sign-in wasn’t confirmed", detail: document.getElementById("authenticator-signin-switch") ? "Try your passkey again, or use your authenticator app." : "Try your passkey again." });
+        : registering ? { title: "Passkey setup wasn’t confirmed", detail: "Try signing in with the passkey, or request a fresh setup code." }
+        : { title: "Sign-in wasn’t confirmed", detail: document.getElementById("authenticator-signin-switch") ? "Try the passkey again, or use the authenticator app." : "Try the passkey again." });
       button.disabled = false;
     }
   });
@@ -358,11 +358,11 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
     if (busy) return;
     const code = input.value.replace(/\s+/g, "");
     if (!/^[0-9]{6}$/.test(code)) {
-      say(status, { title: "Enter the 6-digit code", detail: "Use the latest code from your authenticator app." });
+      say(status, { title: "Enter the 6-digit code", detail: "Use the latest code from the authenticator app." });
       return;
     }
     busy = true;
-    say(status, { title: "Checking your code…", tone: "neutral" });
+    say(status, { title: "Checking the code…", tone: "neutral" });
     try {
       const response = await fetch("/auth/authenticator/login", {
         method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store",
@@ -374,7 +374,7 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
         input.value = "";
         otp?.setAttribute("data-invalid", "");
         paint();
-        say(status, json.error === "invalid_code" ? { title: "Code not accepted", detail: "Enter the latest code from your authenticator app." }
+        say(status, json.error === "invalid_code" ? { title: "Code not accepted", detail: "Enter the latest code from the authenticator app." }
           : json.error === "too_many_attempts" ? { title: "Too many attempts", detail: "Wait five minutes, then try again.", tone: "warning" }
           : { title: "Sign-in wasn’t confirmed", detail: "Reload this page and try again." });
         busy = false;

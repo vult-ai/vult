@@ -105,11 +105,14 @@
 @media (hover: hover) and (pointer: fine) {
   .statement-tool-action:hover, .statement-tool-date .statement-period:hover { background: var(--vult-control-hover); }
 }
+/* Narrow screens: the side rail gives way to the labeled toolbar above the
+   report (statement-compact-tools.css), and a work panel opens as a sheet. */
 @media (max-width: 900px) {
-  .statements-workspace .statement-workbench { grid-template-columns: minmax(0, 1fr) 48px; }
-  .statement-tools-rail { position: absolute; inset-inline-end: 0; inset-block: 0; width: calc(192px - 144px * var(--vult-sidebar-collapse)); }
-  .statement-work-tools[data-expanded="true"] .statement-tools-rail { border: 1px solid var(--color-border-secondary); border-radius: var(--radius-xl); background: var(--color-bg-primary); box-shadow: var(--shadow-lg); }
-  .statement-work-panel { inset-inline-end: 56px; }
+  .statements-workspace .statement-workbench { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .statement-workbench > .statement-main { grid-row: 2; }
+  .statements-workspace .statement-work-tools { display: contents; }
+  .statements-workspace .statement-tools-rail { display: none; }
+  .statements-workspace .statement-work-panel { position: fixed; inset: auto 8px 8px; z-index: 40; width: auto; max-width: 640px; max-height: 72vh; margin-inline: auto; }
   .statement-panel-icon[aria-pressed] { display: none; }
   .statement-workbench .statement-context { gap: 4px 12px; }
 }

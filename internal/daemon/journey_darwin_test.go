@@ -112,7 +112,7 @@ func TestSocketLostReplyAndEncryptedEmptyTargetRecovery(t *testing.T) {
 	if e != nil || outcome.Status != "recorded" || string(retry) != string(outcome.Result) {
 		t.Fatal("socket retry did not recover the exact result", e)
 	}
-	if e = db.Owner.ClosePeriod(ctx, book.ID, "2026-01-01", "2026-01-31"); e != nil {
+	if e = db.ClosePeriod(ctx, book.ID, "2026-01-01", "2026-01-31"); e != nil {
 		t.Fatal(e)
 	}
 	var backup struct {

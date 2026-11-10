@@ -65,7 +65,7 @@ func runAgentInstall(ctx context.Context, out io.Writer) error {
 	// reporting success while the agent here would reach a different server.
 	if n := len(results); n > 0 && results[n-1].Agent == "Claude Code" && results[n-1].Status != "failed" {
 		if shadowed, other := claudeShadowed(ctx, binary); shadowed {
-			results[n-1] = installedAgent{"Claude Code", "shadowed", "In this folder Claude Code uses another server named vult (" + other + "). Start your agent from a different folder, or remove that entry here with: claude mcp remove vult -s local"}
+			results[n-1] = installedAgent{"Claude Code", "shadowed", "In this folder Claude Code uses another server named vult (" + other + "). Start the agent from a different folder, or remove that entry here with: claude mcp remove vult -s local"}
 		}
 	}
 	register("Codex", "codex", "mcp", "add", "vult", "--", binary, "mcp", "--name", "Codex")

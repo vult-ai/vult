@@ -37,7 +37,7 @@ func (s *Server) agentName(scope ledger.Scope) string {
 	if name := s.agentNames[scope.ConnectionID]; name != "" {
 		return name
 	}
-	return "Your agent"
+	return "The agent"
 }
 
 // note records one event for the Book in scope. Repeats of the same step are
@@ -178,7 +178,7 @@ func (s *Server) agentTool(ctx context.Context, scope ledger.Scope, method strin
 		return marshal(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`
-		}{"reported", "The owner sees your reason in Vult and can upload another file. Record nothing from this one."}), nil, true
+		}{"reported", "The owner sees the reason in Vult and can upload another file. Record nothing from this one."}), nil, true
 	}
 	return nil, nil, false
 }
@@ -282,7 +282,7 @@ func (s *Server) ownerActivity(ctx context.Context, session string, input json.R
 		}
 		name := s.agentNames[live.Scope.ConnectionID]
 		if name == "" {
-			name = "Your agent"
+			name = "The agent"
 		}
 		if !seen[name] {
 			seen[name] = true

@@ -140,6 +140,46 @@ func (d *Database) Book(t testing.TB, name string) (ledger.Book, ledger.Scope) {
 	}
 	return book, ledger.Scope{TenantID: c.TenantID, BookID: c.BookID, ActorID: c.ActorID, ConnectionID: c.ID, Access: c.Access}
 }
+
+// EnsureBookOwner gives an ownerless synthetic Book the common fixture
+// identity. Existing owner assignments are preserved.
+func (d *Database) EnsureBookOwner(ctx context.Context, book string) error {
+	_, err := d.Admin.Exec(ctx, `WITH identity AS (
+ INSERT INTO access.identities(id,issuer,subject) VALUES($2,'https://identity.example.com','example-owner')
+ ON CONFLICT(issuer,subject) DO UPDATE SET subject=excluded.subject RETURNING id)
+ INSERT INTO access.owners(tenant_id,identity_id) SELECT b.tenant_id,i.id FROM public.books b CROSS JOIN identity i
+ WHERE b.id=$1 ON CONFLICT(tenant_id) DO NOTHING`, book, ledger.ID())
+	return err
+}
+
+// ClosePeriod records a synthetic owner close with an explicit reason. A
+// fixture on an earlier release's schema writes that release's close record.
+func (d *Database) ClosePeriod(ctx context.Context, book, from, through string) error {
+	var foundations bool
+	if err := d.Admin.QueryRow(ctx, "SELECT to_regclass('public.accounting_periods') IS NOT NULL").Scan(&foundations); err != nil {
+		return err
+	}
+	if !foundations {
+		tx, err := d.Admin.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(context.Background())
+		if _, err = tx.Exec(ctx, `SELECT set_config('vult.tenant_id',tenant_id::text,true),set_config('vult.book_id',id::text,true)
+ FROM public.books WHERE id=$1`, book); err != nil {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO public.closed_periods(tenant_id,book_id,id,start_date,end_date)
+ SELECT tenant_id,id,$2,$3,$4 FROM public.books WHERE id=$1`, book, ledger.ID(), from, through); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
+	if err := d.EnsureBookOwner(ctx, book); err != nil {
+		return err
+	}
+	return d.Owner.ClosePeriod(ctx, book, from, through, "Example close with review items acknowledged")
+}
 func (d *Database) Call(t testing.TB, s ledger.Scope, method string, payload any) json.RawMessage {
 	t.Helper()
 	b, e := json.Marshal(payload)

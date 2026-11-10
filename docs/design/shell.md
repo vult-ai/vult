@@ -48,8 +48,8 @@ The page bar is 56px tall on every page, at every width. From the start:
 
 1. **The sidebar toggle** (on phones, the navigation button).
 2. **The Book switcher**: the Book's name with a menu to change Books. It is as
-   wide as the name, up to 180px (148px on phones), then the name truncates and
-   shows in full on hover.
+   wide as the name, up to 180px (220px on phones, where it shrinks first on
+   the narrowest screens), then the name truncates and shows in full on hover.
 3. **The page**: its icon and name, after a slanted divider. The name truncates
    before anything else does.
 4. **Page actions**, at the end, when the page has any (for example, the
@@ -68,7 +68,7 @@ Controls in the page bar are the small size (32px). The bar's side padding is
 | -- | -- |
 | Content width | Up to 1440px, centred |
 | Side gutter | 16px |
-| Space below the page bar | Pages that lead with a panel (collection pages and the Dashboard) start it at the bar's edge, 12px below the bar's controls, matching the 12px above them. Pages that lead with a title (Approvals, Settings) leave 24px |
+| Space below the page bar | Pages that lead with a panel or a tab bar (collection pages, the Dashboard and Settings) start it at the bar's edge, 12px below the bar's controls, matching the 12px above them. Pages that lead with a title (Approvals) leave 24px |
 | Scrolling | Collection pages scroll inside their table; other pages scroll the canvas |
 
 The canvas is the main landmark. "Skip to content" is the first thing a
@@ -92,8 +92,10 @@ Below 768px the rail is hidden. The navigation button in the page bar opens a
 drawer that mirrors the rail: the Book's name as its title, the same pages,
 Settings at the bottom. The drawer is up to 320px wide, inset 8px from the
 edges of the screen. Escape, the close button or choosing a page closes it and
-returns focus to the navigation button. Under 380px the page name leaves the
-bar so the Book switcher, search and profile menu still fit.
+returns focus to the navigation button. On phones (under 768px) the page name
+leaves the bar: the page names itself in its content and in the drawer, and the
+Book's name gets the room, beside the page's own actions, search and profile
+menu.
 
 ## Building a page
 

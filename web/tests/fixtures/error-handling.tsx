@@ -53,7 +53,7 @@ function FeedbackFixture() {
         </Button>
       </header>
       <p className="vult-type-metadata">
-        Preview only. Your Books won’t change.
+        Preview only. Books won’t change.
       </p>
       <ErrorSeverityPreview />
       <section
@@ -65,7 +65,7 @@ function FeedbackFixture() {
           gap: 16,
         }}
       >
-        <h1 className="vult-type-section">Your dashboard</h1>
+        <h1 className="vult-type-section">Dashboard</h1>
           <ErrorNotice
           error={error}
           intent="read"

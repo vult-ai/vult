@@ -17,9 +17,10 @@ They require an owner session and an explicit owned `book_id`. Bearer tokens
 cannot use them. Responses have `schema_version: 1` and are never cached.
 
 The supported calculations are trial balance, balance sheet, profit and loss,
-general ledger, journal and a qualified changes-in-equity roll-forward. The
-cash-flow engine requires an established cash scope and treatment policy; when
-these are absent it reports `unsupported`, with no invented zero cash totals.
+general ledger, journal, a qualified changes-in-equity roll-forward and a
+direct-method cash flow. Cash flow classifies each cash line from the account
+roles on the other side of its entry; a Book with no account marked `cash`
+reports it as `unsupported`, with no invented zero cash totals.
 Reports make no claim of audited or accounting-framework compliance.
 
 ## Unknowns and treatment

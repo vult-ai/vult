@@ -191,7 +191,7 @@ func TestBrowserProposalStaleAndFreshnessResponsesNameNextStep(t *testing.T) {
 			code, next, status := "proposal_stale", "prepare_operation", http.StatusConflict
 			if mode == "stale-period" {
 				if err := f.sessions.WithOwner(f.db.Context, f.session, f.tenant, true, func(owner ledger.TenantAdmin) error {
-					return owner.ClosePeriod(f.db.Context, f.book.ID, "2026-01-01", "2026-01-31")
+					return owner.ClosePeriod(f.db.Context, f.book.ID, "2026-01-01", "2026-01-31", "Example close with review items acknowledged")
 				}); err != nil {
 					t.Fatal(err)
 				}

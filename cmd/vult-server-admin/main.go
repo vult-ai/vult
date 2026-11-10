@@ -204,6 +204,10 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	case "expire-documents":
 		result, e = expireDocuments(ctx, db, q)
 	}
+	var refusal *ledger.UpgradeRefusal
+	if errors.As(e, &refusal) {
+		return refusal
+	}
 	if e != nil {
 		return errOperation
 	}
@@ -226,6 +230,10 @@ func main() {
 	defer cancel()
 	if e := run(ctx, os.Args[1:], os.Stdout); e != nil {
 		message := error(errOperation)
+		var refusal *ledger.UpgradeRefusal
+		if errors.As(e, &refusal) {
+			message = refusal
+		}
 		for _, safe := range []error{ledger.ErrArchiveCleanup, ledger.ErrArchive, ledger.ErrUncertain, ledger.ErrLimit, errRestoreResult, errRestoreUncertain} {
 			if errors.Is(e, safe) {
 				message = safe

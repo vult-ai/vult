@@ -3,8 +3,8 @@
   max-width: none;
   margin-inline: 0;
   min-height: calc(100dvh - 104px);
-  /* The page bar names the page; tabs open the page. */
-  padding: 24px 24px 64px;
+  /* The page bar names the page; tabs open the page, at the bar's edge. */
+  padding: 0 24px 64px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -201,8 +201,8 @@
 @media (width < 768px) {
   .workspace-page.book-settings-page.settings-canvas {
     min-height: calc(100dvh - 88px);
-    /* The shell's 16px + this 16px = 32px total on mobile. */
-    padding: 16px;
+    /* The shell supplies the space above the tabs. */
+    padding: 0 16px 16px;
   }
 
   .book-settings-page.settings-canvas .vult-settings-row,
@@ -214,6 +214,52 @@
     .book-settings-identity
     .identity-history {
     padding: 16px;
+  }
+}
+
+@media (width < 640px) {
+  .workspace-page.book-settings-page.settings-canvas {
+    padding-inline: 0;
+  }
+  .book-settings-page.settings-canvas .book-settings-tab-panel,
+  .book-settings-page.settings-canvas .book-settings-access {
+    gap: 16px;
+  }
+  .book-settings-page.settings-canvas .book-settings-tab-panel {
+    padding-top: 12px;
+  }
+  .book-settings-page.settings-canvas .vult-settings-section {
+    padding: 0 3px 3px;
+  }
+  .book-settings-page.settings-canvas .vult-settings-section-header {
+    gap: 8px;
+    padding: 8px 9px;
+  }
+  .book-settings-page.settings-canvas .vult-settings-section-icon {
+    width: 32px;
+    height: 32px;
+  }
+  .book-settings-page.settings-canvas .vult-settings-row,
+  .book-settings-page.settings-canvas .book-settings-identity .identity-fields .field,
+  .book-settings-page.settings-canvas .book-settings-identity .identity-history {
+    gap: 4px;
+    padding: 12px;
+  }
+  /* Plain values share their label's row; editors keep the full width. */
+  .book-settings-page.settings-canvas .vult-settings-row:has(> .vult-settings-row-content > span:only-child) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 12px;
+    align-items: start;
+  }
+  .book-settings-page.settings-canvas .vult-settings-row:has(> .vult-settings-row-content > span:only-child) > .vult-settings-row-content {
+    align-items: flex-end;
+    text-align: end;
+  }
+  .book-settings-page.settings-canvas .vult-settings-disclosure-summary {
+    padding-inline: 12px;
+  }
+  .book-settings-page.settings-canvas .vult-settings-footer {
+    padding-block: 12px;
   }
 }
 

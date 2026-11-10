@@ -628,7 +628,9 @@ test("Statements entry investigation keeps the captured report, expanded account
 test("Accounts contextual entry links remain in the actual Accounts host through startup and close",()=>withDOM(async({window,render})=>{
  const period = { from: "2026-10-01", to: "2026-10-31" };
  const accountsState = {
-  ...state, read_view: "accounts", period, account_balances: [],
+  ...state, read_view: "accounts", period,
+  // A Book with no accounts shows the starter charts instead of the list.
+  account_balances: [{ id: "00000000-0000-4000-8000-000000000001", code: "00000000-0000-4000-8000-000000000001", name: "Example cash", kind: "asset", usage: "general", revision: 1, currency: "", scale: 2, native_status: "not_recorded", native_minor: null, balance_minor: "0", period_change_minor: "0", posting_count: 0, through_sequence: 0 }],
   position: { assets_minor: "0", liabilities_minor: "0", equity_accounts_minor: "0", accumulated_result_minor: "0", net_assets_minor: "0" },
   summary: { income_minor: "0", expenses_minor: "0", net_minor: "0" },
   account_activity: {

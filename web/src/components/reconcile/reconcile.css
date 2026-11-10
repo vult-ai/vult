@@ -1,0 +1,52 @@
+/* Reconcile uses the Dashboard's panels: an outer shell with icon and title,
+   and one inner card for the statement list, a statement's figures, the
+   suggestions and each table. */
+.reconcile { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 12px; width: 100%; min-width: 0; padding-bottom: 24px; }
+.reconcile-back { justify-self: start; }
+.reconcile-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.reconcile-account { display: grid; gap: 2px; min-width: 0; }
+.reconcile-account + .reconcile-account { padding-top: 12px; border-top: 1px solid var(--dash-line); }
+.reconcile-account h3 { margin: 0; color: var(--color-text-secondary); font-weight: 500; }
+.reconcile-list, .reconcile-suggestions { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.reconcile-statement { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 6px 0; border: 0; border-top: 1px solid var(--dash-line); background: none; color: var(--color-text-primary); text-align: start; cursor: pointer; }
+.reconcile-list li:first-child .reconcile-statement { border-top: 0; }
+.reconcile-statement-period { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reconcile-status, .reconcile-row-state { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: var(--radius-full); font-size: var(--text-vult-metadata); line-height: 20px; white-space: nowrap; background: var(--dash-fill); color: var(--color-text-secondary); }
+.reconcile-status[data-status="reconciled"], .reconcile-row-state[data-state="matched"], .reconcile-row-state[data-state="adjusted"] { background: var(--color-bg-success-secondary, var(--dash-fill)); color: var(--color-text-success-primary); }
+.reconcile-status[data-status="needs_work"], .reconcile-row-state[data-state="not_in_book"] { background: var(--color-bg-warning-secondary, var(--dash-fill)); color: var(--color-text-warning-primary); }
+/* A statement's figures sit on the panel's fill, like the Dashboard's figures. */
+.reconcile-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap: 6px; margin: 0; }
+.reconcile-summary > div { display: grid; align-content: start; gap: 2px; min-width: 0; padding: 10px 12px; border-radius: var(--radius-lg); background: var(--dash-fill); }
+.reconcile-summary dt { color: var(--color-text-tertiary); font-size: var(--text-vult-metadata); }
+.reconcile-summary dd { margin: 0; color: var(--color-text-primary); font-size: var(--text-vult-ui); overflow-wrap: anywhere; }
+.reconcile-suggestions li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--dash-line); }
+.reconcile-suggestions li:first-child { padding-top: 0; border-top: 0; }
+.reconcile-suggestions li:last-child { padding-bottom: 0; }
+.reconcile-suggestion-text { min-width: 0; overflow-wrap: anywhere; }
+/* Wide tables scroll inside the panel's card, never the page. */
+.reconcile-table-panel .dash-panel-body { padding: 6px 0; }
+.reconcile-table-panel .dash-panel-body > p { margin: 0; padding: 8px 16px; }
+.reconcile-table-frame { max-width: 100%; overflow-x: auto; border-radius: inherit; }
+.reconcile-table-frame:focus-visible { outline: 2px solid var(--color-border-brand); outline-offset: 2px; }
+.reconcile-table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: var(--text-vult-ui); }
+.reconcile-table th { padding: 8px 12px; color: var(--color-text-tertiary); font-size: var(--text-vult-metadata); font-weight: 400; text-align: start; white-space: nowrap; }
+.reconcile-table td { padding: 8px 12px; border-top: 1px solid var(--dash-line); white-space: nowrap; vertical-align: middle; }
+.reconcile-table :is(th, td):first-child { padding-inline-start: 16px; }
+.reconcile-table :is(th, td):last-child { padding-inline-end: 16px; }
+.reconcile-table .num { text-align: end; font-variant-numeric: tabular-nums; }
+.reconcile-table .reconcile-desc { min-width: 180px; max-width: 360px; white-space: normal; overflow-wrap: anywhere; }
+@media (hover: hover) {
+  .reconcile-statement:hover .reconcile-statement-period { text-decoration: underline; text-decoration-color: var(--color-border-primary); text-underline-offset: 3px; }
+}
+@media (width < 640px) {
+  .reconcile { gap: 8px; }
+  .reconcile-statement { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; padding-block: 8px; }
+  .reconcile-statement .reconcile-status { grid-column: 1 / -1; justify-self: start; }
+  .reconcile-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .reconcile-actions { justify-content: stretch; }
+  .reconcile-actions > * { flex: 1; min-height: 44px; }
+  .reconcile-suggestions li { grid-template-columns: minmax(0, 1fr) auto; }
+  .reconcile-suggestions li > button { grid-column: 1 / -1; justify-self: start; min-height: 44px; }
+  .reconcile-table-panel .dash-panel-body > p { padding-inline: 12px; }
+  .reconcile-table :is(th, td):first-child { padding-inline-start: 12px; }
+}

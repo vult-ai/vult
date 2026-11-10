@@ -12,7 +12,8 @@ export type Workspace =
   | "books"
   | "settings"
   | "documents"
-  | "approvals";
+  | "approvals"
+  | "reconcile";
 export const workspacePath = (page: Workspace) => {
   const route = readBookRoute();
   const tail =
@@ -41,6 +42,7 @@ export function readWorkspace(): Workspace {
     sources: "documents",
     documents: "documents",
     approvals: "approvals",
+    reconcile: "reconcile",
   };
   if (aliases[path]) return aliases[path];
   const legacy = window.location.hash.slice(1);

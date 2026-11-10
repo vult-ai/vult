@@ -92,7 +92,7 @@ test("changing a filter invalidates the previous response during the debounce wi
       const links = [...navigation.querySelectorAll("a")];
       assert.deepEqual(
         links.map((node) => node.textContent),
-        ["Dashboard", "Approvals", "Activity", "Accounts", "Statements", "Sources"],
+        ["Dashboard", "Approvals", "Activity", "Accounts", "Reconcile", "Statements", "Sources"],
       );
       assert.equal(
         links

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -38,6 +39,14 @@ func dbError(e error) error {
 	if errors.Is(e, ErrDenied) {
 		return ErrDenied
 	}
+	var remaining *RemainingBalanceError
+	if errors.As(e, &remaining) {
+		return remaining
+	}
+	var refused *RefusedError
+	if errors.As(e, &refused) {
+		return refused
+	}
 	if errors.Is(e, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -62,6 +71,12 @@ func Writing(method string) bool {
 	switch method {
 	case "create_account", "revise_account", "post_journal", "reverse_journal", "add_document", "complete_document_upload", "correct_source_citation", "attach_evidence", "detach_evidence":
 		return true
+	case "retire_account", "reactivate_account", "apply_starter_chart", "create_payee", "revise_payee", "set_entry_payee":
+		return true
+	case "import_statement", "mark_statement_duplicate", "match_statement", "revoke_statement_match", "record_statement_adjustment", "review_statement":
+		return true
+	case "close_period", "reopen_period":
+		return true
 	case "prepare_operation", "execute_proposal", setBookLogoOperation:
 		return true
 	}
@@ -76,6 +91,17 @@ func Supported(method string) bool {
 	}
 	switch method {
 	case "get_book", "list_accounts", "create_account", "revise_account", "post_journal", "get_journal", "list_journals", "reverse_journal", "get_balance", "get_trial_balance", "get_request_outcome", "search_book", "list_closed_periods":
+		return true
+	case "retire_account", "reactivate_account", "apply_starter_chart", "list_starter_charts":
+		return true
+	case "create_payee", "revise_payee", "set_entry_payee", "list_payees", "get_entry_payee", "list_recurring_charges":
+		return true
+	case "get_cash_flow":
+		return true
+	case "import_statement", "mark_statement_duplicate", "match_statement", "revoke_statement_match", "record_statement_adjustment", "review_statement",
+		"list_statements", "get_statement_reconciliation", "suggest_statement_matches":
+		return true
+	case "close_period", "reopen_period", "get_period_review":
 		return true
 	}
 	return false
@@ -129,7 +155,9 @@ func (s Store) transact(ctx context.Context, scope Scope, method string, input j
 	if e = setScope(ctx, tx, scope); e != nil {
 		return nil, dbError(e)
 	}
-	if phase := proposingPhase(ctx); scope.Access == "propose" && phase != "" {
+	// A preview always rolls back, whoever prepares it; a proposing agent's
+	// record phase may only record the proposal itself.
+	if phase := proposingPhase(ctx); phase != "" && (scope.Access == "propose" || phase == "preview") {
 		if _, e = tx.Exec(ctx, "SELECT set_config('vult.proposing',$1,true)", phase); e != nil {
 			return nil, dbError(e)
 		}
@@ -295,26 +323,126 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 		return write(ctx, tx, s, method, q.RequestKey, raw(q), admit, func(receipt string) (json.RawMessage, error) {
 			return reviseAccount(ctx, tx, s, q, receipt)
 		})
+	case "retire_account":
+		var q RetireAccount
+		if decode(&q) != nil || !validRetirement(q) {
+			return nil, ErrInvalid
+		}
+		return write(ctx, tx, s, method, q.RequestKey, raw(q), admit, func(receipt string) (json.RawMessage, error) {
+			return retireAccount(ctx, tx, s, q, receipt)
+		})
+	case "reactivate_account":
+		var q ReactivateAccount
+		if decode(&q) != nil || !validKey(q.RequestKey) || !ValidID(q.AccountID) || q.ExpectedRevision < 1 {
+			return nil, ErrInvalid
+		}
+		return write(ctx, tx, s, method, q.RequestKey, raw(q), admit, func(receipt string) (json.RawMessage, error) {
+			return reactivateAccount(ctx, tx, s, q, receipt)
+		})
+	case "apply_starter_chart":
+		var q ApplyStarterChart
+		if decode(&q) != nil || validStarterChartRequest(q) != nil {
+			return nil, ErrInvalid
+		}
+		return write(ctx, tx, s, method, q.RequestKey, raw(q), admit, func(receipt string) (json.RawMessage, error) {
+			return applyStarterChart(ctx, tx, s, q, receipt)
+		})
+	case "create_payee", "revise_payee", "set_entry_payee":
+		return payeeWrite(ctx, tx, s, method, input, admit)
+	case "list_payees":
+		var q struct {
+			Status string `json:"status,omitempty"`
+		}
+		if decode(&q) != nil || q.Status != "" && q.Status != "active" && q.Status != "retired" {
+			return nil, ErrInvalid
+		}
+		payees, e := readPayees(ctx, tx, s, q.Status)
+		return raw(struct {
+			Payees []Payee `json:"payees"`
+		}{payees}), e
+	case "get_entry_payee":
+		var q EntryQuery
+		if decode(&q) != nil || !ValidID(q.EntryID) {
+			return nil, ErrInvalid
+		}
+		v, e := readEntryPayee(ctx, tx, s, q.EntryID)
+		return raw(v), e
+	case "list_recurring_charges":
+		var q RecurringQuery
+		if decode(&q) != nil || q.Through != "" && !ValidDate(q.Through) {
+			return nil, ErrInvalid
+		}
+		if q.Through == "" {
+			header, e := readBook(ctx, tx, s)
+			if e != nil {
+				return nil, dbError(e)
+			}
+			q.Through = BookToday(header, time.Now())
+		}
+		charges, e := readRecurringCharges(ctx, tx, s, q.Through)
+		return raw(struct {
+			Through string            `json:"through"`
+			Charges []RecurringCharge `json:"charges"`
+		}{q.Through, charges}), e
+	case "import_statement", "mark_statement_duplicate", "match_statement", "revoke_statement_match", "record_statement_adjustment", "review_statement":
+		return statementWrite(ctx, tx, s, method, input, admit)
+	case "close_period", "reopen_period":
+		return periodWrite(ctx, tx, s, method, input, admit)
+	case "get_period_review":
+		var q PeriodReviewQuery
+		if decode(&q) != nil || !ValidDate(q.From) || !ValidDate(q.Through) || q.From > q.Through {
+			return nil, ErrInvalid
+		}
+		v, e := readPeriodReview(ctx, tx, s, q.From, q.Through)
+		return raw(v), e
+	case "list_statements":
+		var q StatementListQuery
+		if decode(&q) != nil || q.AccountID != "" && !ValidID(q.AccountID) {
+			return nil, ErrInvalid
+		}
+		list, e := readStatements(ctx, tx, s, q.AccountID)
+		return raw(struct {
+			Statements []Statement `json:"statements"`
+		}{list}), e
+	case "get_statement_reconciliation":
+		var q StatementQuery
+		if decode(&q) != nil || !ValidID(q.StatementID) {
+			return nil, ErrInvalid
+		}
+		v, e := readStatementReconciliation(ctx, tx, s, q.StatementID)
+		return raw(v), e
+	case "suggest_statement_matches":
+		var q StatementQuery
+		if decode(&q) != nil || !ValidID(q.StatementID) {
+			return nil, ErrInvalid
+		}
+		v, e := suggestStatementMatches(ctx, tx, s, q.StatementID)
+		return raw(struct {
+			Suggestions []StatementSuggestion `json:"suggestions"`
+		}{v}), e
+	case "get_cash_flow":
+		var q CashFlowQuery
+		if decode(&q) != nil {
+			return nil, ErrInvalid
+		}
+		v, e := readCashFlow(ctx, tx, s, q)
+		return raw(v), e
+	case "list_starter_charts":
+		if e := decode(&struct{}{}); e != nil {
+			return nil, e
+		}
+		return raw(struct {
+			Charts []StarterChartTemplate `json:"charts"`
+		}{StarterCharts()}), nil
 	case "post_journal":
 		var q PostJournal
 		if decode(&q) != nil || validatePost(q) != nil {
 			return nil, ErrInvalid
 		}
 		return write(ctx, tx, s, method, q.RequestKey, raw(q), admit, func(receipt string) (json.RawMessage, error) {
-			if err := prepareMeasurements(ctx, tx, s, &q); err != nil {
+			v, err := insertJournal(ctx, tx, s, q, receipt)
+			if err != nil {
 				return nil, err
-			}
-			v := Entry{ID: ID(), ReceiptID: receipt, ActorID: s.ActorID, EconomicDate: q.EconomicDate, AccountingDate: q.AccountingDate, Description: q.Description, Lines: []Line{}, MeasurementPolicy: q.MeasurementPolicy}
-			for _, l := range q.Lines {
-				v.Lines = append(v.Lines, Line{ID: ID(), AccountID: l.AccountID, Side: l.Side, AmountMinor: l.AmountMinor, Memo: l.Memo, Native: l.Native, Contexts: l.Contexts, Valuation: l.Valuation})
-			}
-			if e := insertEntry(ctx, tx, s, &v); e != nil {
-				return nil, e
-			}
-			for i, source := range q.Sources {
-				if e := insertSource(ctx, tx, s, v.ID, receipt, i+1, source); e != nil {
-					return nil, e
-				}
 			}
 			return raw(v), nil
 		})
@@ -419,7 +547,15 @@ func write(ctx context.Context, tx pgx.Tx, s Scope, method, key string, request 
 	id := ID()
 	result, e := apply(id)
 	if e != nil {
-		for _, safe := range []error{ErrConflict, ErrInvalid, ErrDenied, ErrNotFound, ErrUploadExpired, documents.ErrIntegrity, documents.ErrUnavailable} {
+		var remaining *RemainingBalanceError
+		if errors.As(e, &remaining) {
+			return nil, remaining
+		}
+		var refused *RefusedError
+		if errors.As(e, &refused) {
+			return nil, refused
+		}
+		for _, safe := range []error{ErrConflict, ErrInvalid, ErrDenied, ErrNotFound, ErrLimit, ErrUploadExpired, documents.ErrIntegrity, documents.ErrUnavailable} {
 			if errors.Is(e, safe) {
 				return nil, safe
 			}
@@ -565,6 +701,28 @@ func readEntryLines(ctx context.Context, tx pgx.Tx, s Scope, entries []Entry) er
 	}
 	return rows.Err()
 }
+
+// insertJournal posts a validated journal under an allocated receipt. Its caller
+// owns admission, retained outcomes and recording the request.
+func insertJournal(ctx context.Context, tx pgx.Tx, s Scope, q PostJournal, receipt string) (Entry, error) {
+	if err := prepareMeasurements(ctx, tx, s, &q); err != nil {
+		return Entry{}, err
+	}
+	v := Entry{ID: ID(), ReceiptID: receipt, ActorID: s.ActorID, EconomicDate: q.EconomicDate, AccountingDate: q.AccountingDate, Description: q.Description, Lines: []Line{}, MeasurementPolicy: q.MeasurementPolicy}
+	for _, l := range q.Lines {
+		v.Lines = append(v.Lines, Line{ID: ID(), AccountID: l.AccountID, Side: l.Side, AmountMinor: l.AmountMinor, Memo: l.Memo, Native: l.Native, Contexts: l.Contexts, Valuation: l.Valuation})
+	}
+	if err := insertEntry(ctx, tx, s, &v); err != nil {
+		return Entry{}, err
+	}
+	for i, source := range q.Sources {
+		if err := insertSource(ctx, tx, s, v.ID, receipt, i+1, source); err != nil {
+			return Entry{}, err
+		}
+	}
+	return v, nil
+}
+
 func insertEntry(ctx context.Context, tx pgx.Tx, s Scope, v *Entry) error {
 	e := tx.QueryRow(ctx, `INSERT INTO public.entries(tenant_id,book_id,id,sequence,receipt_id,actor_id,economic_date,accounting_date,description,reversal_of,measurement_policy)
  VALUES($1,$2,$3,1,$4,$5,$6,$7,$8,nullif($9,'')::uuid,$10) RETURNING sequence,recorded_at`,

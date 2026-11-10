@@ -25,12 +25,13 @@ if (sharedAssetOrigin) {
     );
 }
 
-export default defineConfig(({ command }) => ({
+export default defineConfig(() => ({
   define: {
     __VULT_PDF_ASSET_BASE__: JSON.stringify(pdfAssetBase),
+    // Help lives on the website in every build. Set VULT_DOCS_ORIGIN only to
+    // preview documentation you are writing.
     __VULT_DOCUMENTATION_ORIGIN__: JSON.stringify(
-      process.env.VULT_DOCS_ORIGIN ??
-        (command === "serve" ? "http://127.0.0.1:3100" : "https://vult.ai"),
+      process.env.VULT_DOCS_ORIGIN ?? "https://vult.ai",
     ),
   },
   html: throughGo ? { cspNonce: "__VULT_DEV_NONCE__" } : undefined,

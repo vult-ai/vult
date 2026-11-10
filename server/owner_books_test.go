@@ -78,7 +78,7 @@ func TestBrowserCreatesABookInTheOwnersWorkspace(t *testing.T) {
 	}
 }
 
-func TestBrowserClosesAPeriodPermanentlyForOwnerAndAgents(t *testing.T) {
+func TestOwnerClosesWithOpenItemsAndReopensThroughTheirSession(t *testing.T) {
 	f, s := browserServer(t)
 	ctx := f.db.Context
 	serve := func(r *http.Request) *httptest.ResponseRecorder {
@@ -108,15 +108,29 @@ func TestBrowserClosesAPeriodPermanentlyForOwnerAndAgents(t *testing.T) {
 	if w := serve(browserRequest(http.MethodGet, periods, f.session)); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"periods":[]`) {
 		t.Fatalf("empty periods returned %d %s", w.Code, w.Body.String())
 	}
-	body := `{"request_key":"close-january","book_id":"` + f.book.ID + `","from":"2026-01-01","through":"2026-01-31"}`
-	if w := serve(ownerPost(periodsClosePath, f.session, body)); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"status":"closed"`) {
+	close := func(key, from, through, reason string) string {
+		r := ""
+		if reason != "" {
+			r = `,"reason":"` + reason + `"`
+		}
+		return `{"book_id":"` + f.book.ID + `","arguments":{"request_key":"` + key + `","from":"` + from + `","through":"` + through + `"` + r + `}}`
+	}
+	// January has an entry with no evidence or payee: the owner must say why.
+	if w := serve(browserRequest(http.MethodGet, "/api/v1/periods/review?book_id="+f.book.ID+"&from=2026-01-01&through=2026-01-31", f.session)); w.Code != http.StatusOK ||
+		!strings.Contains(w.Body.String(), `"clean":false`) || !strings.Contains(w.Body.String(), `"entries_without_payee":1`) {
+		t.Fatalf("the review returned %d %s", w.Code, w.Body.String())
+	}
+	if w := serve(ownerPost(periodsClosePath, f.session, close("close-no-reason", "2026-01-01", "2026-01-31", ""))); w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "needs a reason") {
+		t.Fatalf("a close with open items and no reason returned %d %s", w.Code, w.Body.String())
+	}
+	body := close("close-january", "2026-01-01", "2026-01-31", "Receipts follow from the accountant")
+	if w := serve(ownerPost(periodsClosePath, f.session, body)); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"status":"closed"`) || !strings.Contains(w.Body.String(), `"entries_without_payee":1`) {
 		t.Fatalf("close returned %d %s", w.Code, w.Body.String())
 	}
 	if w := serve(ownerPost(periodsClosePath, f.session, body)); w.Code != http.StatusOK {
 		t.Fatalf("retrying the same close returned %d", w.Code)
 	}
-	overlap := `{"request_key":"close-overlap","book_id":"` + f.book.ID + `","from":"2026-01-20","through":"2026-02-10"}`
-	if w := serve(ownerPost(periodsClosePath, f.session, overlap)); w.Code == http.StatusOK {
+	if w := serve(ownerPost(periodsClosePath, f.session, close("close-overlap", "2026-01-20", "2026-02-10", "x"))); w.Code == http.StatusOK {
 		t.Fatal("an overlapping close was accepted")
 	}
 	w := serve(browserRequest(http.MethodGet, periods, f.session))
@@ -127,11 +141,11 @@ func TestBrowserClosesAPeriodPermanentlyForOwnerAndAgents(t *testing.T) {
 		t.Fatalf("closed periods returned %d %s", w.Code, w.Body.String())
 	}
 
-	// The agent sees the lock and cannot post or reverse inside it.
+	// The agent sees the close and cannot post or reverse inside it.
 	var agentView struct {
 		Periods []ledger.ClosedPeriod `json:"periods"`
 	}
-	if json.Unmarshal(f.db.Call(t, scope, "list_closed_periods", struct{}{}), &agentView) != nil || len(agentView.Periods) != 1 {
+	if json.Unmarshal(f.db.Call(t, scope, "list_closed_periods", struct{}{}), &agentView) != nil || len(agentView.Periods) != 1 || agentView.Periods[0].Status != "closed" {
 		t.Fatal("agent could not read the closed period")
 	}
 	inside, _ := json.Marshal(ledger.PostJournal{RequestKey: "late", EconomicDate: "2026-01-20", AccountingDate: "2026-01-20", Description: "Example late entry", Lines: []ledger.PostLine{{AccountID: cash.ID, Side: "debit", AmountMinor: "5"}, {AccountID: income.ID, Side: "credit", AmountMinor: "5"}}})
@@ -141,6 +155,21 @@ func TestBrowserClosesAPeriodPermanentlyForOwnerAndAgents(t *testing.T) {
 	after, _ := json.Marshal(ledger.PostJournal{RequestKey: "february", EconomicDate: "2026-02-02", AccountingDate: "2026-02-02", Description: "Example February income", Lines: []ledger.PostLine{{AccountID: cash.ID, Side: "debit", AmountMinor: "5"}, {AccountID: income.ID, Side: "credit", AmountMinor: "5"}}})
 	if _, err := f.db.Store.Call(ctx, scope, "post_journal", after); err != nil {
 		t.Fatalf("a posting after the closed period failed: %v", err)
+	}
+	// The agent can't reopen it; the owner can, with a reason.
+	agentReopen, _ := json.Marshal(ledger.ReopenPeriod{RequestKey: "agent-reopen", PeriodID: listed.Periods[0].ID, ExpectedRevision: 1, Reason: "Fix a date"})
+	if _, err := f.db.Store.Call(ctx, scope, "reopen_period", agentReopen); err == nil {
+		t.Fatal("an agent reopened a period")
+	}
+	reopen := `{"book_id":"` + f.book.ID + `","arguments":{"request_key":"reopen-january","period_id":"` + listed.Periods[0].ID + `","expected_revision":1,"reason":"A receipt was posted to the wrong account"}}`
+	if w := serve(ownerPost(periodsReopenPath, f.session, reopen)); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"status":"reopened"`) {
+		t.Fatalf("reopen returned %d %s", w.Code, w.Body.String())
+	}
+	if _, err := f.db.Store.Call(ctx, scope, "post_journal", inside); err != nil {
+		t.Fatalf("a reopened period refused an entry: %v", err)
+	}
+	if w := serve(browserRequest(http.MethodGet, periods, f.session)); json.Unmarshal(w.Body.Bytes(), &listed) != nil || len(listed.Periods[0].Events) != 2 || listed.Periods[0].Events[1].Event != "reopened" {
+		t.Fatalf("the reopening isn't in the history: %s", w.Body.String())
 	}
 
 	// Another owner's Book stays out of reach.

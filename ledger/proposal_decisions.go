@@ -278,10 +278,6 @@ func (s Store) executeProposal(ctx context.Context, tx pgx.Tx, scope Scope, q Ex
 	if err != nil {
 		return nil, err
 	}
-	var entry Entry
-	if json.Unmarshal(result, &entry) != nil {
-		return nil, ErrInvalid
-	}
 	book, err := readBook(ctx, tx, scope)
 	if err != nil {
 		return nil, dbError(err)
@@ -290,12 +286,15 @@ func (s Store) executeProposal(ctx context.Context, tx pgx.Tx, scope Scope, q Ex
 	if err != nil {
 		return nil, err
 	}
-	preview := operationPreview(book, entry, sources, p.payload.Dependencies)
+	preview, receipt, err := proposalEffect(ctx, tx, scope, book, p.Operation, p.OperationKey, result, sources, p.payload.Dependencies)
+	if err != nil {
+		return nil, err
+	}
 	if !bytes.Equal(raw(preview), raw(p.Preview)) {
 		return nil, ErrProposalStale
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO public.operation_consumptions(tenant_id,book_id,proposal_id,decision_revision,receipt_id,actor_id)
-        VALUES($1,$2,$3,$4,$5,$6)`, scope.TenantID, scope.BookID, p.ID, d.Revision, entry.ReceiptID, scope.ActorID)
+        VALUES($1,$2,$3,$4,$5,$6)`, scope.TenantID, scope.BookID, p.ID, d.Revision, receipt, scope.ActorID)
 	return result, dbError(err)
 }
 
@@ -473,10 +472,6 @@ func (a TenantAdmin) postApproved(ctx context.Context, tx pgx.Tx, p OperationPro
 	if err != nil {
 		return nil, err
 	}
-	var entry Entry
-	if json.Unmarshal(result, &entry) != nil {
-		return nil, ErrInvalid
-	}
 	book, err := readBook(ctx, tx, author)
 	if err != nil {
 		return nil, dbError(err)
@@ -485,11 +480,15 @@ func (a TenantAdmin) postApproved(ctx context.Context, tx pgx.Tx, p OperationPro
 	if err != nil {
 		return nil, err
 	}
-	if !bytes.Equal(raw(operationPreview(book, entry, sources, p.payload.Dependencies)), raw(p.Preview)) {
+	preview, receipt, err := proposalEffect(ctx, tx, author, book, p.Operation, p.OperationKey, result, sources, p.payload.Dependencies)
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(raw(preview), raw(p.Preview)) {
 		return nil, ErrProposalStale
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO public.operation_consumptions(tenant_id,book_id,proposal_id,decision_revision,receipt_id,actor_id)
-        VALUES($1,$2,$3,$4,$5,$6)`, author.TenantID, author.BookID, p.ID, d.Revision, entry.ReceiptID, d.OwnerID); err != nil {
+        VALUES($1,$2,$3,$4,$5,$6)`, author.TenantID, author.BookID, p.ID, d.Revision, receipt, d.OwnerID); err != nil {
 		return nil, dbError(err)
 	}
 	return &Outcome{Status: "recorded", Operation: p.Operation, Result: result}, nil

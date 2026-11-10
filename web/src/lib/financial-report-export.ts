@@ -1,4 +1,4 @@
-import type { FinancialReport, ReportRow } from "./financial-reports";
+import type { FinancialReport, PeriodNote, ReportRow } from "./financial-reports";
 
 export const maxReportCSVBytes = 32 << 20;
 export function reportExportAvailable(result: FinancialReport) {
@@ -15,6 +15,10 @@ function field(value: string) {
   // terminator. JS \s differs from Go unicode.IsSpace at FEFF and NEL.
   const leadingSpace = /^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/.test(value);
   return value === "\\." || /[",\r\n]/.test(value) || leadingSpace ? `"${value.replaceAll('"', '""')}"` : value;
+}
+/** A reopening or a close with open items travels with the figures. */
+export function periodNoteCells(note: PeriodNote) {
+  return ["Period note", note.from, note.through, note.kind === "reopened" ? "Reopened" : "Closed with open items", safeText(note.reason)];
 }
 export function reportDecimal(value: string, scale: number) {
   if (!/^-?\d+$/.test(value) || !Number.isInteger(scale) || scale < 0 || scale > 9) throw new Error("The report amount could not be confirmed.");
@@ -53,6 +57,7 @@ export function financialReportCSV(result: FinancialReport) {
   meta.forEach(write);
   result.checks.forEach(c => write(["Check", safeText(c.id), c.status, safeText(c.message)]));
   result.limitations.forEach(l => write(["Limitation", safeText(l)]));
+  (result.period_notes ?? []).forEach(n => write(periodNoteCells(n)));
   write([]);
   write(["Row ID", "Parent row ID", "Depth", "Role", "Account ID", "Account code", "Label", "Date", "Entry ID", "Posting ID", ...result.columns.map(c => `${safeText(c.label)} (${b.currency})`), "GL code"]);
   const visit = (items: ReportRow[], parent: string, depth: number) => {

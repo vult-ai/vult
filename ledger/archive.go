@@ -23,7 +23,8 @@ var ErrArchive = errors.New("archive unavailable; discard incomplete output")
 var ErrArchiveCleanup = errors.New("restore failed; staged encrypted objects need operator cleanup")
 var archiveDocumentTables = []string{"documents", "document_uploads", "source_citations", "evidence_links"}
 var priorArchiveTables = append(append([]string{}, proposalSnapshotTables...), archiveDocumentTables...)
-var archiveTables = append(append([]string{}, snapshotTables...), archiveDocumentTables...)
+var bookDetailArchiveTables = append(append([]string{}, bookDetailSnapshotTables...), archiveDocumentTables...)
+var archiveTables = append(append([]string{}, bookDetailArchiveTables...), foundationTables...)
 
 // Order portable rows by indexed keys before encoding, rather than sorting the
 // Book's serialized JSON. The order is deterministic for every table.
@@ -38,6 +39,13 @@ var archiveRowOrder = map[string]string{
 	"book_identity_revisions": "tenant_id,book_id,revision",
 	"documents":               "tenant_id,book_id,id", "document_uploads": "tenant_id,book_id,id",
 	"source_citations": "tenant_id,book_id,id", "evidence_links": "tenant_id,book_id,id",
+	"payees": "tenant_id,book_id,id", "payee_revisions": "tenant_id,book_id,payee_id,revision",
+	"entry_payees": "tenant_id,book_id,entry_id,revision", "statements": "tenant_id,book_id,id",
+	"statement_rows": "tenant_id,book_id,id", "statement_duplicates": "tenant_id,book_id,row_id",
+	"statement_matches": "tenant_id,book_id,id", "statement_match_parts": "tenant_id,book_id,match_id,part",
+	"statement_match_revocations": "tenant_id,book_id,match_id", "statement_adjustments": "tenant_id,book_id,row_id",
+	"statement_reviews": "tenant_id,book_id,statement_id,revision", "accounting_periods": "tenant_id,book_id,id",
+	"accounting_period_events": "tenant_id,book_id,period_id,revision",
 }
 
 type archiveManifest struct {
@@ -168,7 +176,7 @@ func captureArchive(ctx context.Context, tx pgx.Tx, scope Scope, owner bool) (Bo
 	if err := tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&cutoff); err != nil {
 		return BookArchive{}, err
 	}
-	manifest := archiveManifest{Format: "vult-archive-v5", Migrations: map[string]string{}, Snapshot: Snapshot{Format: "vult-documents-backup-v5", SchemaSHA256: SchemaSHA256(), CreatedAt: cutoff.UTC(), Tables: map[string]json.RawMessage{}}, Originals: []documents.Object{}}
+	manifest := archiveManifest{Format: "vult-archive-v6", Migrations: map[string]string{}, Snapshot: Snapshot{Format: "vult-documents-backup-v6", SchemaSHA256: SchemaSHA256(), CreatedAt: cutoff.UTC(), Tables: map[string]json.RawMessage{}}, Originals: []documents.Object{}}
 	for _, name := range migrationNames() {
 		manifest.Migrations[name] = migrationSum(name)
 	}
@@ -318,8 +326,11 @@ func readArchiveManifest(reader *tar.Reader) (archiveManifest, error) {
 			return manifest, ErrInvalid
 		}
 		expected = 3
-	case "vult-archive-v5":
-		if _, ok := manifest.Migrations[recordedBookMigration]; !ok || manifest.Snapshot.Format != "vult-documents-backup-v5" {
+	case "vult-archive-v5", "vult-archive-v6":
+		_, foundations := manifest.Migrations[foundationsMigration]
+		if _, ok := manifest.Migrations[recordedBookMigration]; !ok ||
+			manifest.Snapshot.Format != strings.Replace(manifest.Format, "vult-archive-", "vult-documents-backup-", 1) ||
+			foundations != (manifest.Format == "vult-archive-v6") {
 			return manifest, ErrInvalid
 		}
 		// Accept only a complete known prefix containing the recorded Book
@@ -403,7 +414,7 @@ func (a Admin) RestoreArchive(ctx context.Context, vault *documents.Vault, sourc
 	}
 	versions := map[string]string{}
 	// The v5 manifest requires the v0.4 receipt, which covers owner uploads.
-	current := manifest.Format == "vult-archive-v5"
+	current := manifest.Format == "vult-archive-v5" || manifest.Format == "vult-archive-v6"
 	oldObjects := map[string]documents.Object{}
 	states := map[string]string{}
 	newObjects := map[string]documents.Object{}
@@ -516,7 +527,10 @@ func (a Admin) RestoreArchive(ctx context.Context, vault *documents.Vault, sourc
 		return documents.ErrIntegrity
 	}
 	tables := priorArchiveTables
-	if current {
+	switch manifest.Format {
+	case "vult-archive-v5":
+		tables = bookDetailArchiveTables
+	case "vult-archive-v6":
 		tables = archiveTables
 	}
 	if err = restoreSnapshotRows(ctx, tx, manifest.Snapshot, tables, true); err != nil {

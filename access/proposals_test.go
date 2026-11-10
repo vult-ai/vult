@@ -207,7 +207,7 @@ func TestOperationOwnerDecisionRejectsStaleForeignAndRefusedWork(t *testing.T) {
 			switch mode {
 			case "changed-period":
 				if err := f.service.WithOwner(f.db.Context, session, tenant, true, func(owner ledger.TenantAdmin) error {
-					return owner.ClosePeriod(f.db.Context, scope.BookID, "2026-01-01", "2026-01-31")
+					return owner.ClosePeriod(f.db.Context, scope.BookID, "2026-01-01", "2026-01-31", "Example close with review items acknowledged")
 				}); err != nil {
 					t.Fatal(err)
 				}

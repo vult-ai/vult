@@ -68,3 +68,25 @@
 .source-use-meta {
   display: block;
 }
+
+/* A narrow workspace shows one column: the list, or the selected source. The
+   upload panel only holds files being added, so its drop box stays compact. */
+.sources-workspace[data-compact] .source-sidebar-body .document-upload-panel { min-height: 0; }
+.sources-workspace[data-compact] .source-sidebar-header { gap: 4px; }
+.sources-workspace[data-compact] .source-sidebar-header h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sources-workspace[data-compact]:not([data-selected]) .source-sidebar { max-height: 40vh; }
+
+/* The narrow list's one column: the name, and the facts on the line under it. */
+.sources-workspace[data-compact] tbody > tr[data-record-id] > td { height: auto; padding-block: 10px; white-space: normal; }
+.source-row-summary { display: grid; gap: 2px; width: 100%; min-width: 0; }
+.source-row-summary .document-preview-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.source-row-summary .document-preview-name > svg { flex: none; }
+.source-row-meta { padding-inline-start: 24px; white-space: normal; }
+.sources-workspace[data-compact] tbody > tr[data-record-id] > td > div { width: 100%; height: auto; }
+
+/* Phones: the title, Add files and the column control share one row. */
+@media (max-width: 640px) {
+  .vult-collection-toolbar:has(.sources-toolbar-lead) { flex-wrap: nowrap; gap: 4px; }
+  .vult-collection-toolbar:has(.sources-toolbar-lead) > .vult-collection-toolbar-lead { flex: 1 1 auto; min-width: 0; }
+  .vult-collection-toolbar:has(.sources-toolbar-lead) > .vult-collection-toolbar-actions { flex: none; width: auto; }
+}

@@ -69,6 +69,11 @@ select {
   overflow: hidden;
   padding: var(--vult-shell-header-content-gap, 8px) var(--vult-workspace-gutter) 0;
 }
+/* Settings leads with its tab bar, which starts at the bar's edge like a
+   collection page's panel. */
+.shell-scroll-region:has(.book-settings-page) {
+  padding-top: var(--vult-shell-header-content-gap, 8px);
+}
 .shell-scroll-region[data-collection] > :not(.entry-preview-region) {
   max-width: none;
   margin-inline: 0;
@@ -197,7 +202,14 @@ select {
 @media (width < 768px) {
   .vult-shell-header .vult-shell-workspace-control {
     display: block;
+    /* On the narrowest phones the Book name gives way, so the switcher's
+       chevron never runs into the page's own header actions. */
+    flex-shrink: 1;
+    min-width: 0;
     max-width: var(--vult-shell-switcher-phone-max-width);
+  }
+  .vult-shell-header .vult-shell-workspace-control > .book-switcher {
+    max-width: 100%;
   }
 }
 .shell-skip-link {
@@ -248,14 +260,39 @@ select {
 }
 @media (width < 768px) {
   .shell-scroll-region {
-    padding: 16px;
-  }
-  .shell-current-page {
-    max-width: 96px;
+    padding: 12px;
   }
 }
-/* The narrowest phones keep the Book switcher, search and profile menu. */
-@media (width < 380px) {
+/* Phones: the layers that frame a page on a desktop each keep only a sliver
+   of their padding, so the content gets the width instead of nested margins.
+   The cards keep their shape; only their insets shrink. */
+@media (width < 640px) {
+  :root:root {
+    --vult-workspace-gutter: 6px;
+  }
+  .shell-scroll-region,
+  .shell-scroll-region:has(.statements-workspace) {
+    padding-inline: 6px;
+  }
+  .shell-scroll-region .collection-inspector[data-compact],
+  .shell-scroll-region .statements-workspace .statement-workbench {
+    padding: 0;
+    gap: 6px;
+  }
+  .statement-workbench > .statement-main {
+    padding: 6px;
+  }
+  .shell-scroll-region .collection-inspector-collection {
+    padding-inline: 4px;
+  }
+  .dash-panel {
+    padding: 0 3px 3px;
+  }
+}
+/* Phones keep the Book switcher, the page's own controls, search and the
+   profile menu. The page names itself in its content and in the menu, so its
+   name gives the Book's name the room instead of showing as a stub. */
+@media (width < 768px) {
   .vult-shell-header .shell-breadcrumb,
   .vult-shell-header span:has(> .shell-page-icon),
   .vult-shell-header .vult-shell-breadcrumb-divider {
@@ -276,10 +313,10 @@ select {
 .shell-header-page-actions:empty {
   display: none;
 }
-/* The Dashboard leads with panels, as collection pages do: the first one
-   starts at the page bar's edge, 12px below its controls, matching the 12px
-   above them (docs/design/shell.md). */
-.shell-scroll-region[data-workspace="dashboard"] {
+/* The Dashboard and Reconcile lead with panels, as collection pages do: the
+   first one starts at the page bar's edge, 12px below its controls, matching
+   the 12px above them (docs/design/shell.md). */
+.shell-scroll-region:is([data-workspace="dashboard"], [data-workspace="reconcile"]) {
   padding-top: 0;
 }
 .dashboard-period-short {

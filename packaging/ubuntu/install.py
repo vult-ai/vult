@@ -16,7 +16,7 @@ import sys
 import tarfile
 import time
 
-VERSION = "0.5.2"
+VERSION = "0.6.0"
 FORMAT = "vult-program-files-linux-v1"
 PROGRAM = "/opt/vult"
 RETAINED = "/var/lib/vult"

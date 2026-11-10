@@ -16,9 +16,9 @@ func TestRecoveryCodesPageKeepsCodesThenSummarizes(t *testing.T) {
 		offer                     bool
 		wantLede, wantOffer, deny string
 	}{
-		{"your passkey", true, false, true, "You sign in with your passkey.", "Add an authenticator app as a backup", ""},
-		{"your authenticator", false, true, false, "You sign in with your authenticator app.", "", "Add an authenticator app as a backup"},
-		{"your sign-in methods", true, true, false, "You sign in with your passkey or authenticator app.", "", "Add an authenticator app as a backup"},
+		{"the passkey", true, false, true, "You sign in with a passkey.", "Add an authenticator app as a backup", ""},
+		{"the authenticator", false, true, false, "You sign in with an authenticator app.", "", "Add an authenticator app as a backup"},
+		{"the sign-in methods", true, true, false, "You sign in with a passkey or authenticator app.", "", "Add an authenticator app as a backup"},
 	} {
 		var page strings.Builder
 		err := recoveryPage.Execute(&page, struct {
@@ -34,12 +34,12 @@ func TestRecoveryCodesPageKeepsCodesThenSummarizes(t *testing.T) {
 		}
 		html := page.String()
 		for _, want := range []string{
-			"<h1 id=\"codes-title\">Save your recovery codes</h1>",
-			"If you ever lose " + tc.lost + ", these codes are the only way back into your Vult.",
+			"<h1 id=\"codes-title\">Save recovery codes</h1>",
+			"If you ever lose " + tc.lost + ", these codes are the only way back in.",
 			"Never share them. Vult will never ask for them.",
 			`<button id="recovery-continue" type="button" disabled`,
 			"I wrote them down",
-			"<h1 id=\"protected-title\">Your account is protected</h1>",
+			"<h1 id=\"protected-title\">This account is protected</h1>",
 			tc.wantLede,
 		} {
 			if !strings.Contains(html, want) {

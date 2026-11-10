@@ -170,7 +170,7 @@ func TestPasskeyRecoveryHTTPRequiresBrowserBinding(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "https://ledger.example.com/auth/recover", nil))
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "revokes your existing passkeys") || w.Header().Get("Referrer-Policy") != "no-referrer" {
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "revokes all existing passkeys") || w.Header().Get("Referrer-Policy") != "no-referrer" {
 		t.Fatal("recovery page omitted its effect or safe headers", w.Code)
 	}
 	nonce := responseCookie(t, w, "__Host-vult-login")

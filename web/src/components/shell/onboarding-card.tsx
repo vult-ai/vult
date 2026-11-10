@@ -38,7 +38,7 @@ export function OnboardingCard({
   }
   if (hidden) return null;
   const steps: Step[] = [
-    { title: "Connect your agent", detail: "Approve it with your passkey", open: onConnectAgent },
+    { title: "Connect an agent", detail: "Approve it with the passkey", open: onConnectAgent },
     { title: "Add a statement", detail: "Bank or card, in Sources", open: onAddStatement },
     { title: "Review and approve", detail: "Before anything posts", open: onReview },
   ];

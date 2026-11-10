@@ -34,7 +34,7 @@ func TestClientFileExportIsDeclaredWithoutGrantingLedgerWrites(t *testing.T) {
 		return json.RawMessage(`{}`), nil
 	}, "read", Options{Documents: true, LocalFiles: true})
 	catalog, err := client.ListTools(ctx, nil)
-	if err != nil || len(catalog.Tools) != 16 {
+	if err != nil || len(catalog.Tools) != 25 {
 		t.Fatal("wrong document read catalog", err)
 	}
 	found := false
@@ -82,7 +82,7 @@ func TestMCPBookJourneysAndLostReplyRecovery(t *testing.T) {
 				return out, e
 			}, "write")
 			catalog, e := c.ListTools(db.Context, nil)
-			if e != nil || len(catalog.Tools) != 18 {
+			if e != nil || len(catalog.Tools) != 40 {
 				t.Fatal("unexpected tool catalog", e)
 			}
 			var got ledger.Book
@@ -138,7 +138,7 @@ func TestReadOnlyMCPHasNoWriteOrOwnerTools(t *testing.T) {
 		return json.RawMessage(`{}`), nil
 	}, "read")
 	catalog, e := c.ListTools(context.Background(), nil)
-	if e != nil || len(catalog.Tools) != 11 {
+	if e != nil || len(catalog.Tools) != 20 {
 		t.Fatal("unexpected read catalog", e)
 	}
 	for _, tool := range catalog.Tools {

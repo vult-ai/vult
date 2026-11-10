@@ -68,7 +68,7 @@ test("recovery picks the action: none, sign-in, and no retry for writes", async 
     // Signed out is a state, not a failure to load.
     assert.match(document.body.textContent, /You’re signed out/);
     assert.doesNotMatch(document.body.textContent, /Couldn’t/);
-    assert.equal(document.querySelector("p").textContent, "Sign in to open your Books.");
+    assert.equal(document.querySelector("p").textContent, "Sign in to open Books.");
     // A session that ended while the account is still known never says
     // "signed out": the owner confirms it's them and returns to this page.
     window.history.replaceState(null, "", "/BOOK1/activity?range=month");
@@ -80,9 +80,9 @@ test("recovery picks the action: none, sign-in, and no retry for writes", async 
       }),
     );
     assert.deepEqual(buttons(), ["Continue"]);
-    assert.match(document.body.textContent, /Your session ended/);
+    assert.match(document.body.textContent, /Session ended/);
     assert.doesNotMatch(document.body.textContent, /signed out|Couldn’t/i);
-    assert.equal(document.querySelector("p").textContent, "For your security, Vult asks you to confirm it’s you.");
+    assert.equal(document.querySelector("p").textContent, "For security, Vult asks you to confirm it’s you.");
     const resume = [...document.querySelectorAll("a")].find((a) => a.textContent === "Continue");
     assert.equal(resume.getAttribute("href"), "/auth/login?return=%2FBOOK1%2Factivity%3Frange%3Dmonth");
     assert.notEqual(resume.getAttribute("target"), "_blank");

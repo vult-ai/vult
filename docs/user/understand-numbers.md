@@ -1,5 +1,5 @@
 ---
-{"id":"understand-numbers","title":"Understand your numbers","description":"Read cash, income, expenses and net result together for the same period, and know what each figure includes.","group":"Use your Book","order":5,"keywords":["dashboard","cash","income","expenses","net result","profit","balance sheet","profit and loss","trial balance","statements","report","csv"]}
+{"id":"understand-numbers","title":"Understand your numbers","description":"Read cash, income, expenses and net result together for the same period, and know what each figure includes.","group":"Use your Book","order":9,"keywords":["dashboard","cash","income","expenses","net result","profit","balance sheet","profit and loss","trial balance","statements","report","csv"]}
 ---
 
 ## One period for every figure {#choose-a-period}
@@ -9,6 +9,19 @@ The Dashboard's date range controls every figure and chart on the page. Both the
 ## Cash {#cash-balance}
 
 Cash is the recorded balance of the accounts marked as cash, at the end of the period. It includes all earlier history, so changing only the start date doesn't change it. It shows what the Book records, not a live bank balance. Vult doesn't connect to your bank.
+
+## Cash flow {#cash-flow}
+
+The Cash flow statement shows how cash moved in the period, from opening cash to closing cash. Cash is every account marked as cash. Each movement is sorted by the account on the other side of its entry:
+
+- **Financing:** money from or to owners (equity accounts) and loans.
+- **Investing:** buying or selling equipment, property and investments.
+- **Operating:** everything else, including income, spending and paying a credit card.
+- **Transfers between your own cash accounts** are left out; they add up to zero.
+- **Opening balances** are where cash starts, not money coming in. An entry against the account with the Opening balances role becomes the period's opening cash. The starter charts give their Opening balances account that role.
+
+When one entry mixes sections in a way Vult can't split exactly, its amount shows as **Unclassified** rather than being guessed. Opening cash plus every section always equals closing cash.
+
 
 ## Income, expenses and net result {#profit}
 

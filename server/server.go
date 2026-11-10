@@ -283,6 +283,16 @@ func failure(w http.ResponseWriter, status int) {
 	_, _ = io.WriteString(w, "{\"error\":\"request unavailable\"}\n")
 }
 
+// signedOut answers a request from a browser holding no session.
+func signedOut(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusUnauthorized)
+	if w.Header().Get("X-Vult-Schema-Version") == "1" {
+		_, _ = io.WriteString(w, "{\"schema_version\":1,\"error\":\"request unavailable\",\"code\":\"SIGNED_OUT\"}\n")
+		return
+	}
+	_, _ = io.WriteString(w, "{\"error\":\"request unavailable\",\"code\":\"SIGNED_OUT\"}\n")
+}
+
 // Serve closes its listener on cancellation and never returns raw network errors.
 func Serve(ctx context.Context, s *http.Server, listener net.Listener) error {
 	defer listener.Close()

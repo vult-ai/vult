@@ -6,6 +6,9 @@
 import { forwardRef, type ComponentProps } from "react";
 import {
   ArrowDown as PhArrowDown,
+  ArrowsOut as PhArrowsOut,
+  MagnifyingGlassMinus as PhMagnifyingGlassMinus,
+  MagnifyingGlassPlus as PhMagnifyingGlassPlus,
   ArrowDownLeft as PhArrowDownLeft,
   ArrowLeft as PhArrowLeft,
   ArrowRight as PhArrowRight,
@@ -33,7 +36,6 @@ import {
   Clock as PhClock,
   CloudArrowUp as PhCloudArrowUp,
   Coins as PhCoins,
-  Columns as PhColumns,
   Copy as PhCopy,
   CreditCard as PhCreditCard,
   DotsNine as PhDotsNine,
@@ -74,6 +76,7 @@ import {
   SlidersHorizontal as PhSlidersHorizontal,
   Stack as PhStack,
   Sun as PhSun,
+  Table as PhTable,
   Tag as PhTag,
   TreeStructure as PhTreeStructure,
   User as PhUser,
@@ -114,14 +117,16 @@ export const Stamp = icon(PhStamp, "Stamp");
 export const ChevronDown = icon(PhCaretDown, "ChevronDown");
 export const ChevronDownDouble = icon(PhCaretDoubleDown, "ChevronDownDouble");
 export const ChevronLeft = icon(PhCaretLeft, "ChevronLeft");
+export const Expand01 = icon(PhArrowsOut, "Expand01");
+export const ZoomIn = icon(PhMagnifyingGlassPlus, "ZoomIn");
+export const ZoomOut = icon(PhMagnifyingGlassMinus, "ZoomOut");
 export const ChevronRight = icon(PhCaretRight, "ChevronRight");
 export const ChevronUp = icon(PhCaretUp, "ChevronUp");
 export const ChevronUpDouble = icon(PhCaretDoubleUp, "ChevronUpDouble");
 export const ClipboardCheck = icon(PhClipboardText, "ClipboardCheck");
 export const Clock = icon(PhClock, "Clock");
 export const Coins01 = icon(PhCoins, "Coins01");
-export const Columns02 = icon(PhColumns, "Columns02");
-export const Columns03 = icon(PhColumns, "Columns03");
+export const TableColumns = icon(PhTable, "TableColumns");
 export const Copy01 = icon(PhCopy, "Copy01");
 export const CreditCard01 = icon(PhCreditCard, "CreditCard01");
 export const CreditCard02 = icon(PhCreditCard, "CreditCard02");

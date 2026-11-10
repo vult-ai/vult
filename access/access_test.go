@@ -222,7 +222,7 @@ func TestOwnerOperationsKeepLedgerRulesAndRollback(t *testing.T) {
 		t.Fatal(e)
 	}
 	if e := f.service.WithOwner(db.Context, session, tenant, true, func(owner ledger.TenantAdmin) error {
-		return owner.ClosePeriod(db.Context, book.ID, "2026-01-01", "2026-01-31")
+		return owner.ClosePeriod(db.Context, book.ID, "2026-01-01", "2026-01-31", "Example close with review items acknowledged")
 	}); e != nil {
 		t.Fatal(e)
 	}

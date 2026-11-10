@@ -16,8 +16,8 @@ import (
 )
 
 func TestProposalCatalogPreservesLegacyAndOwnerBoundaries(t *testing.T) {
-	read := []string{"get_book", "list_accounts", "get_journal", "list_journals", "get_balance", "get_trial_balance", "get_request_outcome", "get_operation_proposal", "search_book", "list_closed_periods", "get_exchange_rate"}
-	write := []string{"create_account", "revise_account", "post_journal", "reverse_journal", "prepare_operation", "execute_proposal", "set_book_logo"}
+	read := []string{"get_book", "list_accounts", "get_journal", "list_journals", "get_balance", "get_trial_balance", "get_request_outcome", "get_operation_proposal", "search_book", "list_closed_periods", "get_exchange_rate", "list_starter_charts", "list_payees", "get_entry_payee", "list_recurring_charges", "get_cash_flow", "list_statements", "get_statement_reconciliation", "suggest_statement_matches", "get_period_review"}
+	write := []string{"create_account", "revise_account", "retire_account", "reactivate_account", "apply_starter_chart", "create_payee", "revise_payee", "set_entry_payee", "import_statement", "mark_statement_duplicate", "match_statement", "revoke_statement_match", "record_statement_adjustment", "review_statement", "close_period", "post_journal", "reverse_journal", "prepare_operation", "execute_proposal", "set_book_logo"}
 	docRead := []string{"get_document", "list_documents", "get_entry_documents", "get_source_usage", "list_entries_missing_evidence"}
 	docWrite := []string{"add_document", "correct_source_citation", "attach_evidence", "detach_evidence"}
 	for _, documents := range []bool{false, true} {

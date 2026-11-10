@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"sort"
 	"strings"
@@ -16,6 +17,7 @@ import (
 var migrations embed.FS
 
 const recordedBookMigration = "0004_recorded_book.sql"
+const foundationsMigration = "0007_accounting_foundations.sql"
 
 func SchemaSHA256() string {
 	b, e := migrations.ReadFile("migrations/0001_ledger.sql")
@@ -98,6 +100,10 @@ func apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string, initial
 	for _, name := range names[applied:] {
 		b, _ := migrations.ReadFile("migrations/" + name)
 		if _, e = tx.Exec(ctx, string(b)); e != nil {
+			var p *pgconn.PgError
+			if errors.As(e, &p) && p.Code == "23514" {
+				return &UpgradeRefusal{Message: p.Message, Hint: p.Hint}
+			}
 			return e
 		}
 		if _, e = tx.Exec(ctx, "INSERT INTO public.schema_receipts(filename,sha256) VALUES($1,$2)", name, migrationSum(name)); e != nil {
@@ -128,6 +134,14 @@ func apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string, initial
 		"GRANT EXECUTE ON FUNCTION public.ledger_validate_balances(uuid,uuid,uuid) TO " + role,
 		"GRANT EXECUTE ON FUNCTION public.ledger_native_position(uuid,uuid,uuid,text,bigint,bigint) TO " + role,
 		"GRANT USAGE ON SCHEMA access TO " + role,
+		// Accounting foundations. Row security applies each connection's
+		// level; the period guard keeps reopening and closing with open
+		// review items for the owner.
+		"GRANT SELECT,INSERT ON public.payees,public.payee_revisions,public.entry_payees,public.statements,public.statement_rows,public.statement_duplicates,public.statement_matches,public.statement_match_parts,public.statement_match_revocations,public.statement_adjustments,public.statement_reviews,public.accounting_periods,public.accounting_period_events TO " + role,
+		"GRANT EXECUTE ON FUNCTION public.ledger_restoring(uuid,uuid),public.ledger_role_fits(text,text),public.ledger_period_closed(uuid,uuid,date),public.statement_line_amount(uuid,uuid,uuid,text,integer),public.statement_row_check(uuid,uuid,uuid),public.statement_line_check(uuid,uuid,uuid,text,integer),public.ledger_owner_decision(uuid,uuid),public.period_open_items(uuid,uuid,date,date),public.statement_entry_reversed(uuid,uuid,uuid),public.ledger_written_here(xid) TO " + role,
+		"GRANT EXECUTE ON FUNCTION public.statement_row_coverages(uuid,uuid,uuid,timestamptz),public.statement_explained(uuid,uuid,uuid,timestamptz),public.statement_current_reconciled(uuid,uuid,uuid),public.statement_line_allocated(uuid,uuid,uuid,text,integer,date,uuid[]),public.statement_line_allocations(uuid,uuid,uuid[],text,integer,date,uuid[]) TO " + role,
+		"GRANT EXECUTE ON FUNCTION access.owner_decision_allowed(uuid,uuid) TO " + role,
+		"GRANT EXECUTE ON FUNCTION public.accounting_period_preview(uuid,uuid,text,jsonb) TO " + role,
 		"GRANT EXECUTE ON FUNCTION access.owner_allowed(uuid) TO " + role,
 		"GRANT EXECUTE ON FUNCTION access.owner_write_allowed(uuid),access.owner_document_allowed(uuid,uuid) TO " + role,
 		"GRANT EXECUTE ON FUNCTION access.delegation_allowed(uuid,boolean),access.require_agent(text,text,uuid,uuid,uuid,uuid,text) TO " + role,
@@ -140,6 +154,19 @@ func apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string, initial
 	}
 	return tx.Commit(ctx)
 }
+
+// UpgradeRefusal is a schema change the database declined on purpose
+// because stored records don't fit it yet. Nothing was changed; the hint says
+// what to change before upgrading again.
+type UpgradeRefusal struct{ Message, Hint string }
+
+func (e *UpgradeRefusal) Error() string {
+	if e.Hint == "" {
+		return "the upgrade was refused and nothing was changed: " + e.Message
+	}
+	return "the upgrade was refused and nothing was changed: " + e.Message + ". " + e.Hint
+}
+
 func Ready(ctx context.Context, pool *pgxpool.Pool) error {
 	_, err := verifyReceipts(ctx, pool, migrationNames(), true)
 	return err

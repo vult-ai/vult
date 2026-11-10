@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ import (
 )
 
 // TestBrowserPreview serves the real server and interface on 127.0.0.1:8080
+// (or VULT_PREVIEW_ADDR)
 // with synthetic Books, for reviewing the interface in a browser. It acts as
 // the TLS proxy a deployment has in front of the server.
 //
@@ -64,7 +66,12 @@ func TestBrowserPreview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	local := "http://127.0.0.1:8080"
+	// VULT_PREVIEW_ADDR serves a second preview beside a kept one.
+	addr := "127.0.0.1:8080"
+	if value := os.Getenv("VULT_PREVIEW_ADDR"); value != "" {
+		addr = value
+	}
+	local := "http://" + addr
 	proxy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/__preview/sign-in" {
 			// A fresh session each time, so signing out elsewhere never strands a reviewer.
@@ -113,7 +120,7 @@ func TestBrowserPreview(t *testing.T) {
 		}
 		s.Handler.ServeHTTP(w, r)
 	})
-	listener := &http.Server{Addr: "127.0.0.1:8080", Handler: proxy, ReadHeaderTimeout: 10 * time.Second}
+	listener := &http.Server{Addr: addr, Handler: proxy, ReadHeaderTimeout: 10 * time.Second}
 	t.Log("preview ready at " + local + "/__preview/sign-in")
 	fmt.Println("PREVIEW READY " + local + "/__preview/sign-in")
 	if err := listener.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -144,7 +151,7 @@ func seedPreview(t *testing.T, f *documentServerFixture) {
 	var c ledger.Connection
 	if err := f.sessions.WithOwner(ctx, f.session, f.tenant, true, func(o ledger.TenantAdmin) error {
 		var err error
-		c, err = o.CreateConnection(ctx, studio.ID, "Claude Code", "write")
+		c, err = o.CreateConnection(ctx, studio.ID, "Example agent", "write")
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -157,6 +164,18 @@ func seedPreview(t *testing.T, f *documentServerFixture) {
 	hosting := f.db.Account(t, scope, "6100", "expense")
 	software := f.db.Account(t, scope, "6200", "expense")
 	travel := f.db.Account(t, scope, "6300", "expense")
+	contractors := f.db.Account(t, scope, "6400", "expense")
+	role := func(a ledger.Account, key, name, value string) ledger.Account {
+		var out ledger.Account
+		if err := json.Unmarshal(f.db.Call(t, scope, "revise_account", ledger.ReviseAccount{RequestKey: key, AccountID: a.ID, ExpectedRevision: a.Revision, Code: a.Code, Name: name, Role: &value}), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	// Roles drive the cash-flow statement: cash, a loan and equipment.
+	cash = role(cash, "cash-role", "Example Bank checking", "cash")
+	loan := role(f.db.Account(t, scope, "2300", "liability"), "loan-role", "Example Bank loan", "loan")
+	equipment := role(f.db.Account(t, scope, "1500", "asset"), "equipment-role", "Equipment", "fixed_asset")
 
 	data := []byte("%PDF-1.4\n% Synthetic statement for interface review\n")
 	hash := sha256.Sum256(data)
@@ -184,13 +203,20 @@ func seedPreview(t *testing.T, f *documentServerFixture) {
 		post("software-"+m, "2026-"+m+"-15", "Example Design Tools subscription", software, cash, fmt.Sprint(2900+i*100), m >= "08")
 	}
 	post("travel", "2026-09-21", "Example Rail, client visit", travel, cash, "18640", true)
+	post("loan", "2026-03-02", "Example Bank loan drawdown", cash, loan, "2000000", false)
+	post("equipment", "2026-04-10", "Studio workstations (synthetic)", equipment, cash, "650000", false)
+	for _, m := range months {
+		post("contractors-"+m, "2026-"+m+"-25", "Example Contractors, monthly retainer", contractors, cash, "750000", false)
+	}
 
+	seedPayees(t, f, scope)
+	seedStatements(t, f, scope, cash.ID, intake.Document.ID)
 	seedCardCurrencies(t, f)
 
 	// More agents: one that only reads and has recorded nothing, and one the
 	// owner disconnected.
 	if err := f.sessions.WithOwner(ctx, f.session, f.tenant, true, func(o ledger.TenantAdmin) error {
-		if _, err := o.CreateConnection(ctx, studio.ID, "Codex", "propose"); err != nil {
+		if _, err := o.CreateConnection(ctx, studio.ID, "Example reviewing agent", "propose"); err != nil {
 			return err
 		}
 		gone, err := o.CreateConnection(ctx, studio.ID, "Example Assistant", "write")
@@ -226,7 +252,7 @@ func seedCardCurrencies(t *testing.T, f *documentServerFixture) {
 	var c ledger.Connection
 	if err := f.sessions.WithOwner(ctx, f.session, f.tenant, true, func(o ledger.TenantAdmin) error {
 		var err error
-		c, err = o.CreateConnection(ctx, book.ID, "Claude", "write")
+		c, err = o.CreateConnection(ctx, book.ID, "Example agent", "write")
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -334,4 +360,87 @@ func decimalText(minor string) string {
 		minor = "0" + minor
 	}
 	return minor[:len(minor)-2] + "." + minor[len(minor)-2:]
+}
+
+// seedStatements imports two checking statements: September, matched and
+// reconciled, and October, with one row still to match and a bank fee the
+// Book doesn't have yet.
+func seedStatements(t *testing.T, f *documentServerFixture, scope ledger.Scope, cash, document string) {
+	balance := func(through string) int64 {
+		var b struct {
+			Balance string `json:"debit_positive_minor"`
+		}
+		if err := json.Unmarshal(f.db.Call(t, scope, "get_balance", map[string]string{"account_id": cash, "through": through}), &b); err != nil {
+			t.Fatal(err)
+		}
+		n, _ := strconv.ParseInt(b.Balance, 10, 64)
+		return n
+	}
+	statement := func(key, start, end string, rows [][3]string) ledger.Statement {
+		day, _ := time.Parse("2006-01-02", start)
+		opening := balance(day.AddDate(0, 0, -1).Format("2006-01-02"))
+		in := ledger.ImportStatement{RequestKey: key, AccountID: cash, DocumentID: document, PeriodStart: start, PeriodEnd: end, OpeningMinor: strconv.FormatInt(opening, 10)}
+		closing := opening
+		for i, r := range rows {
+			n, _ := strconv.ParseInt(r[1], 10, 64)
+			closing += n
+			in.Rows = append(in.Rows, ledger.StatementRowInput{RowNumber: i + 1, Date: r[0], AmountMinor: r[1], Description: r[2], Raw: r[0] + "," + r[2] + "," + r[1]})
+		}
+		in.ClosingMinor = strconv.FormatInt(closing, 10)
+		var st ledger.Statement
+		if err := json.Unmarshal(f.db.Call(t, scope, "import_statement", in), &st); err != nil {
+			t.Fatal(err)
+		}
+		return st
+	}
+	match := func(st ledger.Statement, skip string) {
+		var out struct {
+			Suggestions []ledger.StatementSuggestion `json:"suggestions"`
+		}
+		if err := json.Unmarshal(f.db.Call(t, scope, "suggest_statement_matches", ledger.StatementQuery{StatementID: st.ID}), &out); err != nil {
+			t.Fatal(err)
+		}
+		for i, s := range out.Suggestions {
+			if s.Kind != "match" || s.AmountMinor == skip {
+				continue
+			}
+			f.db.Call(t, scope, "match_statement", ledger.MatchStatement{RequestKey: fmt.Sprintf("%s-match-%d", st.ID, i), Rows: []ledger.StatementMatchPart{{RowID: s.RowID}},
+				Lines: []ledger.StatementMatchPart{{LineID: s.LineIDs[0]}}, Reason: "Same payment on the statement and in the Book"})
+		}
+	}
+	september := statement("statement-sep", "2026-09-01", "2026-09-30", [][3]string{
+		{"2026-09-03", "-4900", "EXAMPLE HOSTING CO"}, {"2026-09-12", "700000", "CLIENT PROJECT 9"}, {"2026-09-15", "-3700", "EXAMPLE DESIGN TOOLS"},
+		{"2026-09-22", "-18640", "EXAMPLE RAIL"}, {"2026-09-25", "-750000", "EXAMPLE CONTRACTORS"}})
+	match(september, "")
+	f.db.Call(t, scope, "review_statement", ledger.ReviewStatement{RequestKey: "statement-sep-review", StatementID: september.ID, Outcome: "reconciled"})
+	october := statement("statement-oct", "2026-10-01", "2026-10-31", [][3]string{
+		{"2026-10-03", "-4900", "EXAMPLE HOSTING CO"}, {"2026-10-12", "735000", "CLIENT PROJECT 10"}, {"2026-10-15", "-3800", "EXAMPLE DESIGN TOOLS"},
+		{"2026-10-26", "-750000", "EXAMPLE CONTRACTORS"}, {"2026-10-31", "-1200", "MONTHLY ACCOUNT FEE"}})
+	match(october, "-750000")
+}
+
+// seedPayees names who the studio's regular charges were with, so recurring
+// charges and spending by payee have something to show.
+func seedPayees(t *testing.T, f *documentServerFixture, scope ledger.Scope) {
+	var page struct {
+		Journals []ledger.Entry `json:"entries"`
+	}
+	if err := json.Unmarshal(f.db.Call(t, scope, "list_journals", map[string]int{"limit": 100}), &page); err != nil {
+		t.Fatal(err)
+	}
+	payees := map[string]string{}
+	for _, name := range []string{"Example Hosting Co", "Example Design Tools", "Example Contractors"} {
+		var p ledger.Payee
+		if err := json.Unmarshal(f.db.Call(t, scope, "create_payee", ledger.CreatePayee{RequestKey: "payee-" + name, DisplayName: name, Kind: "organization"}), &p); err != nil {
+			t.Fatal(err)
+		}
+		payees[name] = p.ID
+	}
+	for _, e := range page.Journals {
+		for name, id := range payees {
+			if strings.HasPrefix(e.Description, name) {
+				f.db.Call(t, scope, "set_entry_payee", ledger.SetEntryPayee{RequestKey: "link-" + e.ID, EntryID: e.ID, PayeeID: id})
+			}
+		}
+	}
 }

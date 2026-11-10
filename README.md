@@ -1,10 +1,10 @@
 # Vult
 
-A double-entry ledger for agents. Your agent keeps your Book; you see it, check
+A double-entry ledger for agents. The agent keeps your Book; you see it, check
 it and trust it. Agents supply debits and credits; Vult records a balanced,
 immutable journal, and you review it in your browser.
 
-Vult 0.5.2 targets local use on **macOS 26 on Apple Silicon** and
+Vult 0.6.0 targets local use on **macOS 26 on Apple Silicon** and
 **Ubuntu 24.04 LTS on x86-64 with GNOME and Chrome**, plus a separate
 **Linux server** behind HTTPS. The native installers include PostgreSQL; agents
 use its protected local socket and the browser uses local HTTPS, with no Docker
@@ -63,8 +63,8 @@ vult connection create --name "Personal agent" --book BOOK_ID --access write
 ```
 
 The result contains a generic MCP `command` and `args` configuration. Add that
-entry to your client's MCP settings. The command is always `vult mcp`, regardless
-of whether the client is Claude Code, Claude Desktop, Codex or another MCP client.
+entry to your client's MCP settings. The command is always `vult mcp`, whichever MCP
+client runs it.
 See [MCP setup](docs/mcp.md).
 
 Each connection selects **one Book** and either `read` or `write` access. Starting
@@ -145,7 +145,7 @@ vult --version
 vult help
 ```
 
-Closing a period is permanent. Export is **plaintext**;
+A closed period accepts no entries until the owner reopens it, with a reason, in the app. Export is **plaintext**;
 backup is encrypted with the recovery key. Output files are created with private
 permissions and never overwrite existing files. Restore requires an empty
 installation, preserves recorded financial rows, and does not restore connection

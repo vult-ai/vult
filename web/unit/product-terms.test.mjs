@@ -8,7 +8,7 @@ const { checkSource } = await import("../scripts/check-product-terms.mjs");
 test("Book is a proper noun in interface copy, not in code or accounting terms", () => {
   for (const copy of [
     "<p>Create book</p>",
-    'label="Opening your books…"',
+    'label="Opening the books…"',
     "Choose one book for this view.",
     "stored in this book’s database",
   ])

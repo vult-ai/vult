@@ -48,10 +48,13 @@ export default function EntryDetail({
     onPendingChange?.(busy);
     return () => onPendingChange?.(false);
   }, [busy, onPendingChange]);
+  const [reload, setReload] = useState(0);
   useEffect(() => {
     let current = true;
-    setData(null);
-    setJournal(null);
+    if (!reload) {
+      setData(null);
+      setJournal(null);
+    }
     setError("");
     get<unknown>(bookURL(`transactions/${id}`, book.id))
       .then((value) => {
@@ -65,11 +68,11 @@ export default function EntryDetail({
     return () => {
       current = false;
     };
-  }, [id, book.id]);
+  }, [id, book.id, reload]);
   if (journal)
     return (
       <div className="dialog-form">
-        <LedgerEntry read={journal} state={state} book={book} onNavigate={onNavigate} />
+        <LedgerEntry read={journal} state={state} book={book} onNavigate={onNavigate} onChanged={() => setReload((value) => value + 1)} />
       </div>
     );
   if (!data)

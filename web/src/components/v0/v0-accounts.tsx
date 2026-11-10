@@ -1,4 +1,5 @@
 import { NameLink } from "../ui/name-link";
+import { StarterChartOffer } from "../workspaces/starter-chart-offer";
 import {
   useEffect,
   useState,
@@ -81,6 +82,9 @@ export function V0Accounts(
     (a: (typeof accounts)[number]) => inAccountGroup(a, group),
     [group],
   );
+  // A Book with no accounts at all can start from a starter chart.
+  if (confirmed && !accounts.length && !props.accountSearch?.trim())
+    return <StarterChartOffer book={props.displayBook} />;
   return (
     <div className="v0-accounts-page">
       <div className="v0-account-list">

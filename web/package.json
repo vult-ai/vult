@@ -18,7 +18,8 @@
     "prebuild": "npm run design:check && npm run assets:check && npm run notices:check",
     "notices:check": "node scripts/notices.mjs --check",
     "test:ui": "node --test unit/*.test.mjs",
-    "postbuild": "node scripts/check-shared-assets.mjs --production"
+    "postbuild": "node scripts/check-shared-assets.mjs --production",
+    "test:viewer": "playwright test --config playwright.viewer.config.ts"
   },
   "dependencies": {
     "@internationalized/date": "3.12.4",

@@ -82,6 +82,25 @@ export type JournalRead = {
   state_knowledge_cutoff?: string;
   recorded_by?: JournalRecorder;
   entry: JournalEntry;
+  /** Who the entry was with: a separate decision from the entry itself. */
+  payee?: EntryPayeeRead;
+};
+export type EntryPayee = {
+  entry_id: string;
+  revision: number;
+  counterpart: "payee" | "unknown";
+  payee_id?: string;
+  payee_name?: string;
+  reason?: string;
+  actor_id: string;
+  recorded_at: string;
+};
+/** `not_recorded` means no decision yet, which differs from an explicit unknown. */
+export type EntryPayeeRead = {
+  entry_id: string;
+  status: "not_recorded" | "payee" | "unknown";
+  current?: EntryPayee;
+  history: EntryPayee[];
 };
 
 const minor = /^(0|[1-9]\d{0,18})$/;
@@ -165,13 +184,15 @@ export function parseJournalRead(data: unknown, book: Pick<Book, "id" | "currenc
   const fail = (why: string): never => { throw new Error(`This entry could not be read: ${why}.`); };
   if (!object(data) ||
       !only(data, ["schema_version", "version", "book_id", "currency", "scale", "entry",
-        "state_revision", "state_captured_at", "state_knowledge_cutoff", "recorded_by"]) ||
+        "state_revision", "state_captured_at", "state_knowledge_cutoff", "recorded_by", "payee"]) ||
       data.version !== 1 || !optional(data.schema_version, (v) => v === 1)) fail("unexpected response");
   const d = data as Value;
   if (!optional(d.state_revision, (v) => typeof v === "string" && /^[a-f0-9]{64}$/.test(v)) ||
       !optional(d.state_captured_at, recordedInstant) || !optional(d.state_knowledge_cutoff, recordedInstant))
     fail("its recorded state is incomplete");
   if (!optional(d.recorded_by, recorder)) fail("its recorder could not be confirmed");
+  if (!optional(d.payee, (p) => object(p) && p.entry_id === entryId && ["not_recorded", "payee", "unknown"].includes(p.status as string) && Array.isArray(p.history)))
+    fail("its payee could not be confirmed");
   if (d.book_id !== book.id || d.currency !== book.currency || d.scale !== book.scale) fail("it belongs to another Book or currency");
   const e = d.entry;
   if (!object(e) || e.id !== entryId) fail("a different entry was returned");

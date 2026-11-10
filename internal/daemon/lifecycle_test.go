@@ -517,7 +517,7 @@ func TestNativeStartupUpgradesReleasedLedgerWithoutChangingRecords(t *testing.T)
 			a, b := db.ReleasedAccount(t, scope, "1000", "asset"), db.ReleasedAccount(t, scope, "3000", "equity")
 			q := ledger.PostJournal{RequestKey: "retained", EconomicDate: "2026-01-01", AccountingDate: "2026-01-02", Description: "Example funding", Lines: []ledger.PostLine{{AccountID: a.ID, Side: "debit", AmountMinor: "1250"}, {AccountID: b.ID, Side: "credit", AmountMinor: "1250"}}}
 			result := db.ReleasedPost(t, scope, q)
-			if e := db.Owner.ClosePeriod(db.Context, book.ID, "2026-01-01", "2026-01-31"); e != nil {
+			if e := db.ClosePeriod(db.Context, book.ID, "2026-01-01", "2026-01-31"); e != nil {
 				t.Fatal(e)
 			}
 			before := db.ReleasedSnapshot(t)

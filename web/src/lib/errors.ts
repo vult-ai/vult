@@ -391,17 +391,17 @@ export function presentFailure(error: unknown, context: FailureContext = {}) {
                   : "retry",
         };
   const nouns = {
-    dashboard: "your dashboard",
-    accounts: "your accounts",
-    balances: "your balances",
-    openings: "your opening balances",
-    activity: "your activity",
+    dashboard: "the dashboard",
+    accounts: "the accounts",
+    balances: "the balances",
+    openings: "the opening balances",
+    activity: "the activity",
     document: "this document",
-    sources: "your sources",
-    settings: "your settings",
+    sources: "the sources",
+    settings: "the settings",
     statement: "this statement",
     search: "search results",
-    approvals: "your approvals",
+    approvals: "the approvals",
     app: "Vult",
   };
   const genericRead =
@@ -472,17 +472,17 @@ function notYetAvailable(resource: keyof typeof missingNames) {
 }
 
 const stateNouns = {
-  dashboard: "your dashboard",
-  accounts: "your accounts",
-  balances: "your balances",
-  openings: "your opening balances",
-  activity: "your activity",
+  dashboard: "the dashboard",
+  accounts: "the accounts",
+  balances: "the balances",
+  openings: "the opening balances",
+  activity: "the activity",
   document: "this document",
-  sources: "your sources",
-  settings: "your settings",
+  sources: "the sources",
+  settings: "the settings",
   statement: "this statement",
   search: "search results",
-  approvals: "your approvals",
+  approvals: "the approvals",
   app: "Vult",
 } as const;
 
@@ -507,7 +507,7 @@ export function presentFailureState(
     failure.recovery === "sign-in"
       ? "You’re signed out"
       : failure.recovery === "confirm"
-        ? "Your session ended"
+        ? "Session ended"
         : `Couldn’t ${verb} ${context.resource ? stateNouns[context.resource] : "this"}`;
   const detail =
     failure.severity === "critical"

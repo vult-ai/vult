@@ -32,7 +32,7 @@ export type AgentEvent =
   | { kind: "unusable"; reason: string };
 /** An entry as the agent records it. Positive amounts are money in. */
 export type EntranceEntry = { date: string; description: string; amountMinor?: string; review?: boolean };
-/** The agent's own name for itself, such as Claude Code or Codex. */
+/** The agent's own name for itself, as its MCP client reports it. */
 export type EntranceAgent = string;
 
 /** How agents reach the local Vult: through its installed command. */
@@ -65,12 +65,15 @@ export function Entrance({
   createBook,
   journey,
   onOpen,
+  unnamed,
 }: {
   /** Start with a new Book, or continue inside one created on an earlier visit. */
   start?: Stage;
   draft?: EntranceDraft | null;
   /** A Book created on an earlier visit, to continue inside it. */
   book?: { name: string; profile?: string; currency: string };
+  /** A Book that exists but was never set up: name it here; its currency is fixed. */
+  unnamed?: { profile?: string; currency: string };
   createBook: (book: { name: string; profile: string; currency: string; timezone: string }) => Promise<void>;
   journey: Journey;
   /** Leaves the scene for the Book, or for the entries waiting for review. */
@@ -89,7 +92,8 @@ export function Entrance({
       <main className="entrance-stages" id="main-content" tabIndex={-1}>
         <FirstBook
           inside={stage === "inside"}
-          draft={book ? { name: book.name, profile: book.profile, currency: book.currency } : draft}
+          draft={book ? { name: book.name, profile: book.profile, currency: book.currency } : unnamed ? { name: "", profile: unnamed.profile, currency: unnamed.currency } : draft}
+          fixedCurrency={unnamed?.currency}
           journey={journey}
           createBook={createBook}
           onDone={() => setStage("inside")}
@@ -118,6 +122,7 @@ function useFocusWhenShown(shown: boolean) {
 function FirstBook({
   inside,
   draft,
+  fixedCurrency,
   journey,
   createBook,
   onDone,
@@ -125,6 +130,8 @@ function FirstBook({
 }: {
   inside: boolean;
   draft?: EntranceDraft | null;
+  /** The currency of a Book that already exists; it can't change. */
+  fixedCurrency?: string;
   journey: Journey;
   createBook: (book: { name: string; profile: string; currency: string; timezone: string }) => Promise<void>;
   onDone: () => void;
@@ -134,7 +141,7 @@ function FirstBook({
   const [name, setName] = useState(draft?.name ?? "");
   const [profile, setProfile] = useState(draft?.profile ?? "");
   const [currency, setCurrency] = useState(() =>
-    draft && bookCurrencyOptions().some((o) => o.value === draft.currency) ? draft.currency : browserBookCurrency(),
+    fixedCurrency ?? (draft && bookCurrencyOptions().some((o) => o.value === draft.currency) ? draft.currency : browserBookCurrency()),
   );
   const [zone, setZone] = useState(draft?.timezone || browserTimeZone());
   const [creating, setCreating] = useState(false);
@@ -143,7 +150,7 @@ function FirstBook({
   const ready = name.trim() !== "" && profile !== "" && currency !== "" && zone !== "";
   async function create() {
     if (!ready) {
-      setError(!profile ? "Choose Personal or Business." : !name.trim() ? "Give your Book a name." : "Choose a currency and timezone.");
+      setError(!profile ? "Choose Personal or Business." : !name.trim() ? "Name the Book." : "Choose a currency and timezone.");
       return;
     }
     setError("");
@@ -164,20 +171,26 @@ function FirstBook({
       aria-labelledby={heading}
     >
       <div className="entrance-book-form" {...hidden(inside)}>
-        <span className="entrance-eyebrow">Your first Book</span>
+        <span className="entrance-eyebrow">First Book</span>
         <h1 id={heading}>Every number starts here</h1>
         <PurposeChoice value={profile} onChange={setProfile} />
         <Field label="Book name">
-          <input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder={profile === "business" ? "Your company’s name" : "Your name"} />
+          <input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder={profile === "business" ? "Company name" : "Full name"} />
         </Field>
-        <OnboardingChoice label="Currency" name="currency" value={currency} items={currencyItems} onChange={setCurrency} placeholder="Search currency or country" />
+        {fixedCurrency ? (
+          <Field label="Currency">
+            <input value={fixedCurrency} readOnly aria-readonly="true" />
+          </Field>
+        ) : (
+          <OnboardingChoice label="Currency" name="currency" value={currency} items={currencyItems} onChange={setCurrency} placeholder="Search currency or country" />
+        )}
         <AccountingTimezone value={zone} onChange={setZone} />
         <div className="entrance-commit">
           {error && <p className="entrance-error" role="alert">{error}</p>}
           <Button size="lg" busy={creating} onClick={() => void create()}>
-            Create Book
+            {fixedCurrency ? "Continue" : "Create Book"}
           </Button>
-          <p className="entrance-fine">Type, currency and timezone can’t change after the Book is created.</p>
+          <p className="entrance-fine">{fixedCurrency ? "Type and timezone can’t change after this." : "Type, currency and timezone can’t change after the Book is created."}</p>
         </div>
       </div>
       <JourneyStatus name={name} profile={profile} currency={currency} zone={zone} journey={journey} inside={inside} onOpen={onOpen} />
@@ -206,7 +219,7 @@ function JourneyStatus({
   inside: boolean;
   onOpen?: (page: "dashboard" | "approvals") => void;
 }) {
-  const title = name.trim() || "Your Book";
+  const title = name.trim() || "New Book";
   const book = useMemo(() => ({ currency, scale: currencyScale(currency) }), [currency]);
   const format = (minor: string) => {
     try {
@@ -303,7 +316,7 @@ function JourneyStatus({
         const last = recorded[recorded.length - 1].date;
         add({ id: "entries", label: `Recorded ${recorded.length} entries`, detail: first === last ? first : `${first} – ${last}` });
       }
-      if (kind === "review") add({ id: "review", label: `Flagged ${flagged.length} for your review`, detail: flagged.join(" · ") });
+      if (kind === "review") add({ id: "review", label: `Flagged ${flagged.length} for review`, detail: flagged.join(" · ") });
       if (kind === "compared") add({ id: "compared", label: "Compared the balance with the statement" });
       if (kind === "balanced") add({ id: "balanced", label: "Checked that everything balances" });
     };
@@ -317,7 +330,7 @@ function JourneyStatus({
     await journey.watchAgent((event) => {
       start(event.kind);
       if (event.kind === "opened") setActivity({ label: `Reading ${event.document}`, detail: "Opened in Vult" });
-      if (event.kind === "checked") setActivity({ label: "Checking it hasn’t been recorded before", detail: "Comparing with your Book’s other statements" });
+      if (event.kind === "checked") setActivity({ label: "Checking it hasn’t been recorded before", detail: "Comparing with the Book’s other statements" });
       if (event.kind === "account") {
         accounts.push(event.name);
         setActivity({ label: "Setting up accounts", detail: event.name, count: String(accounts.length) });
@@ -335,7 +348,7 @@ function JourneyStatus({
       if (event.kind === "review") {
         flagged.push(event.description);
         setReviews([...flagged]);
-        setActivity({ label: "Flagging entries for your review", detail: event.description });
+        setActivity({ label: "Flagging entries for review", detail: event.description });
       }
       if (event.kind === "compared") setActivity({ label: "Comparing the balance with the statement", detail: "Statement closing balance" });
       if (event.kind === "balanced") setActivity({ label: "Checking that everything balances", detail: "Trial balance" });
@@ -378,7 +391,7 @@ function JourneyStatus({
         <div className="entrance-guide">
           <div className="entrance-guide-head">
             <strong>Start with a statement</strong>
-            <small>Upload your latest bank or card statement. Your agent reads it here.</small>
+            <small>Upload the latest bank or card statement. The agent reads it here.</small>
           </div>
           <FirstStatement
             onAdded={async (f) => {
@@ -396,13 +409,16 @@ function JourneyStatus({
       {phase === "connect" && (
         <div className="entrance-guide">
           <div className="entrance-guide-head">
-            <strong>Connect your agent</strong>
-            <small>{file ? `It records ${file} into ${title}. You let it in once, here.` : "Your agent records your statements. You let it in once, here."}</small>
+            <strong>Connect an agent</strong>
+            <small>{file ? `It records ${file} into ${title}. You let it in once, here.` : "The agent records statements. You let it in once, here."}</small>
           </div>
           <ConnectAgent connection={journey.connection} />
           <p className="entrance-waiting">
-            <span className="entrance-live" aria-hidden="true" /> Waiting for your agent…
+            <span className="entrance-live" aria-hidden="true" /> Waiting for the agent…
           </p>
+          <Button color="tertiary" size="sm" className="entrance-skip" onClick={() => onOpen?.("dashboard")}>
+            Skip for now
+          </Button>
         </div>
       )}
       {phase === "approve" && agent && (
@@ -422,7 +438,7 @@ function JourneyStatus({
         <div className="entrance-guide entrance-guide-row">
           <span className="entrance-agent-text">
             <strong>{title} is ready</strong>
-            <small>Upload your first statement whenever you like{agent ? `; ${agent} will record it` : ""}.</small>
+            <small>Upload a statement whenever you like{agent ? `; ${agent} will record it` : ""}.</small>
           </span>
           <Button color="secondary" onClick={() => onOpen?.("dashboard")}>Open {title}</Button>
         </div>
@@ -430,7 +446,7 @@ function JourneyStatus({
       {phase === "unusable" && (
         <AgentStatus
           steps={steps}
-          label={`${agent ?? "Your agent"} couldn’t use ${file}`}
+          label={`${agent ?? "The agent"} couldn’t use ${file}`}
           detail={unusable}
           state="paused"
           action={
@@ -456,12 +472,12 @@ function JourneyStatus({
           label={
             phase === "done"
               ? `${entries.length + reviews.length} ${entries.length + reviews.length === 1 ? "entry" : "entries"} from ${file}`
-              : activity.label || `Waiting for ${agent ?? "your agent"} to start`
+              : activity.label || `Waiting for ${agent ?? "the agent"} to start`
           }
           detail={
             phase === "done"
               ? reviews.length
-                ? `${entries.length} recorded · ${reviews.length} waiting for your review`
+                ? `${entries.length} recorded · ${reviews.length} waiting for review`
                 : `${entries.length} recorded`
               : activity.label
                 ? activity.detail
@@ -477,6 +493,12 @@ function JourneyStatus({
             ) : undefined
           }
         />
+      )}
+      {/* Waiting on the agent or a decision never keeps the owner outside the Book. */}
+      {(phase === "approve" || phase === "unusable" || phase === "working") && (
+        <Button color="tertiary" size="sm" className="entrance-skip" onClick={() => onOpen?.("dashboard")}>
+          Skip for now
+        </Button>
       )}
     </div>
   );
@@ -505,12 +527,12 @@ function ConnectAgent({ connection }: { connection: EntranceConnection }) {
   const local = connection.kind === "local";
   const steps: { text: string; command?: string }[] = local
     ? [
-        { text: "Run this in Terminal to add Vult to your agents:", command: `${connection.program} mcp install` },
-        { text: "Restart your agent and ask it: “Use Vult to do my bookkeeping.”" },
+        { text: "Run this in Terminal to add Vult to the agents on this computer:", command: `${connection.program} mcp install` },
+        { text: "Restart the agent and ask it: “Use Vult to do my bookkeeping.”" },
       ]
     : [
-        { text: "Add Vult to your agent as an MCP server:", command: connection.address },
-        { text: "Your agent asks you to sign in. Then ask it: “Use Vult to do my bookkeeping.”" },
+        { text: "Add Vult to the agent as an MCP server:", command: connection.address },
+        { text: "The agent asks you to sign in. Then ask it: “Use Vult to do my bookkeeping.”" },
       ];
   return (
     <div className="entrance-guide-step">
@@ -540,7 +562,7 @@ function FirstStatement({ onAdded, onSkip }: { onAdded: (file: File) => Promise<
     if (!file) return;
     const type = file.type || (file.name.toLowerCase().endsWith(".csv") ? "text/csv" : "");
     if (!statementTypes.includes(type)) {
-      setError(`${file.name} isn’t a PDF, CSV or photo. Statements usually come as a PDF or CSV from your bank.`);
+      setError(`${file.name} isn’t a PDF, CSV or photo. Statements usually come as a PDF or CSV from the bank.`);
       return;
     }
     if (file.size > maxStatementBytes) {
@@ -551,6 +573,12 @@ function FirstStatement({ onAdded, onSkip }: { onAdded: (file: File) => Promise<
     setBusy(true);
     try {
       await onAdded(file);
+    } catch (e) {
+      setError(
+        e instanceof Error && e.message
+          ? `${file.name} didn’t upload. ${e.message}`
+          : `${file.name} didn’t upload. Try again, or skip for now and add it in Sources.`,
+      );
     } finally {
       setBusy(false);
     }

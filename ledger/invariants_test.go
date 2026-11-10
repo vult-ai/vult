@@ -122,7 +122,7 @@ func TestIntermediateBalanceOverflowCannotBeHiddenByLaterEntry(t *testing.T) {
 func TestHistoricalBalanceValidationRequiresLiveScopedWriteAccess(t *testing.T) {
 	db, _, scope, debit, credit := setup(t)
 	var receipts []string
-	if err := db.Admin.QueryRow(db.Context, "SELECT array_agg(filename ORDER BY filename) FROM public.schema_receipts").Scan(&receipts); err != nil || strings.Join(receipts, ",") != "0001_ledger.sql,0002_server_access.sql,0003_documents.sql,0004_recorded_book.sql,0005_proposing_agents.sql,0006_owner_recovery_codes.sql" {
+	if err := db.Admin.QueryRow(db.Context, "SELECT array_agg(filename ORDER BY filename) FROM public.schema_receipts").Scan(&receipts); err != nil || strings.Join(receipts, ",") != "0001_ledger.sql,0002_server_access.sql,0003_documents.sql,0004_recorded_book.sql,0005_proposing_agents.sql,0006_owner_recovery_codes.sql,0007_accounting_foundations.sql" {
 		t.Fatal("fresh installation has an unexpected migration sequence", err)
 	}
 	var definer, trustedOwner, runtimeAccess, directValidator, directLine, directRestore, directHistory bool
@@ -368,7 +368,7 @@ func TestStaleSnapshotsCannotWriteAfterCloseOrBalanceChange(t *testing.T) {
 				t.Fatal("snapshot not established")
 			}
 			if variation == "period" {
-				if e := db.Owner.ClosePeriod(db.Context, book.ID, "2026-01-01", "2026-01-31"); e != nil {
+				if e := db.ClosePeriod(db.Context, book.ID, "2026-01-01", "2026-01-31"); e != nil {
 					t.Fatal(e)
 				}
 			} else {

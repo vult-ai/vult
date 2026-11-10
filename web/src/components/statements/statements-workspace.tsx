@@ -2,7 +2,7 @@ import { NameLink } from "../ui/name-link";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Download01, Printer } from "../../design-system/icons";
-import { File06, Calendar, Columns03, SwitchHorizontal01, SearchLg, ClipboardCheck, Sliders01, ChevronRight } from "../../design-system/icons";
+import { File06, Calendar, TableColumns, SwitchHorizontal01, SearchLg, ClipboardCheck, Sliders01, ChevronRight } from "../../design-system/icons";
 import { Dialog as AriaDialog, Popover } from "react-aria-components";
 import { bookURL, money, today, type Book, type State } from "../../lib/api";
 import { formatDate, formatDateRange, formatDateTime } from "../../lib/date-format";
@@ -36,6 +36,7 @@ import { captureInspectorScroll, restoreInspectorScroll, type InspectorScroll } 
 import { ReportComparison } from "./report-comparison";
 import { reportComparisonDate } from "../../lib/report-period";
 import { StatementToolAction, StatementToolSelect, StatementTools } from "./statement-tools";
+import { StatementCompactTools } from "./statement-compact-tools";
 import { reportScopeStatus } from "./report-scope-status";
 import { formatReadableDateTime } from "../../lib/date-format";
 import "./statements.css";
@@ -55,6 +56,7 @@ const groups = ["Financial statements", "Accounting reports", "Supporting views"
 const descriptions: Record<ReportView, string> = {
   balance_sheet: "Assets, liabilities and equity at a date.",
   profit_loss: "Recorded income, expenses and results for the period.",
+  cash_flows: "Cash in and out of the cash accounts, by operating, investing and financing activity.",
   trial_balance: "Account balances and exact debit and credit control.",
   general_ledger: "Account activity, opening balances and closing balances.",
   journal: "Posted entries and their debit and credit lines.",
@@ -95,6 +97,8 @@ export function StatementsWorkspace({ book, state, onShowTransactions, onInspect
   const reviewId = useId();
   const toolsTrigger = useRef<HTMLButtonElement>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
+  // The options popover opens beside the side rail, or below the narrow toolbar.
+  const [toolsFromBar, setToolsFromBar] = useState(false);
   const exportTrigger = useRef<HTMLButtonElement>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFailure, setExportFailure] = useState<unknown>();
@@ -275,6 +279,41 @@ export function StatementsWorkspace({ book, state, onShowTransactions, onInspect
     requestAnimationFrame(() => requestAnimationFrame(() => { if (trigger?.isConnected && initialBook.current === book.id) open(trigger); }));
   };
   const compactTools = !toolsExpanded || workPinned;
+  const comparisonOptions = [
+    { value: "none", label: "No comparison" },
+    { value: "previous_period", label: contextDefinition.position ? "Previous month" : "Previous period" },
+    { value: "previous_year", label: "Previous year" },
+    ...(contextDefinition.position ? [{value:"month_end",label:"Previous month end"},{value:"fiscal_year_end",label:"Previous fiscal year end"}]:[]),
+    ...(selection.comparison==="explicit" ? [{value:"explicit",label:"Custom comparison"}]:[]),
+    { value: "custom", label: "Choose comparison dates…" },
+  ];
+  const columnOptions = [
+    { value: "summary", label: "Summary" }, { value: "months", label: "Months", disabled: !!monthViewReason(selection) && selection.columns !== "months" },
+  ];
+  const chooseComparison = (value: string, trigger: HTMLElement) => {
+    if(value==="custom"){setComparisonTrigger(trigger);return;}
+    if(value==="fiscal_year_end"||value==="month_end"){change({comparison:"explicit",compareFrom:undefined,compareTo:reportComparisonDate(value,book,selection.range.to)});return;}
+    change({comparison:value as ReportLocation["comparison"],compareFrom:undefined,compareTo:undefined});
+  };
+  const exportUnavailable = !display || !display.sources.every(reportExportAvailable) || report?.status === "unsupported" || pending;
+  const printUnavailable = !data || pending || allRows.length > 10000;
+  const compactBar = <StatementCompactTools
+    report={selection.report} onReport={value => openReport(value as ReportView)}
+    reports={groups.map(group => ({ label: group, options: reportDefinitions.filter(item => item.group === group).map(item => ({ value: item.id, label: item.label })) }))}
+    period={<ReportPeriodPicker book={book} range={selection.range} position={contextDefinition.position} months={selection.columns==="months"} triggerLabel={contextDefinition.position && selection.columns !== "months" ? formatDate(selection.range.to) : formatDateRange(selection.range.from, selection.range.to)} onRange={(range) => change({ range })} />}
+    comparison={selection.comparison} comparisons={comparisonOptions} comparisonDisabled={!reportSupportsComparison(contextReport)} onComparison={chooseComparison}
+    columns={selection.columns || "summary"} columnsDisabled={!reportSupportsMonths(selection.report)} monthsDisabled={columnOptions[1].disabled}
+    onColumns={value => change({ columns: value as ReportLocation["columns"] })}
+    actions={[
+      { label: "Review", items: [{ id: "inspect", label: "Inspect amount", disabled: !display }, { id: "review", label: "Review scope", disabled: !report }, { id: "views", label: "Saved views and details…" }] },
+      { label: "Export", items: [...(selection.report !== "cash_movement" ? [{ id: "csv", label: "Export CSV", disabled: exportUnavailable || exportPending }] : []), { id: "print", label: "Print / PDF", disabled: printUnavailable }] },
+    ]}
+    onAction={(id, trigger) => {
+      if (id === "inspect" || id === "review") openPanel(id, trigger);
+      else if (id === "views") { toolsTrigger.current = trigger as HTMLButtonElement; setToolsFromBar(true); setExportOpen(false); setActivePanel(undefined); requestAnimationFrame(() => setToolsOpen(true)); }
+      else if (id === "csv") void exportCSV();
+      else if (id === "print") printDocument();
+    }} />;
   const controls = <>
     <section className="statement-tools-group" aria-label="Report scope">
     <StatementToolSelect label="Report" collapsed={compactTools} icon={File06} aria-label="Choose report" value={selection.report} onChange={event => openReport(event.currentTarget.value as ReportView)} options={groups.flatMap(group => [
@@ -286,22 +325,8 @@ export function StatementsWorkspace({ book, state, onShowTransactions, onInspect
     </div>
     </section>
     <section className="statement-tools-group" aria-label="Report presentation">
-    <StatementToolSelect label="Comparison" collapsed={compactTools} icon={SwitchHorizontal01} disabled={!reportSupportsComparison(contextReport)} aria-label="Compare report" value={selection.comparison} onChange={(e) => {
-      const value=e.currentTarget.value;
-      if(value==="custom"){setComparisonTrigger(e.currentTarget);return;}
-      if(value==="fiscal_year_end"||value==="month_end"){change({comparison:"explicit",compareFrom:undefined,compareTo:reportComparisonDate(value,book,selection.range.to)});return;}
-      change({comparison:value as ReportLocation["comparison"],compareFrom:undefined,compareTo:undefined});
-    }} options={[
-      { value: "none", label: "No comparison" },
-      { value: "previous_period", label: contextDefinition.position ? "Previous month" : "Previous period" },
-      { value: "previous_year", label: "Previous year" },
-      ...(contextDefinition.position ? [{value:"month_end",label:"Previous month end"},{value:"fiscal_year_end",label:"Previous fiscal year end"}]:[]),
-      ...(selection.comparison==="explicit" ? [{value:"explicit",label:"Custom comparison"}]:[]),
-      { value: "custom", label: "Choose comparison dates…" },
-    ]} />
-    <StatementToolSelect label="Columns" collapsed={compactTools} icon={Columns03} disabled={!reportSupportsMonths(selection.report)} aria-label="Report columns" value={selection.columns || "summary"} onChange={event => change({ columns: event.currentTarget.value as ReportLocation["columns"] })} options={[
-      { value: "summary", label: "Summary" }, { value: "months", label: "Months", disabled: !!monthViewReason(selection) && selection.columns !== "months" },
-    ]} />
+    <StatementToolSelect label="Comparison" collapsed={compactTools} icon={SwitchHorizontal01} disabled={!reportSupportsComparison(contextReport)} aria-label="Compare report" value={selection.comparison} onChange={(e) => chooseComparison(e.currentTarget.value, e.currentTarget)} options={comparisonOptions} />
+    <StatementToolSelect label="Columns" collapsed={compactTools} icon={TableColumns} disabled={!reportSupportsMonths(selection.report)} aria-label="Report columns" value={selection.columns || "summary"} onChange={event => change({ columns: event.currentTarget.value as ReportLocation["columns"] })} options={columnOptions} />
     </section>
   </>;
   const savedControls = <>
@@ -334,6 +359,7 @@ export function StatementsWorkspace({ book, state, onShowTransactions, onInspect
   return <div className="workspace-page statements-workspace" data-testid="statements-workspace" data-vult-context-inspector aria-busy={pending}>
     <HeaderActions active fallback={<PageToolbar actions={<CopyCurrentView book={book} range={selection.range} href={viewURL} disabled={!data || pending || selection.invalid} />} />}><CopyCurrentView book={book} range={selection.range} href={viewURL} disabled={!data || pending || selection.invalid} /></HeaderActions>
     <div className="statements-layout statement-workbench collection-inspector" data-tools-expanded={toolsExpanded && !workPinned} data-work-pinned={workPinned && !!activePanel} data-motion={toolsAnimate ? "pointer" : "instant"}>
+      {compactBar}
       <div className="statement-main collection-inspector-collection">
         <header className="statement-context">
           <div className="statement-workbench-identity"><h2>{definition.label}</h2><span className="statement-context-currency"><span aria-hidden>·</span> {book.currency}</span></div>
@@ -362,6 +388,15 @@ export function StatementsWorkspace({ book, state, onShowTransactions, onInspect
             <Button size="sm" color="tertiary" onClick={() => onShowTransactions(selection.range)}>Open period activity</Button>
           </div> : report ? <>
             {report.status === "unsupported" && <div className="statement-empty"><h3>Accounting treatment is not established</h3><p>{descriptions[selection.report]}</p><p>Review the required scope and classification before this statement can be prepared.</p>{!!report.limitations.length && <ul className="statement-limitations">{report.limitations.map((limit, i) => <li key={i}>{limit}</li>)}</ul>}</div>}
+            {!!report.period_notes?.length && (
+              <ul className="statement-period-notes">
+                {report.period_notes.map((n, i) => (
+                  <li key={i} className="vult-type-metadata">
+                    {formatDate(n.from, "compact")} – {formatDate(n.through, "compact")} {n.kind === "reopened" ? "was reopened" : "was closed with open review items"} on {formatDate(n.at.slice(0, 10), "compact")}: {n.reason}
+                  </li>
+                ))}
+              </ul>
+            )}
             {report.rows.length > 0 && <>
               {display && <FinancialReportGrid display={display} rows={visible} expanded={expanded} onToggle={toggleRow} onInspect={inspect} rowOffset={page * 100} rowCount={visibleRows.length}
                 selectionContainer={selectionHost} onSelectionChange={selectedAmountChanged}
@@ -387,7 +422,7 @@ export function StatementsWorkspace({ book, state, onShowTransactions, onInspect
           });
           if (workPinned) setWorkPinned(false);
         }}
-        footer={<Button size="sm" color="secondary" className="statement-tool-export" aria-label="Export report" aria-expanded={exportOpen} onClick={event => { exportTrigger.current = event.currentTarget; setToolsOpen(false); if (!workPinned) setActivePanel(undefined); setExportOpen(value => !value); }}><Download01 aria-hidden /><span>Export</span></Button>}
+        footer={<Button size="sm" color="secondary" className="statement-tool-export" aria-label="Export report" title={compactTools ? "Export" : undefined} aria-expanded={exportOpen} onClick={event => { exportTrigger.current = event.currentTarget; setToolsOpen(false); if (!workPinned) setActivePanel(undefined); setExportOpen(value => !value); }}><Download01 aria-hidden /><span>Export</span></Button>}
         panel={<>
           <div hidden={activePanel !== "inspect"} className="statement-work-inspect"><div ref={setSelectionHost} />
             {inspection && report && <ReportInspector embedded report={inspection.cell.report} row={inspection.cell.row} column={inspection.cell.column} displayLabel={inspection.cell.label} onClose={closeInspection} onInspect={onInspect} onRefresh={() => { closeInspection(); setRetry(n => n + 1); }} />}
@@ -399,11 +434,11 @@ export function StatementsWorkspace({ book, state, onShowTransactions, onInspect
         <section className="statement-tools-group statement-tools-actions" aria-label="Investigation and views">
           <StatementToolAction collapsed={compactTools} label="Inspect amount" icon={<SearchLg aria-hidden />} disabled={!display} expanded={activePanel === "inspect"} onClick={trigger => openPanel("inspect", trigger)} />
           <StatementToolAction collapsed={compactTools} label="Review scope" icon={<ClipboardCheck aria-hidden />} disabled={!report} expanded={activePanel === "review"} onClick={trigger => openPanel("review", trigger)} />
-          <StatementToolAction collapsed={compactTools} label="Report options" icon={<Sliders01 aria-hidden />} expanded={toolsOpen} onClick={trigger => { toolsTrigger.current = trigger; setExportOpen(false); if (!workPinned) setActivePanel(undefined); setToolsOpen(value => !value); }} />
+          <StatementToolAction collapsed={compactTools} label="Report options" icon={<Sliders01 aria-hidden />} expanded={toolsOpen} onClick={trigger => { toolsTrigger.current = trigger; setToolsFromBar(false); setExportOpen(false); if (!workPinned) setActivePanel(undefined); setToolsOpen(value => !value); }} />
         </section>
       </StatementTools>
     </div>
-    <Popover triggerRef={toolsTrigger} isOpen={toolsOpen} onOpenChange={setToolsOpen} placement="left bottom" offset={8} containerPadding={12} isNonModal data-motion="instant" className="statement-tools-popover vult-surface-paper">
+    <Popover triggerRef={toolsTrigger} isOpen={toolsOpen} onOpenChange={setToolsOpen} placement={toolsFromBar ? "bottom end" : "left bottom"} offset={8} containerPadding={12} isNonModal data-motion="instant" className="statement-tools-popover vult-surface-paper">
             <AriaDialog aria-label="Report options">
               <div className="statement-tools-views">{savedControls}</div>
               <details className="statement-result-details"><summary>Result details</summary><p>{report?.scope.generated_at ? `Calculated ${formatDateTime(report.scope.generated_at, "full")}` : "Recorded receipts and payments"}</p><p>Live reports may change when entries or report presentation change.</p>{selection.report !== "cash_movement" && <Button size="sm" color="tertiary" disabled={pending} onClick={() => { setToolsOpen(false); setRetry(n => n + 1); }}>Refresh report</Button>}</details>
@@ -411,8 +446,8 @@ export function StatementsWorkspace({ book, state, onShowTransactions, onInspect
           </Popover>
     <Popover triggerRef={exportTrigger} isOpen={exportOpen} onOpenChange={setExportOpen} placement="left bottom" offset={8} containerPadding={12} isNonModal data-motion="instant" className="statement-tools-popover statement-export-popover vult-surface-paper">
       <AriaDialog aria-label="Export report">
-        {selection.report !== "cash_movement" && <Button size="sm" color="secondary" busy={exportPending} disabled={!display || !display.sources.every(reportExportAvailable) || report?.status === "unsupported" || pending} title={report?.status === "unsupported" ? "Establish the accounting treatment before exporting this statement." : undefined} onClick={() => void exportCSV()}><Download01 aria-hidden />Export CSV</Button>}
-        <Button size="sm" color="tertiary" disabled={!data || pending || allRows.length > 10000} title={allRows.length > 10000 ? "Choose a shorter period to print, or export the complete CSV." : undefined} onClick={() => { setExportOpen(false); printDocument(); }}><Printer aria-hidden />Print / PDF</Button>
+        {selection.report !== "cash_movement" && <Button size="sm" color="secondary" busy={exportPending} disabled={exportUnavailable} title={report?.status === "unsupported" ? "Establish the accounting treatment before exporting this statement." : undefined} onClick={() => void exportCSV()}><Download01 aria-hidden />Export CSV</Button>}
+        <Button size="sm" color="tertiary" disabled={printUnavailable} title={allRows.length > 10000 ? "Choose a shorter period to print, or export the complete CSV." : undefined} onClick={() => { setExportOpen(false); printDocument(); }}><Printer aria-hidden />Print / PDF</Button>
       </AriaDialog>
     </Popover>
     <Dialog open={!!saveViewTrigger} title="Save report view" description="Save these reporting parameters in this browser for this Book. This saves a live view, not frozen financial results." returnTo={saveViewTrigger} onOpenChange={open => { if (!open) setSaveViewTrigger(undefined); }}>

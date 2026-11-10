@@ -111,6 +111,16 @@ cd web && VULT_E2E_CHANNEL=chrome npx playwright test
 
 `VULT_E2E_CHANNEL=chrome` uses an installed Chrome with a temporary profile.
 
+The document viewer has a separate browser suite with synthetic PDF and image
+fixtures. Start the web development server, then run from `web`:
+
+```sh
+VULT_E2E_CHANNEL=chrome npm run test:viewer
+```
+
+Set `VULT_E2E_URL` if that server uses a different address. This suite does not
+need a database or an existing Book.
+
 The installer generator and synthetic shell-control tests use Python 3.11 or later:
 
 ```sh

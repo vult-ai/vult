@@ -58,7 +58,7 @@ test("actual sign-in callback accepts only supported relative continuations", as
     const result = await signIn(destination);
     assert.deepEqual(result.navigations, [destination]);
     // Leaving for the next step replaces the page; no message is left behind.
-    assert.equal(result.status, "Waiting for your device…");
+    assert.equal(result.status, "Waiting for the device…");
   }
 });
 
@@ -76,7 +76,7 @@ test("actual sign-in callback rejects substituted, ambiguous and noncanonical de
     const result = await signIn(destination);
     assert.deepEqual(result.navigations, []);
     assert.equal(result.disabled, false);
-    assert.equal(result.status, "Sign-in wasn’t confirmed Try your passkey again.");
+    assert.equal(result.status, "Sign-in wasn’t confirmed Try the passkey again.");
   }
   const result = await signIn(`/auth/approve?operation=${reference}`, false);
   assert.deepEqual(result.navigations, []);
@@ -139,7 +139,7 @@ test("manual setup uses the existing CSRF-checked registration without a secret 
   assert.deepEqual(result.navigations, ["/"]);
   assert.equal(result.input.value, "");
   assert.equal(result.label.hidden, true);
-  assert.equal(result.status.textContent, "Waiting for your device…");
+  assert.equal(result.status.textContent, "Waiting for the device…");
 });
 
 test("a valid setup fragment keeps precedence over a different manual code", async () => {
@@ -169,7 +169,7 @@ test("a failed setup request does not navigate or invent a completed sign-in", a
     assert.deepEqual(result.navigations, []);
     assert.equal(result.button.disabled, false);
     assert.ok(!result.status.textContent.includes(reference));
-    assert.equal(result.status.textContent, "Passkey setup wasn’t confirmed Try signing in with your passkey, or request a fresh setup code.");
+    assert.equal(result.status.textContent, "Passkey setup wasn’t confirmed Try signing in with the passkey, or request a fresh setup code.");
   }
 });
 

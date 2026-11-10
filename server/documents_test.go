@@ -217,7 +217,7 @@ func TestDocumentMCPStreamsVerifiedOriginalAndRecoversLostReply(t *testing.T) {
 	ctx := f.db.Context
 	client := f.client(t, f.token(t, "write"))
 	catalog, err := client.ListTools(ctx, nil)
-	if err != nil || len(catalog.Tools) != 27 {
+	if err != nil || len(catalog.Tools) != 49 {
 		t.Fatal("document tool catalog missing", err)
 	}
 	data := bytes.Repeat([]byte("synthetic original\n"), 300000)
@@ -266,7 +266,7 @@ func TestDocumentMCPStreamsVerifiedOriginalAndRecoversLostReply(t *testing.T) {
 	}
 	reader := f.client(t, f.token(t, "read"))
 	readCatalog, err := reader.ListTools(ctx, nil)
-	if err != nil || len(readCatalog.Tools) != 16 {
+	if err != nil || len(readCatalog.Tools) != 25 {
 		t.Fatal("wrong read catalog", err)
 	}
 	for _, tool := range readCatalog.Tools {

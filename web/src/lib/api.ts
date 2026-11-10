@@ -306,6 +306,13 @@ export type State = {
     posting_count: number;
     /** A recorded parent account, when the Book stores parents. Never derived from names. */
     parent_id?: string;
+    /** The account's current revision, which a change must name. */
+    revision?: number;
+    role?: string;
+    /** Present only when the account is retired. */
+    status?: "retired";
+    /** A heading groups accounts and takes no postings of its own. */
+    heading?: boolean;
   }[];
   months?: { date: string; income_minor: string; expenses_minor: string }[];
   source_import?: {

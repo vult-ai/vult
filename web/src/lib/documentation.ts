@@ -1,7 +1,6 @@
-import { version } from "../../package.json";
-
 declare const __VULT_DOCUMENTATION_ORIGIN__: string;
 
+/** Pages published at vult.ai/docs. */
 export type DocumentationTopic =
   | "get-started"
   | "record-transactions"
@@ -9,7 +8,7 @@ export type DocumentationTopic =
   | "backup-and-restore"
   | "agent-reference";
 
-/** Public, version-specific documentation. No book identity or records leave Vult. */
+/** Public documentation on the website. No book identity or records leave Vult. */
 export function documentationURL(
   topic: DocumentationTopic = "get-started",
   section?: string,
@@ -18,7 +17,7 @@ export function documentationURL(
     typeof __VULT_DOCUMENTATION_ORIGIN__ === "string"
       ? __VULT_DOCUMENTATION_ORIGIN__
       : "https://vult.ai";
-  const url = new URL(`/docs/v${version}/${topic}`, origin);
+  const url = new URL(`/docs/${topic}`, origin);
   if (section) url.hash = section;
   return url.href;
 }

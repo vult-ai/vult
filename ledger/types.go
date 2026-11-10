@@ -95,6 +95,13 @@ type Account struct {
 	CurrencyRevision     *int64 `json:"currency_revision,omitempty"`
 	NativeOriginRevision *int64 `json:"native_origin_revision,omitempty"`
 	RoleRevision         *int64 `json:"role_revision,omitempty"`
+	// ParentAccountID is the display parent, when one is recorded. Parents
+	// never move a balance and are never inferred from names or codes.
+	ParentAccountID string `json:"parent_account_id,omitempty"`
+	// Status is "retired" for a retired account and omitted while active.
+	Status string `json:"status,omitempty"`
+	// Heading marks an account that groups others and takes no postings.
+	Heading bool `json:"heading,omitempty"`
 }
 type Line struct {
 	ID             string               `json:"id,omitempty"`
@@ -139,6 +146,12 @@ type ReviseAccount struct {
 	Currency         *string `json:"currency,omitempty"`
 	Scale            *int    `json:"scale,omitempty"`
 	Role             *string `json:"role,omitempty"`
+	// ParentAccountID sets the display parent; an empty string clears it and
+	// omission keeps the current parent.
+	ParentAccountID *string `json:"parent_account_id,omitempty"`
+	// Heading makes the account a heading that takes no new postings, or
+	// lets it take postings again; omission keeps the current setting.
+	Heading *bool `json:"heading,omitempty"`
 }
 type PostJournal struct {
 	RequestKey        string             `json:"request_key"`

@@ -64,6 +64,13 @@ func (a *webAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cookies := r.CookiesNamed(access.SessionCookie)
+	if len(cookies) == 0 {
+		// No session in this browser at all: the owner is signed out, as
+		// /auth/session says. A session that was present and ended answers
+		// a plain 401.
+		signedOut(w)
+		return
+	}
 	if len(cookies) != 1 {
 		failure(w, http.StatusUnauthorized)
 		return
@@ -119,10 +126,22 @@ func (a *webAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			SchemaVersion int `json:"schema_version"`
 			update.Status
 		}{1, a.updates.Status(r.Context())})
+	case r.URL.Path == accountChangesPath && r.Method == http.MethodPost:
+		a.accountChange(w, r, session.Value)
+	case r.URL.Path == payeesPath && r.Method == http.MethodGet:
+		a.payees(w, r, session.Value)
+	case r.URL.Path == statementsPath && r.Method == http.MethodGet:
+		a.statements(w, r, session.Value)
+	case r.URL.Path == starterChartsPath && r.Method == http.MethodGet && r.URL.RawQuery == "":
+		a.starterCharts(w)
 	case r.URL.Path == periodsPath && r.Method == http.MethodGet:
 		a.readClosedPeriods(w, r, session.Value)
 	case r.URL.Path == periodsClosePath && r.Method == http.MethodPost:
-		a.closePeriod(w, r, session.Value)
+		a.periodChange(w, r, session.Value, "close_period")
+	case r.URL.Path == periodsReopenPath && r.Method == http.MethodPost:
+		a.periodChange(w, r, session.Value, "reopen_period")
+	case r.URL.Path == periodsReviewPath && r.Method == http.MethodGet:
+		a.periodReview(w, r, session.Value)
 	case r.URL.Path == bookViewPreferencePath && r.Method == http.MethodPost:
 		a.saveBookViewPreference(w, r, session.Value)
 	case r.URL.Path == "/api/v1/settings" && r.Method == http.MethodGet:

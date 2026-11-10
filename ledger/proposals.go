@@ -55,6 +55,73 @@ type OperationPreview struct {
 	Accounts          []OperationAccountEffect `json:"accounts"`
 	Classes           []OperationClassEffect   `json:"classes"`
 	MeasurementPolicy *MeasurementPolicy       `json:"measurement_policy,omitempty"`
+	// AccountChanges lists the chart changes of an account operation.
+	AccountChanges []OperationAccountChange `json:"account_changes,omitempty"`
+	// PayeeChange is the payee or entry payee decision a payee operation makes.
+	PayeeChange *OperationPayeeChange `json:"payee_change,omitempty"`
+	// StatementChange is the statement decision a statement operation makes.
+	StatementChange *OperationStatementChange `json:"statement_change,omitempty"`
+	// PeriodChange is the close or reopening a period operation records.
+	PeriodChange *OperationPeriodChange `json:"period_change,omitempty"`
+}
+
+// OperationStatementChange is one statement decision: an import, a match,
+// its revocation, an adjustment, a duplicate or a review.
+type OperationStatementChange struct {
+	Change      string   `json:"change"`
+	StatementID string   `json:"statement_id,omitempty"`
+	AccountID   string   `json:"account_id,omitempty"`
+	PeriodStart string   `json:"period_start,omitempty"`
+	PeriodEnd   string   `json:"period_end,omitempty"`
+	Rows        int      `json:"rows,omitempty"`
+	RowIDs      []string `json:"row_ids,omitempty"`
+	LineIDs     []string `json:"line_ids,omitempty"`
+	MatchID     string   `json:"match_id,omitempty"`
+	EntryID     string   `json:"entry_id,omitempty"`
+	AmountMinor string   `json:"amount_minor,omitempty"`
+	Outcome     string   `json:"outcome,omitempty"`
+	Reason      string   `json:"reason,omitempty"`
+}
+
+// OperationPeriodChange is one close or reopening of an accounting period,
+// with the review items still open when it was prepared.
+type OperationPeriodChange struct {
+	Change    string           `json:"change"`
+	PeriodID  string           `json:"period_id,omitempty"`
+	From      string           `json:"from"`
+	Through   string           `json:"through"`
+	Reason    string           `json:"reason,omitempty"`
+	OpenItems map[string]int64 `json:"open_items,omitempty"`
+}
+
+// OperationPayeeChange is one payee record or entry payee decision. A new
+// payee has no ID until it is recorded.
+type OperationPayeeChange struct {
+	Change      string `json:"change"`
+	PayeeID     string `json:"payee_id,omitempty"`
+	Revision    int64  `json:"revision"`
+	DisplayName string `json:"display_name,omitempty"`
+	Kind        string `json:"kind,omitempty"`
+	Status      string `json:"status,omitempty"`
+	EntryID     string `json:"entry_id,omitempty"`
+	Counterpart string `json:"counterpart,omitempty"`
+}
+
+// OperationAccountChange is one account the approved work creates or revises.
+// A created account has no ID until it is recorded, so it and its parent are
+// named by code; an existing account and parent are named by ID.
+type OperationAccountChange struct {
+	Change          string `json:"change"`
+	AccountID       string `json:"account_id,omitempty"`
+	Revision        int64  `json:"revision"`
+	Class           string `json:"class"`
+	Code            string `json:"code"`
+	Name            string `json:"name"`
+	Role            string `json:"role,omitempty"`
+	ParentAccountID string `json:"parent_account_id,omitempty"`
+	ParentCode      string `json:"parent_code,omitempty"`
+	Status          string `json:"status,omitempty"`
+	Heading         bool   `json:"heading,omitempty"`
 }
 
 type OperationSourceUsage struct {
@@ -161,6 +228,206 @@ type OperationReview struct {
 }
 
 const reviewMessage = "Queued for your approval in Vult. Approving it there posts this exact entry."
+const accountReviewMessage = "Queued for your approval in Vult. Approving it there records this exact change."
+
+func journalOperation(operation string) bool {
+	return operation == "post_journal" || operation == "reverse_journal"
+}
+
+// proposalEffect turns the work a proposal runs into its review preview and
+// the receipt it recorded. The same work run again on approval must produce
+// the identical preview.
+func proposalEffect(ctx context.Context, tx pgx.Tx, s Scope, book Book, operation, key string, effect json.RawMessage, sources []SourceInput, deps operationDependencies) (OperationPreview, string, error) {
+	if journalOperation(operation) {
+		var entry Entry
+		if json.Unmarshal(effect, &entry) != nil {
+			return OperationPreview{}, "", ErrInvalid
+		}
+		return operationPreview(book, entry, sources, deps), entry.ReceiptID, nil
+	}
+	p := emptyOperationPreview(book, sources)
+	existing := func(change string, a Account) OperationAccountChange {
+		return OperationAccountChange{Change: change, AccountID: a.ID, Revision: a.Revision, Class: a.Class, Code: a.Code, Name: a.Name, Role: a.Role, ParentAccountID: a.ParentAccountID, Status: a.Status, Heading: a.Heading}
+	}
+	switch operation {
+	case "create_account", "revise_account", "reactivate_account":
+		var a Account
+		if json.Unmarshal(effect, &a) != nil {
+			return p, "", ErrInvalid
+		}
+		change := existing(strings.TrimSuffix(operation, "_account"), a)
+		if operation == "create_account" {
+			change.AccountID = ""
+		}
+		p.AccountChanges = append(p.AccountChanges, change)
+		p.Description = map[string]string{"create_account": "Create account ", "revise_account": "Revise account ", "reactivate_account": "Reactivate account "}[operation] + a.Name
+	case "retire_account":
+		var r RetiredAccount
+		if json.Unmarshal(effect, &r) != nil {
+			return p, "", ErrInvalid
+		}
+		p.AccountChanges = append(p.AccountChanges, existing("retire", r.Account))
+		if r.Transfer != nil {
+			p.EntriesAffected, p.EconomicDate, p.AccountingDate = 1, r.Transfer.EconomicDate, r.Transfer.AccountingDate
+			for _, line := range r.Transfer.Lines {
+				p.Lines = append(p.Lines, PostLine{AccountID: line.AccountID, Side: line.Side, AmountMinor: line.AmountMinor, Memo: line.Memo, Native: line.Native, Contexts: line.Contexts, Valuation: line.Valuation})
+			}
+		}
+		p.Description = "Retire account " + r.Account.Name
+	case "apply_starter_chart":
+		var chart AppliedStarterChart
+		if json.Unmarshal(effect, &chart) != nil {
+			return p, "", ErrInvalid
+		}
+		codes := map[string]string{}
+		for _, a := range chart.Accounts {
+			codes[a.ID] = a.Code
+		}
+		for _, a := range chart.Accounts {
+			change := existing("create", a)
+			change.AccountID, change.ParentAccountID, change.ParentCode = "", "", codes[a.ParentAccountID]
+			p.AccountChanges = append(p.AccountChanges, change)
+		}
+		if chart, ok := StarterChart(chart.Template); ok {
+			p.Description = "Start the chart of accounts from the " + chart.Title + " starter chart"
+		}
+	case "create_payee", "revise_payee":
+		var payee Payee
+		if json.Unmarshal(effect, &payee) != nil {
+			return p, "", ErrInvalid
+		}
+		change := OperationPayeeChange{Change: "create", Revision: payee.Revision, DisplayName: payee.DisplayName, Kind: payee.Kind, Status: payee.Status}
+		p.Description = "Add payee " + payee.DisplayName
+		if operation == "revise_payee" {
+			change.Change, change.PayeeID = "revise", payee.ID
+			p.Description = "Revise payee " + payee.DisplayName
+		}
+		p.PayeeChange = &change
+	case "set_entry_payee":
+		var link EntryPayee
+		if json.Unmarshal(effect, &link) != nil {
+			return p, "", ErrInvalid
+		}
+		p.PayeeChange = &OperationPayeeChange{Change: "link", PayeeID: link.PayeeID, Revision: link.Revision, DisplayName: link.PayeeName, EntryID: link.EntryID, Counterpart: link.Counterpart}
+		p.Description = "Record the payee as unknown"
+		if link.Counterpart == "payee" {
+			p.Description = "Link the payee " + link.PayeeName
+		}
+	case "import_statement":
+		var st Statement
+		if json.Unmarshal(effect, &st) != nil {
+			return p, "", ErrInvalid
+		}
+		p.StatementChange = &OperationStatementChange{Change: "import", AccountID: st.AccountID, PeriodStart: st.PeriodStart, PeriodEnd: st.PeriodEnd, Rows: st.RowCount}
+		p.Description = "Import the " + st.AccountName + " statement for " + st.PeriodStart + " to " + st.PeriodEnd
+	case "match_statement":
+		var m StatementMatchRead
+		if json.Unmarshal(effect, &m) != nil || len(m.Rows) == 0 {
+			return p, "", ErrInvalid
+		}
+		// Match amounts are in the statement's unit, which can differ from
+		// the Book's currency or precision. No journal lines are posted here.
+		if err := tx.QueryRow(ctx, `SELECT st.currency,st.scale FROM public.statement_rows r JOIN public.statements st
+ ON st.tenant_id=r.tenant_id AND st.book_id=r.book_id AND st.id=r.statement_id
+ WHERE r.tenant_id=$1 AND r.book_id=$2 AND r.id=$3`, s.TenantID, s.BookID, m.Rows[0].RowID).Scan(&p.Currency, &p.Scale); err != nil {
+			return p, "", dbError(err)
+		}
+		c := &OperationStatementChange{Change: "match", Reason: m.Reason}
+		total := new(big.Int)
+		for _, r := range m.Rows {
+			c.RowIDs = append(c.RowIDs, r.RowID)
+			n, ok := new(big.Int).SetString(r.AmountMinor, 10)
+			if !ok {
+				return p, "", ErrInvalid
+			}
+			total.Add(total, n)
+		}
+		for _, l := range m.Lines {
+			c.LineIDs = append(c.LineIDs, l.LineID)
+		}
+		c.AmountMinor = total.String()
+		p.StatementChange, p.Description = c, "Match statement rows to posted lines"
+	case "revoke_statement_match":
+		var v struct {
+			MatchID string `json:"match_id"`
+			Reason  string `json:"reason"`
+		}
+		if json.Unmarshal(effect, &v) != nil {
+			return p, "", ErrInvalid
+		}
+		p.StatementChange, p.Description = &OperationStatementChange{Change: "revoke", MatchID: v.MatchID, Reason: v.Reason}, "Undo a statement match"
+	case "record_statement_adjustment":
+		var v struct {
+			RowID   string `json:"row_id"`
+			EntryID string `json:"entry_id"`
+		}
+		if json.Unmarshal(effect, &v) != nil {
+			return p, "", ErrInvalid
+		}
+		p.StatementChange, p.Description = &OperationStatementChange{Change: "adjust", RowIDs: []string{v.RowID}, EntryID: v.EntryID}, "Explain a statement row with the entry posted for it"
+	case "mark_statement_duplicate":
+		var v MarkStatementDuplicate
+		if json.Unmarshal(effect, &v) != nil {
+			return p, "", ErrInvalid
+		}
+		p.StatementChange, p.Description = &OperationStatementChange{Change: "duplicate", RowIDs: []string{v.RowID, v.CanonicalRowID}, Reason: v.Reason}, "Mark a statement row as a repeat of another"
+	case "review_statement":
+		var st Statement
+		if json.Unmarshal(effect, &st) != nil || st.Review == nil {
+			return p, "", ErrInvalid
+		}
+		p.StatementChange = &OperationStatementChange{Change: "review", StatementID: st.ID, AccountID: st.AccountID, PeriodStart: st.PeriodStart, PeriodEnd: st.PeriodEnd, Outcome: st.Review.Outcome, Reason: st.Review.Reason}
+		p.Description = "Record the " + st.AccountName + " statement as reconciled"
+		if st.Review.Outcome == "needs_work" {
+			p.Description = "Record the " + st.AccountName + " statement as needing work"
+		}
+	case "close_period", "reopen_period":
+		var period AccountingPeriod
+		if json.Unmarshal(effect, &period) != nil || len(period.Events) == 0 {
+			return p, "", ErrInvalid
+		}
+		last := period.Events[len(period.Events)-1]
+		c := &OperationPeriodChange{Change: "close", PeriodID: period.ID, From: period.From, Through: period.Through, Reason: last.Reason, OpenItems: last.OpenItems}
+		p.Description = "Close " + period.From + " to " + period.Through
+		if operation == "reopen_period" {
+			c.Change, p.Description = "reopen", "Reopen "+period.From+" to "+period.Through
+		} else if period.Revision == 1 {
+			c.PeriodID = ""
+		}
+		p.PeriodChange = c
+	default:
+		return p, "", ErrInvalid
+	}
+	var receipt string
+	if err := tx.QueryRow(ctx, "SELECT id::text FROM public.requests WHERE tenant_id=$1 AND book_id=$2 AND actor_id=$3 AND request_key=$4", s.TenantID, s.BookID, s.ActorID, key).Scan(&receipt); err != nil {
+		return p, "", dbError(err)
+	}
+	return p, receipt, nil
+}
+
+func emptyOperationPreview(book Book, sources []SourceInput) OperationPreview {
+	return OperationPreview{Version: 1, Currency: book.Currency, Scale: book.Scale, Lines: []PostLine{}, Sources: sources,
+		SourceUsage: []OperationSourceUsage{}, Accounts: []OperationAccountEffect{}, Classes: []OperationClassEffect{}, AccountChanges: []OperationAccountChange{}}
+}
+
+// Period proposals read their proposed decision without inserting it. The
+// ordinary write guard therefore always requires the owner for a reopening or
+// a close with open items, even when a database client selects preview mode.
+func previewPeriodOperation(ctx context.Context, tx pgx.Tx, s Scope, book Book, operation string, args []byte) (OperationPreview, error) {
+	p := emptyOperationPreview(book, []SourceInput{})
+	var change []byte
+	if err := tx.QueryRow(ctx, "SELECT public.accounting_period_preview($1,$2,$3,$4::jsonb)", s.TenantID, s.BookID, operation, string(args)).Scan(&change); err != nil {
+		return p, periodError(err)
+	}
+	if json.Unmarshal(change, &p.PeriodChange) != nil || p.PeriodChange == nil {
+		return p, ErrInvalid
+	}
+	p.Description = "Close " + p.PeriodChange.From + " to " + p.PeriodChange.Through
+	if operation == "reopen_period" {
+		p.Description = "Reopen " + p.PeriodChange.From + " to " + p.PeriodChange.Through
+	}
+	return p, nil
+}
 
 const proposalColumns = `id::text,sequence,book_id::text,actor_id::text,connection_id::text,request_key,operation,operation_key,sha256,created_at,expires_at,payload_bytes`
 
@@ -176,7 +443,11 @@ func scanProposal(row pgx.Row) (OperationProposal, error) {
 	}
 	p.Arguments, p.Assumptions, p.OpenQuestions, p.Preview = p.payload.Arguments, p.payload.Assumptions, p.payload.OpenQuestions, p.payload.Preview
 	ref := operationref.Encode(p.BookID, p.ID)
-	p.Approval = OperationReview{Flow: "page", Operation: ref, Href: "/auth/approve?operation=" + ref, Message: reviewMessage}
+	message := reviewMessage
+	if !journalOperation(p.Operation) {
+		message = accountReviewMessage
+	}
+	p.Approval = OperationReview{Flow: "page", Operation: ref, Href: "/auth/approve?operation=" + ref, Message: message}
 	return p, nil
 }
 
@@ -198,6 +469,54 @@ func canonicalOperation(operation string, input []byte) (json.RawMessage, string
 			return nil, "", ErrInvalid
 		}
 		return raw(q), q.RequestKey, nil
+	case "create_account":
+		var q CreateAccount
+		if strictjson.Decode(input, &q) != nil || !validKey(q.RequestKey) || !validAccount(q.Class, q.Code, q.Name) || q.Code == "" && !validAccountCodeInput(input, false) {
+			return nil, "", ErrInvalid
+		}
+		return raw(q), q.RequestKey, nil
+	case "revise_account":
+		var q ReviseAccount
+		if strictjson.Decode(input, &q) != nil || !validKey(q.RequestKey) || !ValidID(q.AccountID) || q.ExpectedRevision < 1 || !validCode(q.Code) || len(q.Name) < 1 || len(q.Name) > 120 || q.Code == "" && !validAccountCodeInput(input, true) {
+			return nil, "", ErrInvalid
+		}
+		return raw(q), q.RequestKey, nil
+	case "retire_account":
+		var q RetireAccount
+		if strictjson.Decode(input, &q) != nil || !validRetirement(q) {
+			return nil, "", ErrInvalid
+		}
+		return raw(q), q.RequestKey, nil
+	case "reactivate_account":
+		var q ReactivateAccount
+		if strictjson.Decode(input, &q) != nil || !validKey(q.RequestKey) || !ValidID(q.AccountID) || q.ExpectedRevision < 1 {
+			return nil, "", ErrInvalid
+		}
+		return raw(q), q.RequestKey, nil
+	case "apply_starter_chart":
+		var q ApplyStarterChart
+		if strictjson.Decode(input, &q) != nil || validStarterChartRequest(q) != nil {
+			return nil, "", ErrInvalid
+		}
+		return raw(q), q.RequestKey, nil
+	case "create_payee", "revise_payee", "set_entry_payee":
+		q, key, err := validPayeeChange(operation, input)
+		if err != nil {
+			return nil, "", err
+		}
+		return raw(q), key, nil
+	case "close_period", "reopen_period":
+		q, key, err := validPeriodChange(operation, input)
+		if err != nil {
+			return nil, "", err
+		}
+		return raw(q), key, nil
+	case "import_statement", "mark_statement_duplicate", "match_statement", "revoke_statement_match", "record_statement_adjustment", "review_statement":
+		q, key, err := validStatementChange(operation, input)
+		if err != nil {
+			return nil, "", err
+		}
+		return raw(q), key, nil
 	}
 	return nil, "", ErrInvalid
 }
@@ -216,8 +535,15 @@ func validProposalNotes(notes []string) bool {
 
 func operationSources(operation string, args []byte) ([]SourceInput, error) {
 	sources := []SourceInput{}
-	if operation == "post_journal" {
+	switch operation {
+	case "post_journal":
 		var q PostJournal
+		if strictjson.Decode(args, &q) != nil {
+			return nil, ErrInvalid
+		}
+		sources = append(sources, q.Sources...)
+	case "retire_account":
+		var q RetireAccount
 		if strictjson.Decode(args, &q) != nil {
 			return nil, ErrInvalid
 		}
@@ -366,6 +692,18 @@ func (s Store) prepareOperation(ctx context.Context, scope Scope, input []byte) 
 		if err != nil {
 			return nil, err
 		}
+		if q.Operation == "close_period" || q.Operation == "reopen_period" {
+			book, err := readBook(ctx, tx, scope)
+			if err != nil {
+				return nil, dbError(err)
+			}
+			preview, err := previewPeriodOperation(ctx, tx, scope, book, q.Operation, args)
+			if err != nil {
+				return nil, err
+			}
+			payload = operationPayload{1, q.Operation, args, q.Assumptions, q.OpenQuestions, dependencies, preview}
+			return nil, errOperationPreview
+		}
 		effect, err := dispatch(ctx, tx, scope, q.Operation, args, nil)
 		if err != nil {
 			return nil, err
@@ -373,15 +711,15 @@ func (s Store) prepareOperation(ctx context.Context, scope Scope, input []byte) 
 		if _, err = tx.Exec(ctx, "SET CONSTRAINTS ALL IMMEDIATE"); err != nil {
 			return nil, dbError(err)
 		}
-		var entry Entry
-		if json.Unmarshal(effect, &entry) != nil {
-			return nil, ErrInvalid
-		}
 		book, err := readBook(ctx, tx, scope)
 		if err != nil {
 			return nil, dbError(err)
 		}
-		payload = operationPayload{1, q.Operation, args, q.Assumptions, q.OpenQuestions, dependencies, operationPreview(book, entry, sources, dependencies)}
+		preview, _, err := proposalEffect(ctx, tx, scope, book, q.Operation, key, effect, sources, dependencies)
+		if err != nil {
+			return nil, err
+		}
+		payload = operationPayload{1, q.Operation, args, q.Assumptions, q.OpenQuestions, dependencies, preview}
 		return nil, errOperationPreview
 	})
 	if !errors.Is(err, errOperationPreview) {

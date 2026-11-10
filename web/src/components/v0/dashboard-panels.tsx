@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
+import { Fragment, useCallback, useMemo, useRef, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
 import { workspacePath } from "../../lib/workspace";
 import { BarChart07, ChevronDown, ChevronRight, Coins01, CreditCard02, Receipt, Scales02, Wallet02, PieChart03 } from "../../design-system/icons";
 import { money as baseMoney, type Book, type CashAccount } from "../../lib/api";
@@ -412,7 +412,19 @@ export function IncomeExpensesPanel({
   const zero = low / (top + low);
   // Long labels (weeks, years, quarters) take every other slot past eight periods.
   const longest = groups.reduce((n, g) => Math.max(n, g.label.length), 0);
-  const every = groups.length > 8 && longest >= 4 ? 2 : groups.length > 16 ? Math.ceil(groups.length / 8) : 1;
+  // A narrow chart names fewer periods, so labels never run into each other:
+  // each needs about its own width plus a gap.
+  const [axisWidth, setAxisWidth] = useState(0);
+  const axisObserver = useRef<ResizeObserver | null>(null);
+  const measureAxis = useCallback((node: HTMLDivElement | null) => {
+    axisObserver.current?.disconnect();
+    axisObserver.current = null;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    axisObserver.current = new ResizeObserver(([entry]) => setAxisWidth(entry.contentRect.width));
+    axisObserver.current.observe(node);
+  }, []);
+  const fits = axisWidth > 0 ? Math.max(2, Math.floor(axisWidth / (longest * 7 + 14))) : groups.length;
+  const every = Math.max(groups.length > 8 && longest >= 4 ? 2 : groups.length > 16 ? Math.ceil(groups.length / 8) : 1, Math.ceil(groups.length / fits));
   // Days count back from the last, so the latest period is always named.
   const labelled = (i: number) => (groups[0]?.unit === "day" ? (groups.length - 1 - i) % every === 0 : i % every === 0);
   const focus = hover !== undefined ? groups[hover] : undefined;
@@ -647,7 +659,7 @@ export function IncomeExpensesPanel({
               </div>
             )}
           </div>
-          <div className="dash-axis vult-type-metadata" aria-hidden="true" style={{ ["--groups" as string]: groups.length }}>
+          <div ref={measureAxis} className="dash-axis vult-type-metadata" aria-hidden="true" style={{ ["--groups" as string]: groups.length }}>
             {groups.map((g, i) => <span key={g.key} data-active={hover === i || pinnedKey === g.key || undefined}>{labelled(i) ? g.label : ""}</span>)}
           </div>
         </div>
@@ -762,7 +774,7 @@ export function CashPanel({ book, accounts, total: cash, status, range, onOpen, 
             </li>
           ))}
           {rest !== undefined && sorted!.length > 5 && (
-            <li><div className="dash-row dash-row-plain"><span className="dash-row-name vult-type-ui text-tertiary">{sorted!.length - 5} more accounts</span><span className="dash-row-value vult-money vult-type-ui text-tertiary">{f.money(rest.toString())}</span></div></li>
+            <li><div className="dash-row dash-row-plain"><span className="dash-row-name vult-type-ui text-tertiary">{sorted!.length - 5} more {sorted!.length - 5 === 1 ? "account" : "accounts"}</span><span className="dash-row-value vult-money vult-type-ui text-tertiary">{f.money(rest.toString())}</span></div></li>
           )}
         </ol>
       )}
@@ -814,7 +826,7 @@ export function OwedPanel({ book, position, range, onOpen, onViewAccounts }: {
             </li>
           ))}
           {rows.length > 5 && (
-            <li><div className="dash-row dash-row-plain"><span className="dash-row-name vult-type-ui text-tertiary">{rows.length - 5} more accounts</span><span className="dash-row-value vult-money vult-type-ui text-tertiary">{f.money(rest.toString())}</span></div></li>
+            <li><div className="dash-row dash-row-plain"><span className="dash-row-name vult-type-ui text-tertiary">{rows.length - 5} more {rows.length - 5 === 1 ? "account" : "accounts"}</span><span className="dash-row-value vult-money vult-type-ui text-tertiary">{f.money(rest.toString())}</span></div></li>
           )}
         </ol>
       )}

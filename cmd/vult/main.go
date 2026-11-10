@@ -42,7 +42,7 @@ const help = `Vult ` + daemon.Version + ` — local general ledger
   vult mcp install
   vult mcp [--name AGENT] [--import-dir DIRECTORY] [--export-dir DIRECTORY]
   vult mcp --connection ID [--import-dir DIRECTORY] [--export-dir DIRECTORY]
-  vult period close --book ID --from YYYY-MM-DD --through YYYY-MM-DD
+  vult period close --book ID --from YYYY-MM-DD --through YYYY-MM-DD [--reason TEXT]
   vult verify --book ID
   vult export --book ID --output FILE.json
   vult export --documents --book ID --output FILE.tar
@@ -287,15 +287,12 @@ func run(args []string, out, errout io.Writer) error {
 		book := f.String("book", "", "Book ID")
 		from := f.String("from", "", "first accounting date")
 		through := f.String("through", "", "last accounting date")
+		reason := f.String("reason", "", "reason for closing with open review items")
 		if parse(f, args[2:]) != nil || !ledger.ValidID(*book) || !ledger.ValidDate(*from) || !ledger.ValidDate(*through) || *from > *through {
 			return ledger.ErrInvalid
 		}
 		method = "period_close"
-		payload = struct {
-			BookID  string `json:"book_id"`
-			From    string `json:"from"`
-			Through string `json:"through"`
-		}{*book, *from, *through}
+		payload = local.PeriodCloseRequest{BookID: *book, RequestKey: ledger.ID(), From: *from, Through: *through, Reason: *reason}
 	case "mcp":
 		if len(args) == 2 && args[1] == "install" {
 			return runAgentInstall(ctx, out)

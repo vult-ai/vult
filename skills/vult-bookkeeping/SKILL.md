@@ -17,7 +17,7 @@ Call `get_book` for the selected Book, currency and precision, then
 `list_accounts` for permanent account IDs and current names/codes. Tools derive
 tenant, Book and actor from the connection. Do not invent scope parameters or
 switch Books to bypass a denial. A read connection cannot write; owner setup,
-period closing, recovery and revocation stay outside agent tools.
+reopening periods, recovery and revocation stay outside agent tools.
 
 Discover the actual tool schemas. Available tools depend on the connection's
 permission, document storage and transport. Use the schema presented by the
@@ -82,12 +82,106 @@ display attributes: omit `code` or use `""` when creating an account without one
 A revision explicitly retains, assigns or clears its code. Names and codes can
 change without changing posted identities.
 
+In a Book with no accounts, offer the starter chart that matches its Business or
+Personal profile (`list_starter_charts`, then `apply_starter_chart`) before
+creating accounts one by one; it is ordinary accounts with roles and parents.
+Give an account a role only when it fits the class: `cash`, `receivable`,
+`fixed_asset` or `investment` on an asset; `card`, `loan` or `payable` on a
+liability; `cost_of_sales` on an expense for the direct cost of what was sold;
+`opening_balance` on the equity account that opening balances post against.
+Group accounts with `parent_account_id` on `revise_account` when the owner's
+chart calls for it; never infer a parent from a name such as "Expenses:Travel".
+A parent never moves money. Accounts marked `heading` group others and take no
+postings: post to the account beneath them that fits.
+
+Roles drive the cash-flow statement (`get_cash_flow`), so set them from what an
+account is, never from its name. Cash is every `cash` account. A cash line is
+financing when the other side is equity or a `loan`, investing when it is a
+`fixed_asset` or `investment`, and operating otherwise; transfers between cash
+accounts are excluded. An entry that posts to an `opening_balance` account and
+to no income or expense is opening cash, not financing. A credit-card account must carry `card` and a loan
+`loan`, or their payments read as spending. Report an `Unclassified` amount as
+it is: split the entry differently only when the evidence says it was two
+separate movements.
+
+Before creating an account, look for an existing one with the same meaning and
+reuse it. Create one when the evidence or a reporting distinction the owner
+needs calls for it, with the name an ordinary bookkeeper would use. A small
+chart grows from evidence, not from guesses.
+
+Each real bank, card or loan account gets its own Vult account. The first real
+account of a kind can take over an unused starter account (rename it, for
+example "Checking" to the bank's name for it); every further one is created
+separately. Never put two real accounts' statements into one Vult account
+because they are the same kind of account.
+
+What an account is named never decides what an entry means:
+
+- Opening balances record where tracking starts: the position on a stated date,
+  from the evidence for that date. They are not income. When moving an existing
+  Book, keep the distinctions its records already make (owner capital,
+  Accumulated earnings, each asset and liability) rather than collapsing them
+  into Opening balances, and record earlier-period income and expenses as
+  income and expenses in their own periods. Never use Opening balances to hide a
+  real contribution, receipt or payment.
+- Accumulated earnings holds earnings brought in as a balance, for periods
+  whose income and expenses are not recorded entry by entry. Reports derive
+  later years' earnings from the entries. Never record both for the same
+  period; if detailed history for a covered period arrives later, ask the owner
+  how to reconcile the overlap.
+- Sales tax collected for a tax authority is owed, not earned: record it in
+  Sales tax payable, and record paying it over as settling that liability, not
+  as a new expense. Taxes and licenses is for taxes that are the business's own
+  cost.
+- A loan or mortgage payment reduces the loan by the principal and is interest
+  expense for the interest, as the loan statement splits it. Escrow for taxes
+  and insurance is money held until the lender pays the bill. Without the split,
+  propose the entry and ask; never put a whole payment into expenses.
+- Paying a credit card settles the card; the purchases were already recorded.
+- A net salary deposit does not show gross pay or what was withheld. Record
+  those only from the payslip.
+- An empty account says nothing about a real balance. Record Property,
+  Investments or a loan only from evidence of its amount and date, and never
+  invent a matching asset to balance a liability.
+
+A line you can't classify from the evidence is proposed with `prepare_operation`
+and your question, never posted to a catch-all account. It stays visible to the
+owner until they decide.
+
+Retire an account the owner has closed with `retire_account`. If it still holds
+money, the call is refused with the remaining balance: ask where the money went,
+or use what the closing statement shows, then retire with
+`destination_account_id`, `transfer_date` and the statement as a source. Vult
+records the transfer and the retirement together. Never retire by posting a
+balancing entry yourself first, and never pick a destination the evidence
+doesn't support. Post nothing to a retired account; `reactivate_account` first
+if the owner says it is in use again.
+
 Keep economic date, accounting date and the service's recorded time distinct.
 Use supported dates; skip pending lines until settled values are available. An
 open accounting date for an event in a closed period needs the owner's accounting
 instruction, while the original economic date remains intact. `list_closed_periods`
-shows which dates are closed. Only the owner closes a period, in Book settings;
-never ask to reopen one, because closing is permanent.
+shows which periods are closed or reopened, with why.
+
+## Close a period
+
+Closing isn't permanent: it is a recorded decision that stops posting into the
+period until the owner reopens it with a reason.
+
+1. `get_period_review` for the range first. It lists statements in it that
+   aren't reconciled, and income or expense entries with no evidence or no
+   payee. Transfers, opening balances and reversals never count.
+2. When it is `clean`, a write agent closes it with `close_period`. Reconcile,
+   attach evidence and record payees before closing rather than closing around
+   them.
+3. When items stay open, only the owner can close: tell the owner what is open,
+   or `prepare_operation` the close with a reason the owner can approve. The
+   reason shows on that period's reports.
+4. Only the owner reopens a period. When a correction belongs in a closed
+   period, prepare `reopen_period` with a specific reason, or record the
+   correction in a later, open period as the owner instructs.
+5. A year close records its period like any other. Never post closing entries:
+   reports derive retained earnings.
 
 An opening position needs an explicit cutoff, evidence, covered period and an
 account of history already present. Do not add an opening balance on top of
@@ -193,6 +287,32 @@ one entry may cite up to 32 sources. Opening balances or supported manual
 adjustments may have none. Verify the returned entry and balances rather than
 assuming preparation or a timeout means posting succeeded.
 
+## Record who an entry was with
+
+Payees are the people and organizations a Book deals with. Who an entry was
+with is a separate decision from the entry: linking or changing it never
+changes the entry, its statement text or its sources.
+
+- Start from the statement row's counterparty text and the rest of the
+  evidence: the receipt or invoice, a merchant ID, an earlier entry the owner
+  already linked. Link a payee only when that evidence identifies the
+  counterparty. A name that merely looks the same is not enough: two payees
+  with the same name are different people or organizations, and one payee can
+  appear under several statement spellings.
+- `list_payees` first and reuse the payee that is the same identity. Create a
+  payee (`create_payee`) with the name an ordinary person would use, such as
+  "Example Bistro" for "CARD 1234 EXAMPLE BISTRO LDN"; never copy card numbers
+  or reference codes into a name.
+- When the evidence doesn't identify the counterparty, record it as unknown
+  (`set_entry_payee` with `unknown: true`) or leave it for the owner, and say
+  so. Unknown is a recorded decision; no decision reads as "Not recorded".
+- `get_entry_payee` shows an entry's current payee decision and its history;
+  read it before changing one.
+- A change to an existing decision needs a reason. Rename or retire a payee
+  with `revise_payee`; its entries keep it.
+- Recurring charges come from `list_recurring_charges`, derived from the
+  linked entries. Never record a charge as recurring yourself.
+
 ## Keep sources separate from evidence
 
 A **source** records where the posting came from. **Evidence** is an explicit
@@ -243,13 +363,43 @@ tax/legal conclusion or an automatic rule prohibiting posting.
    uncertain reply before continuing with that event.
 5. Store any actual receipt or invoice separately and use `attach_evidence`
    with the matching role. A statement source alone is not receipt evidence.
-6. Compare `get_balance` through the statement date in the same unit and basis.
-   A foreign statement needs an available complete native balance; incomplete
-   native history is not zero. Book carrying value is separate. Amount agreement
-   alone does not establish complete reconciliation. Report missing coverage or
-   unexplained items; never invent an entry to force agreement.
+6. Reconcile the statement (below). Amount agreement alone does not establish
+   complete reconciliation. Report missing coverage or unexplained items; never
+   invent an entry to force agreement.
 7. Finish with `get_trial_balance` to confirm the Book balances. The owner sees
    it as the last step of your work.
+
+## Reconcile a statement
+
+A statement is evidence the Book is compared against; it never posts.
+`list_statements` shows what is already imported and each statement's latest
+review, so check it before importing.
+
+1. `import_statement` once per statement, cited to its document, with every
+   row as printed: `raw` is the row's exact text, `lifecycle` says whether it
+   is settled, pending, a refund, a chargeback or cancelled. Sign each amount
+   the way the statement's balance moves: on a bank account a deposit is
+   positive; on a card a charge is positive and a payment or refund negative.
+   Give the statement's own opening and closing balances; mark it `incomplete`
+   when pages or rows are missing. Importing it again adds nothing.
+2. `suggest_statement_matches`, then check each suggestion against the
+   evidence before `match_statement`. A suggestion is never a decision: equal
+   date and amount alone don't prove the same money. Split and combined
+   matches give each part's `amount_minor`. Rows repeated across overlapping
+   statements are `mark_statement_duplicate` with a reason; two genuine
+   same-day fees are two rows.
+3. A row with no entry in the Book, such as a bank fee, needs its entry first
+   (`post_journal`, or a proposal), then `record_statement_adjustment` links the
+   row to it. Never post a balancing entry to make the totals agree.
+4. `get_statement_reconciliation` shows what is matched, on the statement but
+   not in the Book, in the Book but not on a statement yet (outstanding; that is
+   normal at a cutoff), and the remaining difference. When `fully_explained`
+   is true, `review_statement` with `reconciled`; otherwise `needs_work` with a
+   reason the owner can act on. Vult refuses `reconciled` for anything not
+   fully explained. A propose agent prepares each of these with
+   `prepare_operation` instead.
+5. A matched entry can't be reversed until its match is revoked
+   (`revoke_statement_match`, with a reason).
 
 If another statement arrives after a payment is posted, inspect that payment
 first. Attach the second statement as evidence with role `statement` when it

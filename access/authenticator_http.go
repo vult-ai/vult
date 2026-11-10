@@ -95,7 +95,7 @@ func (h *HTTP) authenticatorRoute(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case errors.Is(err, ErrInvalidCode):
-		codeError(w, http.StatusBadRequest, "invalid_code", "That code didn't work. Enter the newest 6-digit code from your authenticator app. If it keeps failing, check that your phone's clock is set automatically.")
+		codeError(w, http.StatusBadRequest, "invalid_code", "That code didn't work. Enter the newest 6-digit code from the authenticator app. If it keeps failing, check that the phone's clock is set automatically.")
 		return
 	case errors.Is(err, ErrTooManyAttempts):
 		codeError(w, http.StatusTooManyRequests, "too_many_attempts", "Too many codes were tried. Wait five minutes, then try again.")

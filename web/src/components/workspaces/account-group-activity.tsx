@@ -1,4 +1,5 @@
 import { AccountCodeEditor } from "./account-code-editor";
+import { AccountChangeDialogs, type AccountChangeMode } from "./account-status-dialogs";
 import { Dropdown } from "../../design-system/catalog/components/vult-ui/dropdown";
 import { Button as MenuButton } from "../../design-system/catalog/components/vult-ui/button";
 import { useEffect, useRef, useState } from "react";
@@ -84,6 +85,7 @@ export function AccountGroupActivity({
 }) {
   const entryInspection = useAccountEntryInspection();
   const [codeOpen, setCodeOpen] = useState(false);
+  const [changeMode, setChangeMode] = useState<AccountChangeMode | null>(null);
   const toolsTrigger = useRef<HTMLButtonElement>(null);
   const [showContextHelp, setShowContextHelp] = useState(false);
   useEffect(() => setShowContextHelp(false), [node.key]);
@@ -257,6 +259,20 @@ export function AccountGroupActivity({
             </Button>
           )}
           <AccountCodeEditor book={book.id} account={account} />
+          {account.status !== "retired" && (
+            <Button size="sm" color="tertiary" onClick={() => setChangeMode("parent")}>
+              Set parent account
+            </Button>
+          )}
+          {account.status !== "retired" && (
+            <Button size="sm" color="tertiary" onClick={() => setChangeMode("heading")}>
+              {account.heading ? "Allow postings" : "Use as a heading"}
+            </Button>
+          )}
+          <Button size="sm" color="tertiary" onClick={() => setChangeMode(account.status === "retired" ? "reactivate" : "retire")}>
+            {account.status === "retired" ? "Reactivate account" : "Retire account"}
+          </Button>
+          <AccountChangeDialogs book={book} account={account} accounts={accounts} mode={changeMode} onClose={() => setChangeMode(null)} />
         </div>
       )}
       {!account && node.own.length === 1 && (
@@ -430,6 +446,25 @@ export function AccountGroupActivity({
             >
               Edit account code
             </Dropdown.Item>
+            {account && account.status !== "retired" && (
+              <Dropdown.Item id="parent" appearance="control" onAction={() => setChangeMode("parent")}>
+                Set parent account
+              </Dropdown.Item>
+            )}
+            {account && account.status !== "retired" && (
+              <Dropdown.Item id="heading" appearance="control" onAction={() => setChangeMode("heading")}>
+                {account.heading ? "Allow postings" : "Use as a heading"}
+              </Dropdown.Item>
+            )}
+            {account && (
+              <Dropdown.Item
+                id="status"
+                appearance="control"
+                onAction={() => setChangeMode(account.status === "retired" ? "reactivate" : "retire")}
+              >
+                {account.status === "retired" ? "Reactivate account" : "Retire account"}
+              </Dropdown.Item>
+            )}
           </Dropdown.Menu>
         </Dropdown.Popover>
       </Dropdown.Root>
@@ -440,6 +475,16 @@ export function AccountGroupActivity({
         onOpenChange={setCodeOpen}
         returnTo={toolsTrigger.current}
       />
+      {account && (
+        <AccountChangeDialogs
+          book={book}
+          account={account}
+          accounts={accounts}
+          mode={changeMode}
+          returnTo={toolsTrigger.current}
+          onClose={() => setChangeMode(null)}
+        />
+      )}
     </>
   ) : null;
   return embedded ? (
@@ -454,6 +499,8 @@ export function AccountGroupActivity({
       >
         <div className="account-detail-title">
           <h2>{name}</h2>
+          {account?.status === "retired" && <span className="account-status-badge">Retired</span>}
+          {account?.heading && <span className="account-status-badge" title="Takes no new entries; its recorded lines and balance stay">Heading</span>}
           {account && identity && (
             <span className="account-detail-reference">{identity}</span>
           )}
@@ -535,7 +582,9 @@ export function AccountGroupActivity({
         if (!open) onClose();
       }}
     >
-      {content}
+      {/* The dialog body has no inset of its own; its content keeps the
+          standard dialog padding. */}
+      <div className="account-group-activity-dialog">{content}</div>
     </Dialog>
   );
 }

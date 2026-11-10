@@ -380,3 +380,10 @@
 .table[data-scrolled-start] .cell:first-child {
   box-shadow: 1px 0 var(--vult-workbench-border);
 }
+
+/* Phones: the table panel keeps a narrow inset, so rows get the width. */
+@media (width < 640px) {
+  .records {
+    padding-inline: 6px;
+  }
+}

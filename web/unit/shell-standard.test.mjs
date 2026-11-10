@@ -35,7 +35,7 @@ test("the shell tokens keep the documented values", async () => {
   assert.deepEqual(checkTokens(css), []);
   assert.match(checkTokens(css.replace("--vult-shell-header-height: 56px", "--vult-shell-header-height: 60px")).join(""), /56px/);
   const doc = await readFile(new URL("../../docs/design/shell.md", import.meta.url), "utf8");
-  for (const value of ["256px", "64px", "56px", "32px", "4px", "8px", "16px", "24px", "180px", "148px", "1440px", "320px", "768px"])
+  for (const value of ["256px", "64px", "56px", "32px", "4px", "8px", "16px", "24px", "180px", "220px", "1440px", "320px", "768px"])
     assert.match(doc, new RegExp(value), `the document states ${value}`);
   assert.equal(Object.keys(tokens).length, 12);
 });

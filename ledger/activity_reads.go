@@ -93,6 +93,11 @@ type ActivityEntry struct {
 	// OriginalAmount is the amount in another currency the entry records:
 	// the charged amount a statement shows, or a foreign account's movement.
 	OriginalAmount *CurrencyAmount `json:"original_amount,omitempty"`
+	// Counterparty is the linked payee's current name; PayeeStatus is payee,
+	// unknown, or omitted when no payee decision was recorded.
+	Counterparty string `json:"counterparty,omitempty"`
+	PayeeID      string `json:"payee_id,omitempty"`
+	PayeeStatus  string `json:"payee_status,omitempty"`
 }
 
 type ActivityAccount struct {
@@ -314,8 +319,12 @@ func (a TenantAdmin) Activity(ctx context.Context, book string, q ActivityPageQu
    ORDER BY l.id LIMIT 1),
   (SELECT jsonb_build_object('currency',l.native_currency,'scale',l.native_scale,'amount_minor',l.native_amount_minor::text) FROM public.lines l
    WHERE l.tenant_id=e.tenant_id AND l.book_id=e.book_id AND l.entry_id=e.id AND l.native_currency IS NOT NULL AND l.native_currency<>$5
-   ORDER BY l.id LIMIT 1))
- FROM public.entries e LEFT JOIN public.entries r ON r.tenant_id=e.tenant_id AND r.book_id=e.book_id AND r.reversal_of=e.id AND r.recorded_at<=$4::timestamptz
+   ORDER BY l.id LIMIT 1)),
+ coalesce(p.counterpart,''),coalesce(p.payee_id::text,''),coalesce(p.name,'')
+ FROM public.entries e LEFT JOIN LATERAL (SELECT l.counterpart,l.payee_id,(SELECT r.display_name FROM public.payee_revisions r
+   WHERE r.tenant_id=l.tenant_id AND r.book_id=l.book_id AND r.payee_id=l.payee_id ORDER BY r.revision DESC LIMIT 1) name
+   FROM public.entry_payees l WHERE l.tenant_id=e.tenant_id AND l.book_id=e.book_id AND l.entry_id=e.id ORDER BY l.revision DESC LIMIT 1) p ON true
+ LEFT JOIN public.entries r ON r.tenant_id=e.tenant_id AND r.book_id=e.book_id AND r.reversal_of=e.id AND r.recorded_at<=$4::timestamptz
  CROSS JOIN LATERAL(SELECT coalesce(sum(l.amount_minor::numeric) FILTER(WHERE l.side='debit'),0)::text amount,
    coalesce(bool_or(l.native_amount_minor IS NOT NULL),false) native FROM public.lines l
    WHERE l.tenant_id=e.tenant_id AND l.book_id=e.book_id AND l.entry_id=e.id) m
@@ -327,7 +336,7 @@ func (a TenantAdmin) Activity(ctx context.Context, book string, q ActivityPageQu
 		for rows.Next() {
 			entry := ActivityEntry{BookID: book, Currency: header.Currency, Scale: header.Scale, Kind: "journal", AmountRole: "book_debit_total", MeasurementStatus: "entry_lines"}
 			var original []byte
-			if err := rows.Scan(&entry.ID, &entry.Sequence, &entry.EconomicDate, &entry.AccountingDate, &entry.RecordedAt, &entry.Description, &entry.ReversalOf, &entry.ReversedBy, &entry.AmountMinor, &entry.HasNative, &original); err != nil {
+			if err := rows.Scan(&entry.ID, &entry.Sequence, &entry.EconomicDate, &entry.AccountingDate, &entry.RecordedAt, &entry.Description, &entry.ReversalOf, &entry.ReversedBy, &entry.AmountMinor, &entry.HasNative, &original, &entry.PayeeStatus, &entry.PayeeID, &entry.Counterparty); err != nil {
 				return dbError(err)
 			}
 			if len(original) > 0 {

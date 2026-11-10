@@ -20,7 +20,7 @@ import (
 	"github.com/vult-ai/vult/ledger"
 )
 
-var ErrResponseLimit = errors.New("response exceeds server limits; request a smaller journal page or contact your operator")
+var ErrResponseLimit = errors.New("response exceeds server limits; request a smaller journal page or contact the operator")
 var errOperation = errors.New("operation unavailable; for a lost write response, look up the original request key")
 
 // TransactionAdmission applies durable quotas only to a new write request,

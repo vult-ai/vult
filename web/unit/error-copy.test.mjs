@@ -61,7 +61,7 @@ test("copy never guesses a cause, a file limit, a deletion or a duplicate postin
     { error: "new unsupported private reason" },
     "write",
   );
-  assert.equal(unknown.message, "Check your details and try again.");
+  assert.equal(unknown.message, "Check the details and try again.");
 });
 
 test("gallery cases use the real feedback components, include field associations and no diagnostics", async () => {

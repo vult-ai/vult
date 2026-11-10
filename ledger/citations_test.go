@@ -93,7 +93,7 @@ func TestMultipleSourcesAndCorrectionLeaveAccountingUnchanged(t *testing.T) {
 	if len(citations) != 2 || citations[0].DocumentID != a.ID || citations[1].DocumentID != b.ID {
 		t.Fatal("multiple sources were not preserved")
 	}
-	if err := db.Owner.ClosePeriod(db.Context, s.BookID, "2026-01-01", "2026-01-31"); err != nil {
+	if err := db.ClosePeriod(db.Context, s.BookID, "2026-01-01", "2026-01-31"); err != nil {
 		t.Fatal(err)
 	}
 	fix := ledger.CorrectSourceCitation{RequestKey: "citation-fix", SourceID: citations[0].SourceID, ExpectedRevision: 1,

@@ -23,6 +23,7 @@ import { SettingsLayout } from "../ui/settings-layout";
 import { formatAnnualDate } from "../../lib/date-format";
 import { BookDataSettings } from "../book/book-data-settings";
 import { BookPeriodSettings } from "../book/book-period-settings";
+import { BookPayeeSettings } from "../book/book-payee-settings";
 import { BookProfileSetting, BookTimezoneSetting } from "../book/book-setup-settings";
 import { BookLogoSettings } from "../book/book-logo-settings";
 
@@ -245,6 +246,7 @@ export function Settings({
                 </SettingsRow>
               </SettingsSection>
               <BookPeriodSettings key={book.id} book={book} />
+              <BookPayeeSettings key={`payees:${book.id}`} book={book} />
             </>
           ),
         },
@@ -264,7 +266,7 @@ export function Settings({
         },
         {
           id: "data",
-          label: "Your data",
+          label: "Data",
           content: <BookDataSettings book={book} />,
         },
         {

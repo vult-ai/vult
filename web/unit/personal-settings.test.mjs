@@ -96,7 +96,7 @@ test("personal settings use a compact dialog and retain Theme, Help, workspace a
       assert.ok(dialog.classList.contains("personal-settings-dialog"));
       assert.equal(
         dialog.querySelector(".dialog-heading h2").textContent,
-        "Your settings",
+        "Personal settings",
       );
       assert.equal(dialog.querySelector(".dialog-heading p"), null);
       assert.equal(dialog.getAttribute("aria-describedby"), null);

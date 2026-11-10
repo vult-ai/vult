@@ -183,7 +183,9 @@ func TestStandaloneCurrencySnapshotKeepsMeasurements(t *testing.T) {
 	// operation revisions. It carries no archive migration receipts.
 	before.Format = "vult-ledger-backup-v2"
 	for _, name := range []string{"book_revisions", "book_addresses", "book_identity_revisions", "book_logo_images",
-		"operation_proposals", "operation_decisions", "operation_consumptions"} {
+		"operation_proposals", "operation_decisions", "operation_consumptions", "payees", "payee_revisions", "entry_payees",
+		"statements", "statement_rows", "statement_duplicates", "statement_matches", "statement_match_parts",
+		"statement_match_revocations", "statement_adjustments", "statement_reviews", "accounting_periods", "accounting_period_events"} {
 		delete(before.Tables, name)
 	}
 	target := testutil.New(t)

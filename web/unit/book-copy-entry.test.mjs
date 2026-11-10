@@ -126,7 +126,7 @@ test("the real Settings route retains the Book name and scoped download controls
       await click(document.querySelector('button[aria-label="Settings"]'));
       assert.equal(window.location.pathname, "/settings");
       assert.equal(document.querySelector('[role="dialog"]'), null);
-      await selectTab("Your data");
+      await selectTab("Data");
       await React.act(async()=>new Promise(done=>setTimeout(done,80)));
       assert.match(document.querySelector(".book-settings-page").textContent, /Download/);
       assert.equal(changes.length, 1, "opening data settings only reads the Book");

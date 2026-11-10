@@ -23,6 +23,17 @@ test("all captured browser exports match Go byte for byte, including comparison,
   }
 });
 
+test("exports carry a period's reopening and close with open items, protected like every text cell", () => {
+  const result = compact(fixture("profit_loss"));
+  result.period_notes = [
+    { period_id: "p1", from: "2026-01-01", through: "2026-01-31", kind: "reopened", reason: "=Late receipt", at: "2026-02-03T10:00:00Z" },
+    { period_id: "p1", from: "2026-01-01", through: "2026-01-31", kind: "closed_with_open_items", reason: "Receipts follow, from the accountant", at: "2026-02-01T10:00:00Z" },
+  ];
+  const csv = financialReportCSV(result);
+  assert.match(csv, /\nPeriod note,2026-01-01,2026-01-31,Reopened,'=Late receipt\n/);
+  assert.match(csv, /\nPeriod note,2026-01-01,2026-01-31,Closed with open items,"Receipts follow, from the accountant"\n/);
+});
+
 test("CSV limit counts UTF-8 bytes and fails without a truncated download", () => {
   const result = compact(fixture("balance_sheet"));
   result.limitations = ["界".repeat(Math.floor(maxReportCSVBytes / 3) + 1)];

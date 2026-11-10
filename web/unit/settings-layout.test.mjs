@@ -112,6 +112,7 @@ async function fixture(
         csrf: "synthetic-csrf",
       });
     if (path === "/api/v1/periods") return result({ book_id: book.id, periods: [] });
+    if (path === "/api/v1/payees") return result({ schema_version: 1, payees: [] });
     if (path === "/api/v1/legal-identity-catalog")
       return result({
         catalog: {
@@ -373,7 +374,7 @@ test("every Book field stays in the settings row layout, including fiscal year a
         null,
         "Local mode retains the hosted-access boundary",
       );
-      await selectTab("Your data");
+      await selectTab("Data");
       await click(button("Download"));
       const exports = [...document.querySelectorAll('a[href*="/exports/"]')];
       // The same files the terminal writes with `vult export`.
@@ -415,12 +416,12 @@ test("every Book field stays in the settings row layout, including fiscal year a
       assert.equal(document.querySelector('input[name="founder"]'), null);
       assert.ok(save("Name"));
       assert.ok(![...document.querySelectorAll("button")].some((b) => /^Import from /.test(b.textContent.trim())));
-      await selectTab("Your data");
+      await selectTab("Data");
       const backup = document.querySelector('a[href*="exports/book.tar"]');
       assert.ok(backup);
       assert.match(backup.textContent, /Download Book/);
       assert.doesNotMatch(
-        section("Download your data").textContent,
+        section("Download data").textContent,
         /PostgreSQL|scripts\/backup/,
       );
       assert.deepEqual(f.changes, []);
@@ -455,7 +456,7 @@ test("Settings follows the heading/subtitle/tab layout with keyboard navigation 
         [...document.querySelectorAll('[role="tab"]')].map((node) =>
           node.textContent.trim(),
         ),
-        ["General", "Accounting", "Legal identity", "Your data", "Connections"],
+        ["General", "Accounting", "Legal identity", "Data", "Connections"],
       );
       assert.equal(tab("General").getAttribute("aria-selected"), "true");
       assert.equal(document.querySelectorAll('[role="tabpanel"]').length, 1);
@@ -506,13 +507,13 @@ test("Settings follows the heading/subtitle/tab layout with keyboard navigation 
           }),
         );
       });
-      assert.equal(tab("Your data").getAttribute("aria-selected"), "true");
+      assert.equal(tab("Data").getAttribute("aria-selected"), "true");
       assert.ok(
         form.closest("[data-inert]"),
         "inactive Book fields are retained and cannot receive focus",
       );
-      const data = await selectTab("Your data");
-      assert.ok(data.contains(section("Download your data")));
+      const data = await selectTab("Data");
+      assert.ok(data.contains(section("Download data")));
       assert.equal(data.querySelectorAll('a[href*="/exports/"]').length, 1);
       await selectTab("General");
       assert.equal(section("Name").querySelector("form"), form);
@@ -537,8 +538,8 @@ test("Settings follows the heading/subtitle/tab layout with keyboard navigation 
       await selectTab("General");
       assert.equal(
         f.reads.length,
-        reads + 3,
-        "identity and closed periods load once on first visit; revisiting tabs does not reread or reset mounted forms",
+        reads + 4,
+        "identity, closed periods and payees load once on first visit; revisiting tabs does not reread or reset mounted forms",
       );
       assert.equal(
         f.reads.filter((read) => read.path === "/api/v1/periods").length,
@@ -621,9 +622,9 @@ test("Settings contains no personal Appearance controls", async () => {
         null,
       );
       assert.ok(section("Name"));
-      await selectTab("Your data");
+      await selectTab("Data");
       assert.equal(
-        section("Download your data").querySelectorAll('a[href*="/exports/"]')
+        section("Download data").querySelectorAll('a[href*="/exports/"]')
           .length,
         1,
       );
@@ -672,7 +673,7 @@ test("legacy defaults, absent import actions and selected Book exports stay trut
         row("Book name").querySelector("input").value,
         "Second synthetic book",
       );
-      await selectTab("Your data");
+      await selectTab("Data");
       for (const a of document.querySelectorAll('a[href*="/exports/"]'))
         assert.equal(new URL(a.href).searchParams.get("book_id"), changed.id);
       assert.deepEqual(f.changes, []);

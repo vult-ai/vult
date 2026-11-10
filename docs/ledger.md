@@ -43,7 +43,10 @@ recovery remain offline operator actions.
 Migrations apply in filename order. Existing receipt checksums and sequence must
 match before any forward change. Vult 0.4 upgrades the released v0.1, v0.2 and
 v0.3 ledgers through one v0.4 migration, [0004_recorded_book.sql](../ledger/migrations/0004_recorded_book.sql),
-which includes owner document retention. The three published migrations keep
+which includes owner document retention. Later releases each add one:
+`0005_proposing_agents.sql` (0.5), `0006_owner_recovery_codes.sql` (0.5.2) and
+`0007_accounting_foundations.sql` (0.6: chart of accounts, payees, statement
+reconciliation and period decisions). The published migrations keep
 their original checksums. An unrecognized migration receipt requires recovery.
 The original ledger checksum remains the v1
 data-backup identifier; authentication and connection grants are separate from

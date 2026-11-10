@@ -13,6 +13,10 @@ import (
 )
 
 func TestProposalErrorsExposeOnlyCanonicalMessages(t *testing.T) {
+	refused := &ledger.RefusedError{Reason: "Closing with open review items needs a reason."}
+	if got := safeError(refused); got != refused.Error() {
+		t.Fatal("native refusal lost its explanation", got)
+	}
 	for _, known := range []error{ledger.ErrApprovalRequired, ledger.ErrProposalStale, ledger.ErrProposalExpired} {
 		if got := safeError(fmt.Errorf("example private context: %w", known)); got != known.Error() {
 			t.Fatal("proposal error lost its safe next step or leaked context", got)

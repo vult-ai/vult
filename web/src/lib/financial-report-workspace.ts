@@ -2,7 +2,7 @@ import { parseDate } from "@internationalized/date";
 import { get, money, type Book } from "./api";
 import { dateISO, formatDateRange, formatMonth } from "./date-format";
 import type { DashboardRange } from "./dashboard-period";
-import { financialReportCSV, reportExportAvailable } from "./financial-report-export";
+import { financialReportCSV, periodNoteCells, reportExportAvailable } from "./financial-report-export";
 import {
   assertFinancialReport, financialReportQuery, loadFinancialReport, readReportLocation, reportDefinition, reportFlatRows, reportRequest, reportViewURL,
   type FinancialReport, type FinancialReportRequest, type FinancialReportKind, type ReportLocation, type ReportRow, type ReportView,
@@ -192,6 +192,7 @@ export function displayedReportCSV(display: ReportDisplay) {
     ["Period", ...display.columns.map(c => c.period.from ? formatDateRange(c.period.from, c.period.to, "full") : c.period.to)],
     ...display.columns.map(c => ["Column result", c.id, c.source.digest, c.source.scope.knowledge_cutoff, c.source.scope.generated_at]),
     ...(display.omissions?.size ? [["Presentation note", omittedAmountNote]] : []),
+    ...(display.base.period_notes ?? []).map(periodNoteCells),
     ...display.columns.flatMap(c => [...(display.omissions?.get(c.source) || [])].map(id => ["Omitted line", id, c.id, c.source.digest])),
     ...display.sources.flatMap(source => [
       ["Source scope", source.digest, source.status, source.scope.coverage, source.scope.opening_balances],

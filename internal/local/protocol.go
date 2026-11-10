@@ -27,6 +27,17 @@ type BrowserSetup struct {
 	SetupURL string `json:"setup_url"`
 }
 
+// PeriodCloseRequest is the complete native-authorized close decision. Keep
+// every wire field explicit so strict decoding validates the same payload in
+// the command, approval prompt and daemon.
+type PeriodCloseRequest struct {
+	BookID     string `json:"book_id"`
+	RequestKey string `json:"request_key"`
+	From       string `json:"from"`
+	Through    string `json:"through"`
+	Reason     string `json:"reason,omitempty"`
+}
+
 type Request struct {
 	Method        string          `json:"method"`
 	Authorization string          `json:"authorization,omitempty"`

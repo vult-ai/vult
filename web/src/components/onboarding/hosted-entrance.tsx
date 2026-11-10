@@ -8,6 +8,7 @@ import { readProposals } from "../../lib/proposals";
 import { readSession, writeHeaders } from "../../lib/session";
 import { settingsPost } from "../../lib/settings-requests";
 import { withRecentSignIn } from "../../lib/recent-sign-in";
+import { needsName } from "./welcome";
 import { Entrance, type AgentEvent, type Journey } from "./entrance";
 
 type Connection = { id: string; name: string; connection?: boolean; revoked_at?: string };
@@ -142,12 +143,31 @@ export function HostedEntrance({ book: existing, onOpen }: { book?: Book; onOpen
   }, [address]);
 
   if (address === undefined) return null;
+  // A Book that exists but was never named starts at naming it, not inside it.
+  const unnamed = existing && needsName(existing) ? existing : undefined;
   return (
     <Entrance
-      start={existing ? "inside" : "book"}
-      book={existing ? { name: existing.name, profile: existing.profile, currency: existing.currency } : undefined}
+      start={existing && !unnamed ? "inside" : "book"}
+      book={existing && !unnamed ? { name: existing.name, profile: existing.profile, currency: existing.currency } : undefined}
+      unnamed={unnamed ? { profile: existing?.profile, currency: unnamed.currency } : undefined}
       journey={journey}
       createBook={async ({ name, profile, currency, timezone }) => {
+        if (unnamed) {
+          // Naming a Book changes its settings, which need a recent sign-in.
+          bookRef.current = await withRecentSignIn(() =>
+            settingsPost<Book>("settings", {
+              book_id: unnamed.id,
+              idempotency_key: settingsKey.current,
+              revision: unnamed.metadata_revision ?? 0,
+              name,
+              founder: "",
+              profile,
+              accounting_timezone: timezone,
+            }),
+          );
+          remember(unnamed.id, "started");
+          return;
+        }
         const created = await withRecentSignIn(async () =>
           fetchJSON<Book>("/api/v1/books", {
             method: "POST",

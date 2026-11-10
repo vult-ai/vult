@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -12,9 +13,11 @@ import (
 )
 
 const (
-	booksPath        = "/api/v1/books"
-	periodsPath      = "/api/v1/periods"
-	periodsClosePath = "/api/v1/periods/close"
+	booksPath         = "/api/v1/books"
+	periodsPath       = "/api/v1/periods"
+	periodsClosePath  = "/api/v1/periods/close"
+	periodsReopenPath = "/api/v1/periods/reopen"
+	periodsReviewPath = "/api/v1/periods/review"
 )
 
 type createBookRequest struct {
@@ -120,23 +123,23 @@ func (a *webAPI) readClosedPeriods(w http.ResponseWriter, r *http.Request, sessi
 	}{book, periods})
 }
 
-type closePeriodRequest struct {
-	RequestKey string `json:"request_key"`
-	BookID     string `json:"book_id"`
-	From       string `json:"from"`
-	Through    string `json:"through"`
-}
-
-// closePeriod permanently locks a date range of one Book. Only the owner can
-// close a period; agents cannot. Retrying the same request returns its result.
-func (a *webAPI) closePeriod(w http.ResponseWriter, r *http.Request, session string) {
+// periodChange records the owner's close or reopening of a period: a close
+// with open review items needs a reason, and only the owner reopens.
+// Retrying the same request returns its result.
+func (a *webAPI) periodChange(w http.ResponseWriter, r *http.Request, session, operation string) {
 	if r.URL.RawQuery != "" || r.Header.Get("Content-Type") != "application/json" {
 		apiFailure(w, ledger.ErrInvalid)
 		return
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 2048))
-	var q closePeriodRequest
-	if err != nil || strictjson.Decode(body, &q) != nil || !ledger.ValidID(q.BookID) || !ledger.ValidDate(q.From) || !ledger.ValidDate(q.Through) || q.From > q.Through {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 8192))
+	var q struct {
+		BookID    string          `json:"book_id"`
+		Arguments json.RawMessage `json:"arguments"`
+	}
+	var key struct {
+		RequestKey string `json:"request_key"`
+	}
+	if err != nil || strictjson.Decode(body, &q) != nil || !ledger.ValidID(q.BookID) || json.Unmarshal(q.Arguments, &key) != nil {
 		apiFailure(w, ledger.ErrInvalid)
 		return
 	}
@@ -146,24 +149,53 @@ func (a *webAPI) closePeriod(w http.ResponseWriter, r *http.Request, session str
 		return
 	}
 	input, _ := json.Marshal(struct {
-		BookID  string `json:"book_id"`
-		From    string `json:"from"`
-		Through string `json:"through"`
-	}{q.BookID, q.From, q.Through})
-	result, err := a.sessions.OwnerRequest(r.Context(), session, tenant, q.RequestKey, "close_period", input, a.admit, func(o ledger.TenantAdmin) (json.RawMessage, error) {
-		if err := o.ClosePeriod(r.Context(), q.BookID, q.From, q.Through); err != nil {
-			return nil, err
-		}
-		return json.Marshal(struct {
-			Status  string `json:"status"`
-			BookID  string `json:"book_id"`
-			From    string `json:"from"`
-			Through string `json:"through"`
-		}{"closed", q.BookID, q.From, q.Through})
+		BookID    string          `json:"book_id"`
+		Operation string          `json:"operation"`
+		Arguments json.RawMessage `json:"arguments"`
+	}{q.BookID, operation, q.Arguments})
+	result, err := a.sessions.OwnerRequestAs(r.Context(), session, tenant, key.RequestKey, operation, input, a.admit, func(o ledger.TenantAdmin, who string) (json.RawMessage, error) {
+		return o.AccountChange(r.Context(), q.BookID, who, operation, q.Arguments)
 	})
+	var refused *ledger.RefusedError
+	if errors.As(err, &refused) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "refused", "message": refused.Reason})
+		return
+	}
+	if errors.Is(err, ledger.ErrFreshOwnerProof) {
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "fresh_authentication_required", "message": "Sign in again, then make this change."})
+		return
+	}
 	if err != nil {
 		apiFailure(w, err)
 		return
 	}
 	_, _ = w.Write(result)
+}
+
+// periodReview is what the owner sees before closing a range.
+func (a *webAPI) periodReview(w http.ResponseWriter, r *http.Request, session string) {
+	q := r.URL.Query()
+	book, from, through := q.Get("book_id"), q.Get("from"), q.Get("through")
+	if len(q) != 3 || !ledger.ValidID(book) || !ledger.ValidDate(from) || !ledger.ValidDate(through) || from > through {
+		apiFailure(w, ledger.ErrInvalid)
+		return
+	}
+	tenant, err := a.sessions.BookTenant(r.Context(), session, book)
+	if err != nil {
+		apiFailure(w, err)
+		return
+	}
+	var review ledger.PeriodReview
+	err = a.sessions.WithOwner(r.Context(), session, tenant, false, func(o ledger.TenantAdmin) error {
+		var err error
+		review, err = o.PeriodReview(r.Context(), book, from, through)
+		return err
+	})
+	if err != nil {
+		apiFailure(w, err)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(review)
 }

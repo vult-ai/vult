@@ -1,5 +1,5 @@
 ---
-{"id":"backup-and-restore","title":"Back up, export and restore","description":"Download your Book at any time, keep encrypted backups and restore them safely.","group":"Use your Book","order":6,"keywords":["backup","restore","export","download","csv","json","archive","recovery key","upgrade","uninstall"]}
+{"id":"backup-and-restore","title":"Back up, export and restore","description":"Download your Book at any time, keep encrypted backups and restore them safely.","group":"Use your Book","order":10,"keywords":["backup","restore","export","download","csv","json","archive","recovery key","upgrade","uninstall"]}
 ---
 
 ## Download your data {#download}

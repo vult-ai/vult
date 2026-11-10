@@ -247,3 +247,18 @@
 /* A printed statement carries its basis line; on screen the review link shows it. */
 .statement-scope-print { display: none; }
 @media print { .statement-scope-print { display: inline; } }
+
+
+/* Reasons a covered period was reopened or closed with open items. */
+.statement-period-notes { display: grid; gap: 4px; margin: 0; padding: 10px 28px 0; list-style: none; color: var(--color-text-warning-primary); overflow-wrap: anywhere; }
+@media (max-width: 640px) { .statement-period-notes { padding: 10px 16px 0; } }
+
+/* Phones: the report's name, then its scope on one quiet line that opens the
+   review, with its arrow right after the words. */
+@media (max-width: 600px) {
+  .statement-workbench .statement-context { flex-direction: column; align-items: stretch; gap: 2px; padding: 6px 4px 10px; }
+  .statement-workbench-scope { min-width: 0; font-size: var(--text-vult-metadata); line-height: var(--text-vult-metadata--line-height); color: var(--color-text-tertiary); }
+  .statement-workbench-scope .statement-review-link { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; }
+  .statement-workbench-scope .statement-review-link .vult-name-link-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .statement-workbench-scope .statement-review-link svg { flex: none; width: 14px; height: 14px; }
+}

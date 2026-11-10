@@ -1,7 +1,10 @@
+/* Phones: the type filters and the band's actions share one row. */
 @media (max-width: 640px) {
-  .transaction-toolbar-summary {
-    flex-basis: 100%;
-  }
+  .vult-collection-toolbar:has(.transaction-toolbar-summary) { flex-wrap: nowrap; gap: 4px; }
+  .vult-collection-toolbar:has(.transaction-toolbar-summary) > .vult-collection-toolbar-lead { flex: 1 1 auto; min-width: 0; }
+  .vult-collection-toolbar:has(.transaction-toolbar-summary) > .vult-collection-toolbar-actions { flex: none; width: auto; gap: 0; }
+  .transaction-toolbar-summary [data-vult-region="collection-filters"] { gap: 2px; }
+  .transaction-toolbar-summary [data-vult-region="collection-filters"] > .vult-button { padding-inline: 8px; }
 }
 /* The search filter takes the next line rather than widen the band. */
 .transaction-toolbar-summary:has(.vult-search-filter) {
@@ -10,4 +13,10 @@
   flex: 1 1 auto;
   min-width: 0;
   white-space: normal;
+}
+/* The narrowest phones: the filters drop their in/out keys, and scroll rather
+   than run under the band's actions if they still don't fit. */
+@media (max-width: 360px) {
+  .vult-collection-toolbar:has(.transaction-toolbar-summary) > .vult-collection-toolbar-lead { overflow-x: auto; scrollbar-width: none; }
+  .transaction-toolbar-summary [data-vult-region="collection-filters"] .vult-series-key { display: none; }
 }

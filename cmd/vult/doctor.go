@@ -92,7 +92,7 @@ func doctorChecks(ctx context.Context) []check {
 		Ready   bool   `json:"ready"`
 	}
 	if err != nil || json.Unmarshal(data, &status) != nil || !status.Ready {
-		return append(checks, check{Name: "Ledger service running", Remedy: "Reinstall Vult to restart its service; your Books are kept: " + installCommand})
+		return append(checks, check{Name: "Ledger service running", Remedy: "Reinstall Vult to restart its service; Books are kept: " + installCommand})
 	}
 	checks = append(checks, check{Name: "Ledger service running", OK: true, Detail: "version " + status.Version})
 	browserCtx, cancel := context.WithTimeout(ctx, 3*time.Second)

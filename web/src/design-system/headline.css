@@ -42,6 +42,13 @@
 .vult-headline[data-stacked] .vult-headline-caption { overflow: visible; white-space: normal; }
 .vult-headline[data-stacked] .vult-headline-aside { flex-wrap: wrap; white-space: normal; }
 .vult-headline[data-stacked] .vult-headline-aside > span { white-space: nowrap; }
+/* On a phone there is no room beside the figure: the parts always take their
+   own line, so they never cover it and nothing jumps as values change. */
+@media (width < 640px) {
+  .vult-headline { flex-direction: column; align-items: stretch; gap: 6px; }
+  .vult-headline-aside { flex-wrap: wrap; white-space: normal; }
+  .vult-headline-aside > span { white-space: nowrap; }
+}
 
 /* In and out are told by position, never by colour: colour belongs to accounts
    and to the direction of a change. The key is a tiny pair of columns in ink,

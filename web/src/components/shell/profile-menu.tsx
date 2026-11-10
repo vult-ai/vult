@@ -170,7 +170,7 @@ export function ProfileMenu({
         >
           <div className="border-b border-secondary px-2.5 py-2">
             <p className="vult-type-label truncate font-medium text-primary">
-              {value.display_name.trim() || "Your profile"}
+              {value.display_name.trim() || "Profile"}
             </p>
             <p className="vult-type-metadata truncate text-quaternary">
               Personal settings

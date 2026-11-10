@@ -34,10 +34,17 @@ Renaming an account or changing its code never changes the entries that use it.
 
 ## Close a period {#close-a-period}
 
-When a period's entries are complete and checked against your statements, lock it so nothing more is posted into it. In Vult, open the Book's **Settings**, then **Accounting**, choose the first and last day under **Closed periods**, and select **Close period**. On your own computer you can also use the terminal:
+When a period's entries are complete and checked against your statements, close it so nothing more is posted into it. In Vult, open the Book's **Settings**, then **Accounting**, choose the first and last day under **Closing periods**, and select **Review and close**. Vult first shows what's still open in those dates: statements that aren't reconciled, and income or expense entries with no evidence or no payee. Transfers between accounts, opening balances and reversals never count.
+
+- If nothing is open, close it. An agent with write access can also close a period with nothing open.
+- If something is open, you can still close it, but only you, and with a reason. The reason shows on that period's reports.
+
+Closing isn't permanent. Select **Reopen** with a reason to let a period accept entries again; the reason shows on that period's reports, and the history keeps every close and reopening. Agents can't reopen a period; they can ask you to, through Approvals. Closing a year works the same way and posts no closing entries: reports work out retained earnings.
+
+On your own computer you can also close a period from the terminal:
 
 ```sh
 vult period close --book BOOK_ID --from 2026-01-01 --through 2026-01-31
 ```
 
-Closing a period is permanent. Only the owner can do it, never an agent. Agents can see which periods are closed, and any correction afterwards goes into a later, open period.
+A period closed from the terminal records no reason.

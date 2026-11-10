@@ -65,9 +65,11 @@
   }
 }
 
+/* The four figures sit in a row and wrap to a second one when the panel is
+   narrower than they are; their labels never run into each other. */
 .account-ledger-summary.account-ledger-summary-inline {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(112px, max-content));
+  display: flex;
+  flex-wrap: wrap;
   inline-size: fit-content;
   max-inline-size: 100%;
   align-items: start;
@@ -77,7 +79,7 @@
   border: 0;
 }
 .account-ledger-summary-inline > div {
-  min-width: 0;
+  min-width: 112px;
 }
 .account-ledger-summary-inline dt {
   margin-bottom: 4px;
