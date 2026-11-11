@@ -1,6 +1,8 @@
 import { showStartupError } from "./components/ui/startup-error";
 import { readInitialBooks } from "./lib/book-state";
 import { startApplication } from "./lib/startup";
+import { rememberedUpdatesInstallHere, untilVultAnswers } from "./lib/connection";
+import { APIError } from "./lib/errors";
 import "./style.css";
 
 // After Vult is updated, a page opened before the update asks for files that
@@ -52,6 +54,15 @@ const startup = startApplication({
   read: readInitialBooks,
   load: () => import("./main"),
 });
-void startup.catch((error: unknown) => {
-  showStartupError(document.getElementById("root")!, error);
+void startup.catch(async (error: unknown) => {
+  const root = document.getElementById("root")!;
+  // Vult on this computer is briefly away while an update installs: say so
+  // calmly and open the page by itself when it answers.
+  if (rememberedUpdatesInstallHere() && error instanceof APIError && error.status === 0) {
+    showStartupError(root, error, { title: "Updating Vult", detail: "Back in a moment." }, true);
+    await untilVultAnswers();
+    window.location.reload();
+    return;
+  }
+  showStartupError(root, error);
 });

@@ -18,8 +18,12 @@ import urllib.request
 from go_notices import check as check_go_notices
 from make_installer import render
 
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 GO_VERSION = "go1.27.3"
+# Native code records the compiler and SDK it was built with, so a rebuild
+# reproduces the same bytes only with exactly these.
+CLANG_VERSION = "Apple clang version 21.0.0 (clang-2100.4.1.1)"
+MACOS_SDK = "27.2"
 PG_VERSION = "18.6"
 PG_SHA256 = "555610c24d53e4316da5b7d3fc25c279d96856d5e0e23ee308c328c5fa881d9f"
 PREFIX = Path("/Library/PrivilegedHelperTools/ai.vult.ledger")
@@ -187,6 +191,12 @@ def runtime_payload(pg, dest):
             output.chmod(0o644)
 
 
+def native_toolchain():
+    clang = subprocess.check_output(["/usr/bin/clang", "--version"], env=ENV, timeout=30).decode().splitlines()[0].strip()
+    sdk = subprocess.check_output(["/usr/bin/xcrun", "--show-sdk-version"], env=ENV, timeout=30).decode().strip()
+    return clang, sdk
+
+
 def build_browser_setup(source, product, signing_identity):
     app = product / "Vult Browser Setup.app"
     contents = app / "Contents"
@@ -201,6 +211,53 @@ def build_browser_setup(source, product, signing_identity):
     run(["/usr/bin/codesign", "--force", "--sign", signing_identity or "-", "--options", "runtime", app])
 
 
+def update_trust(directory):
+    """Read and check the update repository the package will trust."""
+    root = json.loads((directory / "root.json").read_text())
+    repository = json.loads((directory / "repository.json").read_text())
+    if not isinstance(root, dict) or root.get("signed", {}).get("_type") != "root":
+        raise ValueError("--updates needs a TUF root.json")
+    if set(repository) != {"metadata_url", "targets_url"} or not all(str(v).startswith("https://") for v in repository.values()):
+        raise ValueError("--updates needs repository.json with HTTPS metadata_url and targets_url")
+    return root, repository
+
+
+def add_updater(go, clean, env, payload, launch, trust, sign):
+    """Add the update installer, its launchd job and the trust store."""
+    tools = payload / "Library/PrivilegedHelperTools/ai.vult.updater"
+    tools.mkdir(parents=True)
+    for name in ("vult-update-helper",):
+        run([go, "build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w", "-o", tools / name, "./cmd/" + name], clean, env)
+        (tools / name).chmod(0o755)
+        run(["/usr/bin/strip", "-S", tools / name])
+        run(["/usr/bin/codesign", "--force", "--sign", sign or "-", "--options", "runtime", tools / name])
+    shutil.copyfile(clean / "packaging/macos/updater/ai.vult.update-helper.plist", launch / "ai.vult.update-helper.plist")
+    store = payload / "Library/Application Support/ai.vult.updater/trust"
+    store.mkdir(parents=True)
+    for name in ("root.json", "repository.json"):
+        shutil.copyfile(trust / name, store / name)
+
+
+def program_archive(product, path):
+    """Write the program directory as a tar an update can install: plain files
+    and directories only, sorted, with fixed owners and times."""
+    with tarfile.open(path, "x", format=tarfile.USTAR_FORMAT) as tar:
+        for item in sorted(product.rglob("*")):
+            name = item.relative_to(product).as_posix()
+            if item.is_symlink() or not (item.is_file() or item.is_dir()):
+                raise ValueError(f"{name} can't be in an update")
+            info = tar.gettarinfo(item, arcname=name + ("/" if item.is_dir() else ""))
+            info.uid = info.gid = 0
+            info.uname = info.gname = ""
+            info.mtime = 0
+            info.mode = 0o755 if item.is_dir() else (info.mode & 0o755)
+            if item.is_dir():
+                tar.addfile(info)
+            else:
+                with item.open("rb") as data:
+                    tar.addfile(info, data)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--output", type=Path, help="new artifact directory")
@@ -211,12 +268,18 @@ def main():
     p.add_argument("--postgres-archive", type=Path, help="use an existing checksum-verified source archive; native code is always rebuilt cleanly")
     p.add_argument("--sign-application", help="Developer ID Application signing identity")
     p.add_argument("--sign-installer", help="Developer ID Installer signing identity")
+    p.add_argument("--updates", type=Path, help="include the update installer behind the app's Update button, trusting the update repository described in this directory (root.json and repository.json)")
     args = p.parse_args()
     if args.print_web_sha256:
         print(interface_files(args.print_web_sha256)[1])
         return
     if not args.output or not args.web_dist or not args.web_sha256:
         p.error("--output, --web-dist and --web-sha256 are required")
+    if args.updates:
+        try:
+            update_trust(args.updates)
+        except ValueError as error:
+            p.error(str(error))
     _, web_checksum = interface_files(args.web_dist)
     if web_checksum != args.web_sha256:
         p.error("interface build checksum mismatch")
@@ -230,6 +293,8 @@ def main():
     version = subprocess.check_output([go, "version"], env=env, timeout=10).decode().split()[2]
     if version != GO_VERSION:
         p.error("the exact pinned Go version is required")
+    if native_toolchain() != (CLANG_VERSION, MACOS_SDK):
+        p.error(f"the exact pinned compiler and SDK are required: {CLANG_VERSION}, macOS SDK {MACOS_SDK}")
     source = Path(__file__).resolve().parents[1]
     files = selected_files(source)
     output = args.output.resolve()
@@ -246,7 +311,8 @@ def main():
         product = payload / str(PREFIX).lstrip("/")
         product.mkdir(parents=True)
         runtime_payload(pg, product / "postgres")
-        run([go, "build", "-tags=webui", "-trimpath", "-buildvcs=false", "-ldflags=-s -w", "-o", product / "vult", "./cmd/vult"], clean, env)
+        tags = "webui,vult_updates" if args.updates else "webui"
+        run([go, "build", "-tags=" + tags, "-trimpath", "-buildvcs=false", "-ldflags=-s -w", "-o", product / "vult", "./cmd/vult"], clean, env)
         (product / "vult").chmod(0o755)
         for path in sorted(product.rglob("*")):
             if path.is_file() and (path.suffix == ".dylib" or path.parent.name == "bin" or path.name == "vult"):
@@ -262,6 +328,8 @@ def main():
         launch.mkdir(parents=True)
         shutil.copyfile(clean / "packaging/macos/ai.vult.ledger.plist", launch / "ai.vult.ledger.plist")
         shutil.copyfile(clean / "packaging/macos/ai.vult.browser.plist", launch / "ai.vult.browser.plist")
+        if args.updates:
+            add_updater(go, clean, env, payload, launch, args.updates, args.sign_application)
         # Only unchanged, explicitly inventoried program files may be removed.
         inventory = {"format": "vult-program-files-v1", "version": VERSION,
                      "files": {path.relative_to(product).as_posix(): digest(path)
@@ -272,6 +340,9 @@ def main():
         for directory in payload.rglob("*"):
             if directory.is_dir():
                 directory.chmod(0o755)
+        if args.updates:
+            # The program directory as an update installs it.
+            program_archive(product, output / f"vult-{VERSION}-macos-arm64.tar")
         package = output / f"vult-{VERSION}-macos-arm64.pkg"
         run(["/usr/bin/xattr", "-cr", payload])
         cmd = ["/usr/bin/pkgbuild", "--root", payload, "--scripts", clean / "packaging/macos/scripts", "--identifier", "ai.vult.ledger", "--version", VERSION, "--install-location", "/", "--ownership", "recommended", "--min-os-version", "26.0", "--compression", "latest", "--filter", r"(^|/)([.]DS_Store|[.][_]([^/]*))$"]
@@ -295,7 +366,7 @@ def main():
                     info.mode = (clean / name).stat().st_mode & 0o777
                     info.uid = info.gid = info.mtime = 0
                     tar.addfile(info, io.BytesIO(data))
-        manifest = {"version": VERSION, "platform": "macos-arm64", "minimum_macos": "26.0", "go": GO_VERSION, "postgresql": PG_VERSION, "postgresql_source_sha256": PG_SHA256, "schema_sha256": digest(clean / "ledger/migrations/0001_ledger.sql"), "source_files": {name: digest(clean / name) for name in files}, "application_signing": "developer-id" if args.sign_application else "ad-hoc", "installer_signing": "developer-id" if args.sign_installer else "unsigned", "notarized": False}
+        manifest = {"version": VERSION, "platform": "macos-arm64", "minimum_macos": "26.0", "go": GO_VERSION, "clang": CLANG_VERSION, "macos_sdk": MACOS_SDK, "postgresql": PG_VERSION, "postgresql_source_sha256": PG_SHA256, "schema_sha256": digest(clean / "ledger/migrations/0001_ledger.sql"), "source_files": {name: digest(clean / name) for name in files}, "application_signing": "developer-id" if args.sign_application else "ad-hoc", "installer_signing": "developer-id" if args.sign_installer else "unsigned", "notarized": False}
         manifest["migrations"] = {path.name: digest(path) for path in sorted((clean / "ledger/migrations").glob("*.sql"))}
         manifest["installer_sha256"] = hashlib.sha256(installer).hexdigest()
         manifest["interface_sha256"] = web_checksum

@@ -450,7 +450,11 @@ func TestBrowserUpgradeLeadsTheOwnerToANewPasskey(t *testing.T) {
 }
 
 func TestUpdateCheckIsOnlyOnMac(t *testing.T) {
-	if c := updateChecker("darwin"); c == nil || c.Current != Version || c.Every <= 0 {
+	if c := updateChecker("darwin"); installer("darwin") != nil {
+		if c != nil {
+			t.Fatal("helper discovery duplicated the browser check")
+		}
+	} else if c == nil || c.Current != Version || c.Every <= 0 {
 		t.Fatal("Vult on a Mac does not check for updates", c)
 	}
 	if updateChecker("linux") != nil {

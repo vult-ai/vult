@@ -1,0 +1,10 @@
+[Unit]
+Description=Start the Vult update installer when the owner presses Update
+
+[Path]
+PathChanged=/var/lib/vult/updater/request.json
+PathChanged=/var/lib/vult/updater/check.json
+Unit=ai.vult.update-helper.service
+
+[Install]
+WantedBy=multi-user.target

@@ -20,7 +20,7 @@ import package_ubuntu as package
 install = package.installer_module(ROOT)
 
 
-def payload():
+def payload(updater=False):
     files = {"vult": b"synthetic command", "LICENSE": b"license", "NOTICE": b"notice",
              "THIRD_PARTY_NOTICES.md": b"notices", "postgres/bin/postgres": b"postgres",
              "postgres/bin/initdb": b"initdb", "postgres/bin/pg_ctl": b"pg_ctl",
@@ -28,12 +28,18 @@ def payload():
     external = {install.UNITS[name]: (ROOT / f"packaging/ubuntu/ai.vult.{name}.service").read_bytes()
                 for name in ("ledger", "browser")}
     external[install.POLICY] = b"synthetic policy"
+    if updater:
+        external[install.UPDATER_PROGRAM] = b"synthetic update installer"
+        for unit in install.UPDATER_UNITS:
+            external[unit] = (ROOT / "packaging/ubuntu/updater" / Path(unit).name).read_bytes()
+        external["/opt/vult-updater/root.json"] = b'{"signed":{"_type":"root"}}'
+        external["/opt/vult-updater/repository.json"] = b'{"metadata_url":"https://updates.invalid/m","targets_url":"https://updates.invalid/t"}'
     value = {"format": install.FORMAT, "version": install.VERSION,
              "files": {name: install.sha(data) for name, data in files.items()},
              "external_files": {name: install.sha(data) for name, data in external.items()}}
     entries = {"opt/vult/" + name: (data, 0o755 if name == "vult" or name.startswith(("postgres/bin/", "postgres/lib/")) else 0o644)
                for name, data in files.items()}
-    entries.update({name.lstrip("/"): (data, 0o644) for name, data in external.items()})
+    entries.update({name.lstrip("/"): (data, 0o755 if name == install.UPDATER_PROGRAM else 0o644) for name, data in external.items()})
     entries["opt/vult/program-files.json"] = (json.dumps(value).encode(), 0o644)
     return value, entries
 
@@ -51,6 +57,7 @@ class FixtureInstaller(install.Installer):
         self.timeouts = []
         self.cgroup_busy = False
         self.actions = {}
+        self.outputs = {}
         self.syncs = []
 
     def protected(self, name, uid=0, gid=None, mode=None, directory=False):
@@ -87,6 +94,8 @@ class FixtureInstaller(install.Installer):
             return subprocess.CompletedProcess(args, 1, "", "")
         if tuple(args) in self.actions:
             self.actions[tuple(args)]()
+        if tuple(args) in self.outputs:
+            return subprocess.CompletedProcess(args, 0, self.outputs[tuple(args)], "")
         if args[:2] == ["/usr/bin/systemctl", "show"]:
             path = "/etc/systemd/system/" + args[2]
             loaded = self.exists(path)
@@ -103,6 +112,9 @@ class FixtureInstaller(install.Installer):
 
     def sync_directory(self, name):
         self.syncs.append(name)
+
+    def own(self, name, uid, gid):
+        self.owners[name] = (uid, gid)
 
 
 class UbuntuInstallerTests(unittest.TestCase):
@@ -390,14 +402,61 @@ class UbuntuInstallerTests(unittest.TestCase):
         calls = self.fixture.calls
         self.assertLess(calls.index(("/opt/vult/vult", "_stop")), calls.index(("/usr/bin/systemctl", "daemon-reload")))
         self.assertLess(calls.index(("/usr/bin/systemctl", "start", "ai.vult.ledger.service")), calls.index(("/opt/vult/vult", "_browser_install")))
+        # The database changes only in the maintenance step, before the
+        # service starts, and never as root.
+        migrate = ("/usr/sbin/runuser", "-u", "_vultledger", "--", "/opt/vult/vult", "_maintenance", "migrate")
+        self.assertLess(calls.index(("/opt/vult/vult", "_install")), calls.index(migrate))
+        self.assertLess(calls.index(migrate), calls.index(("/usr/bin/systemctl", "start", "ai.vult.ledger.service")))
         self.assertLess(calls.index(("/opt/vult/vult", "_browser_install")), calls.index(("/usr/bin/systemctl", "start", "ai.vult.browser.service")))
+
+    def test_package_with_the_update_installer_switches_it_on(self):
+        self.installed()
+        value, entries = payload(updater=True)
+        validate = ("/usr/sbin/runuser", "-u", "_vultledger", "--", "/opt/vult/vult", "_maintenance", "validate")
+        self.fixture.outputs[validate] = '{"command":"validate","applied":8,"known":8,"schema":"0008"}'
+        self.fixture.install(value, entries, self.pin)
+        helper = self.fixture.path(install.UPDATER_PROGRAM)
+        self.assertEqual(helper.read_bytes(), b"synthetic update installer")
+        self.assertEqual(stat.S_IMODE(helper.stat().st_mode), 0o755)
+        state = install.UPDATER_STATE
+        self.assertEqual(json.loads(self.fixture.path(state + "/installed.json").read_text()),
+                         {"version": install.VERSION, "sha256": "package", "schema": "0008"})
+        for name in ("request.json", "check.json"):
+            request = state + "/" + name
+            self.assertEqual(self.fixture.owners[request], (0, 998), "the browser account's group may write the request")
+            self.assertEqual(stat.S_IMODE(self.fixture.path(request).stat().st_mode), 0o664)
+        for name, mode in (("trust/metadata", 0o700), ("staging", 0o700), ("copies", 0o700), ("journal", 0o755)):
+            self.assertEqual(stat.S_IMODE(self.fixture.path(state + "/" + name).stat().st_mode), mode, name)
+        calls = self.fixture.calls
+        self.assertIn(("/usr/bin/systemctl", "enable", "--now", "ai.vult.update-helper.path"), calls)
+        self.assertLess(calls.index(("/opt/vult/vult", "_browser_check")), calls.index(validate))
+
+    def test_package_without_the_update_installer_leaves_it_out(self):
+        self.installed()
+        self.fixture.install(self.value, self.entries, self.pin)
+        self.assertFalse(self.fixture.exists(install.UPDATER_PROGRAM))
+        self.assertFalse(self.fixture.exists(install.UPDATER_STATE))
+
+    def test_the_update_installer_comes_whole_and_executable(self):
+        value, entries = payload(updater=True)
+        install.inventory(json.dumps(value).encode(), current=True)
+        partial = deepcopy(value)
+        partial["external_files"].pop(install.UPDATER_UNITS[1])
+        with self.assertRaises(install.InstallError):
+            install.inventory(json.dumps(partial).encode(), current=True)
+        entries["opt/vult-updater/vult-update-helper"] = (entries["opt/vult-updater/vult-update-helper"][0], 0o644)
+        archive = self.root / "release.tar.gz"
+        package.write_archive(archive, entries)
+        with self.assertRaises(install.InstallError):
+            install.archive_payload(str(archive), install.sha(archive.read_bytes()))
 
     def test_reinstall_reuses_retained_identities_without_account_creation(self):
         self.retained()
         before = self.snapshot(self.fixture.path(install.RETAINED))
         self.fixture.install(self.value, self.entries, self.pin)
         self.assertEqual(self.snapshot(self.fixture.path(install.RETAINED)), before)
-        self.assertFalse(any(args[0].startswith("/usr/sbin/") for args in self.fixture.calls))
+        account_tools = ("/usr/sbin/useradd", "/usr/sbin/groupadd", "/usr/sbin/usermod")
+        self.assertFalse(any(args[0] in account_tools for args in self.fixture.calls))
 
     def test_interrupted_program_copy_retries_same_archive_forward(self):
         self.installed()
@@ -733,6 +792,8 @@ class UbuntuInstallerTests(unittest.TestCase):
         self.assertIn("TimeoutStopSec=20\n", browser)
         self.assertIn("IPAddressDeny=any\n", browser)
         self.assertIn("IPAddressAllow=localhost\n", browser)
+        for name in ("request.json", "check.json"):
+            self.assertIn("ReadWritePaths=-/var/lib/vult/updater/" + name + "\n", browser)
         for unit in (ledger, browser):
             self.assertIn("Slice=system.slice\n", unit)
             self.assertIn("ProtectControlGroups=yes\n", unit)

@@ -74,12 +74,20 @@ this is not an Apple Developer ID signature or notarization claim.
 
 ## Update
 
-While Vult is open on your Mac, it checks GitHub for a newer release at most once
-every 12 hours. It reads only the public release manifest and sends nothing about
-your installation. When a newer release is published, Vult shows a small notice
-in the sidebar.
+While Vult is open on your Mac, it checks for a newer release at most once every
+12 hours. It reads only public, signed release information from
+`updates.vult.sh` and sends nothing about your installation. When a newer release
+is available, the sidebar shows it with an **Update** button.
 
-From your own terminal:
+**Update** installs a release only when two independent signatures agree on it:
+the release signature, and a rebuild from the public source on a separate
+machine that produced the identical program. Vult then stops briefly, keeps a
+copy of your data, installs the new version and updates the database in one
+step, and starts again. If anything fails before the new version is running,
+the previous version and data come back. To go back afterwards, run
+`sudo vult update undo` from your own terminal.
+
+Or update from your own terminal:
 
 ```sh
 vult update
@@ -128,8 +136,9 @@ configuration, a missing initialized database, or a missing ledger schema stops
 startup and requires recovery. Installing over these conditions does not create
 an empty replacement or generate replacement keys.
 
-Version 0.6.0 upgrades recognized v0.1.0, v0.2.0, v0.3.0, v0.4.0, v0.5.0, v0.5.1 and v0.5.2 ledgers through
-checksum-verified forward migrations. It preserves Books, journal rows, request
+Version 0.7.0 upgrades recognized v0.1.0, v0.2.0, v0.3.0, v0.4.0, v0.5.0, v0.5.1, v0.5.2 and v0.6.0 ledgers through
+checksum-verified forward migrations, which the installer applies in a separate
+step while Vult is stopped; starting Vult never changes the database. It preserves Books, journal rows, request
 outcomes, connections, originals and local keys. Missing, altered, gapped or
 unknown migration receipts stop startup
 and require recovery; they never trigger a new empty ledger. Released migrations

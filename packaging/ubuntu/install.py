@@ -16,7 +16,7 @@ import sys
 import tarfile
 import time
 
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 FORMAT = "vult-program-files-linux-v1"
 PROGRAM = "/opt/vult"
 RETAINED = "/var/lib/vult"
@@ -29,6 +29,14 @@ UNITS = {name: f"/etc/systemd/system/ai.vult.{name}.service"
 SERVICE_STATES = frozenset(("active", "activating", "deactivating", "reloading", "inactive", "failed"))
 POLICY = "/usr/share/polkit-1/actions/ai.vult.owner.policy"
 EXTERNAL = frozenset((*UNITS.values(), POLICY))
+# The update installer behind the app's Update button, when the package
+# carries it: kept outside the program folder an update replaces.
+UPDATER_PROGRAM = "/opt/vult-updater/vult-update-helper"
+UPDATER_UNITS = ("/etc/systemd/system/ai.vult.update-helper.service",
+                 "/etc/systemd/system/ai.vult.update-helper.path")
+UPDATER_TRUST = ("/opt/vult-updater/root.json", "/opt/vult-updater/repository.json")
+UPDATER = frozenset((UPDATER_PROGRAM, *UPDATER_UNITS, *UPDATER_TRUST))
+UPDATER_STATE = RETAINED + "/updater"
 MAX_ARCHIVE = 128 << 20
 MAX_PAYLOAD = 256 << 20
 MAX_FILES = 4096
@@ -77,7 +85,7 @@ def inventory(data, current=False):
     if current and value["version"] != VERSION:
         raise InstallError("Payload version does not match the installer.")
     files, external = value["files"], value["external_files"]
-    if not isinstance(files, dict) or not 1 <= len(files) <= MAX_FILES or not isinstance(external, dict) or set(external) != EXTERNAL:
+    if not isinstance(files, dict) or not 1 <= len(files) <= MAX_FILES or not isinstance(external, dict) or set(external) not in (EXTERNAL, EXTERNAL | UPDATER):
         raise InstallError("Incomplete program inventory.")
     required = {"vult", "LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md",
                 "postgres/bin/postgres", "postgres/bin/initdb", "postgres/bin/pg_ctl"}
@@ -118,7 +126,7 @@ def archive_payload(path, expected):
                 if not member.isfile() or name in entries or not parts or name != PurePosixPath(name).as_posix() or name.startswith("/") or any(part in (".", "..") or part.startswith(".") for part in parts) or "\\" in name:
                     raise InstallError("Unexpected release archive member.")
                 total += member.size
-                if member.size < 0 or total > MAX_PAYLOAD or len(entries) >= MAX_FILES + len(EXTERNAL) + 1 or member.mode not in (0o644, 0o755):
+                if member.size < 0 or total > MAX_PAYLOAD or len(entries) >= MAX_FILES + len(EXTERNAL) + len(UPDATER) + 1 or member.mode not in (0o644, 0o755):
                     raise InstallError("Release payload exceeds its bounds.")
                 content = archive.extractfile(member)
                 if content is None:
@@ -140,7 +148,7 @@ def archive_payload(path, expected):
     for name, digest in selected.items():
         if sha(entries[name][0]) != digest:
             raise InstallError("Release member checksum mismatch.")
-        wanted_mode = program_mode(name[len("opt/vult/"):]) if name.startswith("opt/vult/") else 0o644
+        wanted_mode = program_mode(name[len("opt/vult/"):]) if name.startswith("opt/vult/") else 0o755 if "/" + name == UPDATER_PROGRAM else 0o644
         if entries[name][1] != wanted_mode:
             raise InstallError("Unexpected release member permissions.")
     if entries[manifest_name][1] != 0o644:
@@ -216,7 +224,7 @@ class Installer:
             raise InstallError("A running systemd system is required.")
         if not self.path("/sys/fs/cgroup/cgroup.controllers").is_file():
             raise InstallError("A cgroup v2 system is required.")
-        for name in ("/usr/bin/systemctl", "/usr/sbin/useradd", "/usr/sbin/groupadd", "/usr/sbin/usermod", "/usr/bin/certutil", "/usr/bin/zenity", "/usr/bin/google-chrome-stable"):
+        for name in ("/usr/bin/systemctl", "/usr/sbin/useradd", "/usr/sbin/groupadd", "/usr/sbin/usermod", "/usr/sbin/runuser", "/usr/bin/certutil", "/usr/bin/zenity", "/usr/bin/google-chrome-stable"):
             if not os.access(self.path(name), os.X_OK):
                 raise InstallError("Install the system tools, Chrome, libnss3-tools and Zenity first. A GNOME polkit authentication agent is also required.")
         if self.checked(["/usr/bin/systemctl", "show", "polkit.service", "--property=LoadState", "--value"]).strip() != "loaded":
@@ -448,7 +456,7 @@ class Installer:
         expected = {PROGRAM + "/" + name: digest for name, digest in value["files"].items()}
         expected.update(value["external_files"])
         for path, digest in expected.items():
-            mode = program_mode(path[len(PROGRAM) + 1:]) if path.startswith(PROGRAM + "/") else 0o644
+            mode = program_mode(path[len(PROGRAM) + 1:]) if path.startswith(PROGRAM + "/") else 0o755 if path == UPDATER_PROGRAM else 0o644
             if sha(self.read(path, mode=mode, limit=128 << 20)) != digest:
                 raise InstallError("Installed program files changed; nothing was replaced.")
         directories = {PROGRAM}
@@ -570,6 +578,32 @@ class Installer:
         if not self.exists("/usr/local/bin/vult"):
             self.path("/usr/local/bin/vult").symlink_to(PROGRAM + "/vult")
 
+    def own(self, name, uid, gid):
+        os.chown(self.path(name), uid, gid, follow_symlinks=False)
+
+    def updater(self, browser):
+        """Prepare the update installer: its folders, the request file the app
+        writes, and the record of what is installed now. Then switch it on."""
+        self.directory(UPDATER_STATE, 0, 0, 0o755)
+        for name, mode in (("trust", 0o755), ("journal", 0o755), ("trust/metadata", 0o700), ("staging", 0o700), ("copies", 0o700)):
+            self.directory(UPDATER_STATE + "/" + name, 0, 0, mode)
+        for name in ("request.json", "check.json"):
+            request = UPDATER_STATE + "/" + name
+            if not self.exists(request):
+                self.write(request, b"", 0o644)
+            self.own(request, 0, browser[1])
+            self.path(request).chmod(0o664)
+        report = self.checked(["/usr/sbin/runuser", "-u", "_vultledger", "--", PROGRAM + "/vult", "_maintenance", "validate"], timeout=300)
+        try:
+            schema = json.loads(report)["schema"]
+        except (ValueError, KeyError, TypeError) as error:
+            raise InstallError("The installed database could not be checked.") from error
+        if not isinstance(schema, str) or not re.fullmatch(r"[0-9]{4}", schema):
+            raise InstallError("The installed database could not be checked.")
+        self.write(UPDATER_STATE + "/installed.json", json.dumps({"version": VERSION, "sha256": "package", "schema": schema}).encode() + b"\n", 0o644)
+        self.checked(["/usr/bin/systemctl", "enable", Path(UPDATER_UNITS[0]).name])
+        self.checked(["/usr/bin/systemctl", "enable", "--now", Path(UPDATER_UNITS[1]).name])
+
     def install(self, value, entries, archive_sha256):
         manifest_name = PROGRAM.lstrip("/") + "/" + MANIFEST
         candidate_bytes = entries[manifest_name][0]
@@ -618,6 +652,8 @@ class Installer:
                 for parent in reversed(PurePosixPath(absolute).parents):
                     if str(parent).startswith(PROGRAM + "/"):
                         self.directory(str(parent))
+            elif absolute == UPDATER_PROGRAM or absolute in UPDATER_TRUST:
+                self.directory(str(PurePosixPath(UPDATER_PROGRAM).parent))
             self.write(absolute, body, mode)
         if old:
             obsolete_directories = set()
@@ -649,6 +685,9 @@ class Installer:
         self.sync_directory(RETAINED)
         try:
             self.checked([PROGRAM + "/vult", "_install"], timeout=60)
+            # Create or update the database while the service is stopped; the
+            # service itself only checks the schema when it starts.
+            self.checked(["/usr/sbin/runuser", "-u", "_vultledger", "--", PROGRAM + "/vult", "_maintenance", "migrate"], timeout=1800)
             self.shortcut()
             self.checked(["/usr/bin/systemctl", "enable", Path(UNITS["ledger"]).name])
             self.checked(["/usr/bin/systemctl", "start", Path(UNITS["ledger"]).name])
@@ -662,6 +701,8 @@ class Installer:
             self.checked(["/usr/bin/systemctl", "start", Path(UNITS["browser"]).name])
             self.checked(["/usr/bin/systemctl", "is-active", "--quiet", Path(UNITS["browser"]).name])
             self.checked([PROGRAM + "/vult", "_browser_check"], timeout=50)
+            if UPDATER <= set(value["external_files"]):
+                self.updater(browser)
         except BaseException as failure:
             try:
                 self.stop_candidate(value, candidate_bytes)

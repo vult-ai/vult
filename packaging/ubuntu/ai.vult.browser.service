@@ -21,6 +21,10 @@ CapabilityBoundingSet=
 AmbientCapabilities=
 ProtectControlGroups=yes
 ProtectSystem=strict
+# The app writes only these requests; the leading "-" skips them
+# where the package has no update installer.
+ReadWritePaths=-/var/lib/vult/updater/request.json
+ReadWritePaths=-/var/lib/vult/updater/check.json
 ProtectHome=yes
 PrivateTmp=yes
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

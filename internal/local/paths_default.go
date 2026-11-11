@@ -11,4 +11,6 @@ const (
 	BrowserPath        = "/Library/Application Support/ai.vult.ledger/browser"
 	PostgresSocketPath = "/Library/Application Support/ai.vult.ledger/postgres"
 	PostgresPath       = "/Library/PrivilegedHelperTools/ai.vult.ledger/postgres"
+	// RecoveryPath holds recovery points: root-only, never in a user's home.
+	RecoveryPath = "/Library/Application Support/ai.vult.ledger/recovery"
 )

@@ -1,0 +1,22 @@
+[Unit]
+Description=Vult update installer
+# Runs when the owner presses Update (see the .path unit) and at boot, to
+# finish or undo an update a power cut interrupted.
+After=local-fs.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/vult-updater/vult-update-helper
+Environment=PATH=/usr/bin:/bin:/usr/sbin:/sbin LANG=C LC_ALL=C
+UMask=0022
+TimeoutStartSec=3600
+KillMode=process
+NoNewPrivileges=yes
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vult-update-helper
+
+[Install]
+WantedBy=multi-user.target

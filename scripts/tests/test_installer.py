@@ -109,6 +109,29 @@ if os.environ.get('FIXTURE_INSTALL_FAIL'):sys.exit(1)
         owner = self.mock("osascript", "#!/bin/sh\n/bin/cat >/dev/null\nprintf approved >\"$FIXTURE_OWNER_LOG\"\nexit \"${FIXTURE_OWNER_FAIL:-0}\"\n")
         return self.script.replace("/usr/bin/uname", uname).replace("/usr/bin/sw_vers", version).replace("/usr/bin/osascript", owner)
 
+    def test_postinstall_updates_the_database_before_starting_the_service(self):
+        postinstall = (ROOT / "packaging/macos/scripts/postinstall").read_text()
+        migrate = '/usr/bin/sudo -u _vultledger "$binary" _maintenance migrate'
+        self.assertEqual(postinstall.count(migrate), 1)
+        self.assertLess(postinstall.index('"$binary" _install\n'), postinstall.index(migrate))
+        self.assertLess(postinstall.index(migrate), postinstall.index("/bin/launchctl bootstrap system /Library/LaunchDaemons/ai.vult.ledger.plist"))
+        line = next(l for l in postinstall.splitlines() if migrate in l)
+        self.assertIn("|| fail", line)
+
+    def test_postinstall_sets_up_the_update_installer_only_when_carried(self):
+        postinstall = (ROOT / "packaging/macos/scripts/postinstall").read_text()
+        guard = 'if [ -f "$updater/vult-update-helper" ] && [ ! -L "$updater/vult-update-helper" ]; then'
+        self.assertEqual(postinstall.count(guard), 1)
+        start = postinstall.index(guard)
+        end = postinstall.index("\nfi\n", start)
+        block = postinstall[start:end]
+        self.assertLess(postinstall.index("_maintenance migrate"), start)
+        self.assertLess(end, postinstall.index("/bin/launchctl bootstrap system /Library/LaunchDaemons/ai.vult.ledger.plist"))
+        for needed in ("installed.json", "ai.vult.update-helper.plist", '"$browser_uid:$browser_gid" "$request"'):
+            self.assertIn(needed, block)
+        self.assertNotIn("_vultupdate", block, "no separate checker account")
+        self.assertIn('for path in "$ustate/trust/metadata" "$ustate/staging" "$ustate/copies"; do', block)
+
     def postinstall_startup_fixture(self):
         self.startup_log = self.work / "startup.json"
         self.env["FIXTURE_STARTUP_LOG"] = str(self.startup_log)

@@ -43,6 +43,7 @@ import { lazy, Suspense } from "react";
 import { AppShell } from "./components/shell/app-shell";
 import { OnboardingCard } from "./components/shell/onboarding-card";
 import { UpdateNotice, useUpdateNotice } from "./components/shell/update-notice";
+import { UpdatingOverlay } from "./components/shell/updating-overlay";
 import { BookFinder } from "./components/shell/book-finder";
 import { PersonalSettingsHost, usePersonalAccount } from "./components/shell/personal-settings-host";
 import { FocusVisibility } from "./design-system/focus-visibility";
@@ -1155,6 +1156,7 @@ export function mount(initial: InitialBook) {
       <FocusVisibility />
       <App initial={initial} Table={preparedTable} />
       <Toaster />
+      <UpdatingOverlay />
     </PersonalSettingsHost>,
   );
 }

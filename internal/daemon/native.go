@@ -207,7 +207,12 @@ func runPostgres(ctx context.Context, args ...string) error {
 	}
 	return nil
 }
-func prepareDatabase(ctx context.Context, c configuration) error {
+
+// prepareDatabase initializes a new installation's cluster and starts
+// PostgreSQL. With private set, only the service account can reach it: the
+// maintenance step uses that so nothing else connects while the schema
+// changes.
+func prepareDatabase(ctx context.Context, c configuration, private bool) error {
 	database := filepath.Join(local.DataPath, "database")
 	socket := local.PostgresSocketPath
 	uid, _, e := serviceIdentity()
@@ -262,11 +267,17 @@ func prepareDatabase(ctx context.Context, c configuration) error {
 		}
 	}
 	if e := runPostgres(ctx, "pg_ctl", "-D", database, "status"); e == nil {
+		if private {
+			return errors.New("the database is already running")
+		}
 		return nil
 	}
 	// Enforce the private transport even if initial configuration writing was
 	// interrupted. PostgreSQL defaults must never open a TCP listener.
 	options := fmt.Sprintf("-c listen_addresses='' -c unix_socket_directories='%s' -c unix_socket_permissions=0770 -c unix_socket_group=%s -c max_connections=24", socket, local.BrowserUser)
+	if private {
+		options = fmt.Sprintf("-c listen_addresses='' -c unix_socket_directories='%s' -c unix_socket_permissions=0700 -c max_connections=4", socket)
+	}
 	return runPostgres(ctx, "pg_ctl", "-D", database, "-o", options, "-l", filepath.Join(local.DataPath, "postgres.log"), "-w", "-t", "30", "start")
 }
 
@@ -320,14 +331,14 @@ func requireExisting(state, kind string, exists bool) error {
 	return nil
 }
 
-func verifyOrInitializeSchema(ctx context.Context, admin *pgxpool.Pool, role, state string) error {
-	if state == "ready" {
-		return ledger.Upgrade(ctx, admin, role)
+// migrateSchema is the only place the native ledger's schema changes: it
+// initializes a new installation's database or moves an existing one
+// forward. Only the maintenance step calls it, never ordinary startup.
+func migrateSchema(ctx context.Context, admin *pgxpool.Pool, role, state string) (ledger.MigrationResult, error) {
+	if state != "new" && state != "ready" {
+		return ledger.MigrationResult{}, errors.New("unknown installation state")
 	}
-	if state != "new" {
-		return errors.New("unknown installation state")
-	}
-	return ledger.Apply(ctx, admin, role)
+	return ledger.Migrate(ctx, admin, role, state == "new")
 }
 
 func markConfigurationReady(path string, c configuration) error {
@@ -404,11 +415,72 @@ func pool(ctx context.Context, user, password, database string) (*pgxpool.Pool, 
 	}
 	return p, nil
 }
+
+// openDatabase checks the running PostgreSQL and connects as the database
+// owner. For a new installation it also creates the ledger database and the
+// restricted runtime role; for an existing one their absence means recovery
+// is required.
+func openDatabase(startup context.Context, conf configuration) (*pgxpool.Pool, error) {
+	bootstrap, e := pool(startup, "vult_owner", conf.AdminPassword, "postgres")
+	if e != nil {
+		return nil, e
+	}
+	var version int
+	if e = bootstrap.QueryRow(startup, "SELECT current_setting('server_version_num')::integer").Scan(&version); e != nil || version < 180000 || version >= 190000 {
+		bootstrap.Close()
+		return nil, errors.New("PostgreSQL18 is required")
+	}
+	var exists bool
+	if e = bootstrap.QueryRow(startup, "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname='vult')").Scan(&exists); e != nil {
+		bootstrap.Close()
+		return nil, errors.New("database initialization failed")
+	}
+	if !exists {
+		if e = requireExisting(conf.State, "ledger database", false); e != nil {
+			bootstrap.Close()
+			return nil, e
+		}
+		if _, e = bootstrap.Exec(startup, "CREATE DATABASE vult"); e != nil {
+			bootstrap.Close()
+			return nil, errors.New("database initialization failed")
+		}
+	}
+	if e = bootstrap.QueryRow(startup, "SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='vult_runtime')").Scan(&exists); e != nil {
+		bootstrap.Close()
+		return nil, e
+	}
+	if !exists {
+		if e = requireExisting(conf.State, "runtime role", false); e != nil {
+			bootstrap.Close()
+			return nil, e
+		}
+		_, e = bootstrap.Exec(startup, "CREATE ROLE vult_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD '"+conf.RuntimePassword+"'")
+		if e != nil {
+			bootstrap.Close()
+			return nil, errors.New("restricted role initialization failed")
+		}
+	}
+	var unsafe bool
+	if e = bootstrap.QueryRow(startup, "SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname='vult_runtime'").Scan(&unsafe); e != nil || unsafe {
+		bootstrap.Close()
+		return nil, errors.New("unsafe runtime database role")
+	}
+	if _, e = bootstrap.Exec(startup, "REVOKE CREATE,TEMPORARY ON DATABASE vult FROM PUBLIC"); e != nil {
+		bootstrap.Close()
+		return nil, e
+	}
+	bootstrap.Close()
+	return pool(startup, "vult_owner", conf.AdminPassword, "vult")
+}
+
 func ServeNative(ctx context.Context) error {
 	if !nativeSupported() {
 		return errors.New("native service requires a supported installation")
 	}
 	if err := nativeStartupReady(); err != nil {
+		return err
+	}
+	if err := updateStartupReady(); err != nil {
 		return err
 	}
 	uid, _, e := serviceIdentity()
@@ -433,7 +505,7 @@ func ServeNative(ctx context.Context) error {
 	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 	startup, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	if e = prepareDatabase(startup, conf); e != nil {
+	if e = prepareDatabase(startup, conf, false); e != nil {
 		return e
 	}
 	defer func() {
@@ -441,64 +513,19 @@ func ServeNative(ctx context.Context) error {
 		defer cancel()
 		_ = runPostgres(stop, "pg_ctl", "-D", filepath.Join(local.DataPath, "database"), "-m", "fast", "-w", "-t", "20", "stop")
 	}()
-	bootstrap, e := pool(startup, "vult_owner", conf.AdminPassword, "postgres")
-	if e != nil {
-		return e
+	if conf.State != "ready" {
+		return errors.New("Vult has not finished installing; run the installer again")
 	}
-	var version int
-	if e = bootstrap.QueryRow(startup, "SELECT current_setting('server_version_num')::integer").Scan(&version); e != nil || version < 180000 || version >= 190000 {
-		bootstrap.Close()
-		return errors.New("PostgreSQL18 is required")
-	}
-	var exists bool
-	if e = bootstrap.QueryRow(startup, "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname='vult')").Scan(&exists); e != nil {
-		bootstrap.Close()
-		return errors.New("database initialization failed")
-	}
-	if !exists {
-		if e = requireExisting(conf.State, "ledger database", false); e != nil {
-			bootstrap.Close()
-			return e
-		}
-		if _, e = bootstrap.Exec(startup, "CREATE DATABASE vult"); e != nil {
-			bootstrap.Close()
-			return errors.New("database initialization failed")
-		}
-	}
-	if e = bootstrap.QueryRow(startup, "SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='vult_runtime')").Scan(&exists); e != nil {
-		bootstrap.Close()
-		return e
-	}
-	if !exists {
-		if e = requireExisting(conf.State, "runtime role", false); e != nil {
-			bootstrap.Close()
-			return e
-		}
-		_, e = bootstrap.Exec(startup, "CREATE ROLE vult_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD '"+conf.RuntimePassword+"'")
-		if e != nil {
-			bootstrap.Close()
-			return errors.New("restricted role initialization failed")
-		}
-	}
-	var unsafe bool
-	if e = bootstrap.QueryRow(startup, "SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname='vult_runtime'").Scan(&unsafe); e != nil || unsafe {
-		bootstrap.Close()
-		return errors.New("unsafe runtime database role")
-	}
-	if _, e = bootstrap.Exec(startup, "REVOKE CREATE,TEMPORARY ON DATABASE vult FROM PUBLIC"); e != nil {
-		bootstrap.Close()
-		return e
-	}
-	bootstrap.Close()
-	admin, e := pool(startup, "vult_owner", conf.AdminPassword, "vult")
+	admin, e := openDatabase(startup, conf)
 	if e != nil {
 		return e
 	}
 	defer admin.Close()
-	if e = verifyOrInitializeSchema(startup, admin, "vult_runtime", conf.State); e != nil {
-		var refusal *ledger.UpgradeRefusal
-		if errors.As(e, &refusal) {
-			return refusal
+	// Startup only checks the schema. Changing it is the maintenance step's
+	// job, run by the installer or the updater while Vult is stopped.
+	if e = ledger.RequireCurrent(startup, admin); e != nil {
+		if errors.Is(e, ledger.ErrNeedsMaintenance) {
+			return e
 		}
 		return errors.New("ledger schema needs recovery or a supported forward upgrade")
 	}
@@ -515,12 +542,6 @@ func ServeNative(ctx context.Context) error {
 		return e
 	}
 	defer documents.Close()
-	// Persist readiness before opening any owner or agent endpoint.
-	if conf.State == "new" {
-		if e = markConfigurationReady(filepath.Join(local.DataPath, "configuration.json"), conf); e != nil {
-			return e
-		}
-	}
 	socketDir := filepath.Dir(local.SocketPath)
 	if e = protected(socketDir, uid, true); e != nil {
 		return e

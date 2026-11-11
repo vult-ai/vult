@@ -2,4 +2,4 @@
 package version
 
 // Version is the release this program belongs to.
-const Version = "0.6.0"
+const Version = "0.7.0"

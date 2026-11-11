@@ -408,7 +408,7 @@ func TestSoftwareReinstallRetainsExactJournalAndCanPostAgain(t *testing.T) {
 		t.Fatal(e)
 	}
 	writeFixture(t, filepath.Join(p.Code, "vult"), []byte("replacement program"), 0755)
-	if e = verifyOrInitializeSchema(db.Context, db.Admin, db.Role, "ready"); e != nil {
+	if _, e = migrateSchema(db.Context, db.Admin, db.Role, "ready"); e != nil {
 		t.Fatal(e)
 	}
 	after, e := db.Owner.Snapshot(db.Context)
@@ -435,7 +435,7 @@ func TestInitializedSchemaIsNeverRecreatedOnStartup(t *testing.T) {
 	if _, e := db.Admin.Exec(db.Context, "DROP TABLE public.schema_receipts"); e != nil {
 		t.Fatal(e)
 	}
-	if e := verifyOrInitializeSchema(db.Context, db.Admin, db.Role, "ready"); e == nil {
+	if _, e := migrateSchema(db.Context, db.Admin, db.Role, "ready"); e == nil {
 		t.Fatal("missing schema was accepted")
 	}
 	var exists bool
@@ -527,7 +527,7 @@ func TestNativeStartupUpgradesReleasedLedgerWithoutChangingRecords(t *testing.T)
 			}
 			var code string
 			for i := 0; i < 2; i++ {
-				if e = verifyOrInitializeSchema(db.Context, db.Admin, db.Role, "ready"); e != nil {
+				if _, e = migrateSchema(db.Context, db.Admin, db.Role, "ready"); e != nil {
 					t.Fatal("initialized ledger could not upgrade", e)
 				}
 				if e = ledger.Ready(db.Context, db.Admin); e != nil {
@@ -629,7 +629,7 @@ func TestNativeUpgradeRejectsUnrecognizedReceipts(t *testing.T) {
 			if db.Admin.QueryRow(db.Context, snapshot).Scan(&before) != nil {
 				t.Fatal("receipt snapshot unavailable")
 			}
-			if verifyOrInitializeSchema(db.Context, db.Admin, db.Role, "ready") == nil {
+			if _, e := migrateSchema(db.Context, db.Admin, db.Role, "ready"); e == nil {
 				t.Fatal("unrecognized history was upgraded")
 			}
 			if db.Admin.QueryRow(db.Context, snapshot).Scan(&after) != nil || before != after {

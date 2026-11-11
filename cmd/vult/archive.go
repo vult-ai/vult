@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/vult-ai/vult/internal/daemon"
 	"github.com/vult-ai/vult/internal/local"
 	"github.com/vult-ai/vult/ledger"
 	"golang.org/x/term"
@@ -39,8 +40,15 @@ func runArchive(ctx context.Context, args []string, out io.Writer) error {
 	input := f.String("input", "", "encrypted backup")
 	output := f.String("output", "", "new output file")
 	documents := f.Bool("documents", false, "include originals and relationship history")
+	point := f.String("recovery-point", "", "a recovery point's encrypted archive")
 	if parse(f, args[1:]) != nil {
 		return ledger.ErrInvalid
+	}
+	if *point != "" {
+		if args[0] != "restore" || *book != "" || *input != "" || *output != "" || *documents {
+			return ledger.ErrInvalid
+		}
+		return runRecoveryRestore(ctx, *point, out)
 	}
 	switch args[0] {
 	case "backup":
@@ -81,6 +89,40 @@ func runArchive(ctx context.Context, args []string, out io.Writer) error {
 	}
 	_ = jsonOut(out, map[string]string{"status": status})
 	return nil
+}
+
+// runRecoveryRestore restores a recovery point onto a newly installed Vult.
+// An administrator runs it with sudo and types the installation recovery
+// key; it needs no Vult sign-in, so it works on a Mac where nobody has set
+// Vult up yet.
+func runRecoveryRestore(ctx context.Context, path string, out io.Writer) error {
+	if os.Geteuid() != 0 {
+		return errors.New("run this with sudo: restoring a recovery point needs an administrator")
+	}
+	key, err := readSecret("Installation recovery key: ")
+	if err != nil {
+		return err
+	}
+	defer clear(key)
+	return daemon.RestoreRecoveryPoint(ctx, path, string(key), out)
+}
+
+func readSecret(prompt string) ([]byte, error) {
+	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+	if err != nil || !term.IsTerminal(int(tty.Fd())) {
+		if tty != nil {
+			tty.Close()
+		}
+		return nil, errors.New("recovery requires an interactive terminal")
+	}
+	defer tty.Close()
+	fmt.Fprint(tty, prompt)
+	key, err := term.ReadPassword(int(tty.Fd()))
+	fmt.Fprintln(tty)
+	if err != nil || len(key) == 0 {
+		return nil, errors.New("recovery key unavailable")
+	}
+	return key, nil
 }
 
 func runArchiveRestore(ctx context.Context, client local.Client, path string, out io.Writer) error {

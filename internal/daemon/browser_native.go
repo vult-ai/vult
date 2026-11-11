@@ -183,6 +183,9 @@ func ServeNativeBrowser(ctx context.Context) error {
 	if err := nativeStartupReady(); err != nil {
 		return err
 	}
+	if err := updateStartupReady(); err != nil {
+		return err
+	}
 	app := web.App()
 	if err := browserInterface(app); err != nil {
 		return err
@@ -227,6 +230,8 @@ func ServeNativeBrowser(ctx context.Context) error {
 		ReadDocument: client.DownloadForOwner, UploadDocument: client.UploadForOwner,
 		LocalBooks: localBooks{client},
 		Updates:    updateChecker(runtime.GOOS),
+		// Set only when this build has an update installer.
+		Updater: installer(runtime.GOOS),
 	})
 	if err != nil {
 		return err
@@ -238,10 +243,13 @@ func ServeNativeBrowser(ctx context.Context) error {
 	return server.Serve(ctx, s, l)
 }
 
-// updateChecker looks for newer releases on macOS. The Ubuntu browser service
-// may reach only loopback addresses, so it has no checker; its owners update
-// from the release page.
+// updateChecker supports Mac installations without the privileged installer.
+// With an installer, discovery runs in the helper. The Ubuntu browser service
+// may reach only loopback addresses and never checks the network itself.
 func updateChecker(goos string) *update.Checker {
+	if installer(goos) != nil {
+		return nil // This installation discovers verified releases through its helper.
+	}
 	if goos != "darwin" {
 		return nil
 	}

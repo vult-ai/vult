@@ -179,3 +179,31 @@ test("nothing shows when Vult is current or the verified session is not local", 
     });
   }
 });
+
+test("helper discovery is followed promptly without starting an update", async (context) => {
+  await withDOM(async ({ render, unmount }) => {
+    const before = globalThis.fetch;
+    let status = { ...current, installer: { enabled: true, state: "idle", checking: true } };
+    const asked = serve(() => status);
+    context.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+    try {
+      await render(React.createElement(Fixture));
+      await settle();
+      assert.equal(asked.length, 1);
+      assert.equal(document.querySelector('[aria-label="Update available"]'), null);
+      status = { ...release("0.7.1"), installer: { enabled: true, state: "idle" } };
+      await React.act(async () => context.mock.timers.tick(3000));
+      await settle();
+      assert.equal(asked.length, 2, "discovering a release does not wait twelve hours");
+      const notice = document.querySelector('[aria-label="Update available"]');
+      assert.match(notice.textContent, /0\.7\.1/);
+      assert.ok([...notice.querySelectorAll("button")].some((button) => button.textContent === "Update" && !button.disabled));
+      await React.act(async () => context.mock.timers.tick(3000));
+      assert.equal(asked.length, 2, "the fast polling ends when discovery finishes");
+    } finally {
+      await unmount();
+      context.mock.timers.reset();
+      globalThis.fetch = before;
+    }
+  });
+});

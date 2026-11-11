@@ -21,17 +21,23 @@ TARGETS = (("darwin", "arm64"), ("linux", "amd64"))
 FORMAT = "{{with .Module}}{{if not .Main}}{{.Path}} {{.Version}}{{end}}{{end}}"
 
 
+# What the packages ship: vult as built with and without the update
+# installer, and the update installer itself.
+BUILDS = (("webui", "./cmd/vult"), ("webui,vult_updates", "./cmd/vult"), ("", "./cmd/vult-update-helper"))
+
+
 def linked_modules(go="go", source=ROOT, env=None):
-    """Every non-main module compiled into ./cmd/vult, as {(path, version)}."""
+    """Every non-main module compiled into what the packages ship, as {(path, version)}."""
     modules = set()
     for goos, goarch in TARGETS:
         target_env = dict(env or os.environ, GOOS=goos, GOARCH=goarch, CGO_ENABLED="0", GOWORK="off")
-        output = subprocess.check_output(
-            [go, "list", "-e", "-mod=readonly", "-deps", "-tags=webui", "-f", FORMAT, "./cmd/vult"],
-            cwd=source, env=target_env, timeout=300,
-        ).decode()
-        # -e: listing still works before the browser interface is built for embedding.
-        modules.update(tuple(line.split(" ", 1)) for line in output.splitlines() if line.strip())
+        for tags, package in BUILDS:
+            output = subprocess.check_output(
+                [go, "list", "-e", "-mod=readonly", "-deps", "-tags=" + tags, "-f", FORMAT, package],
+                cwd=source, env=target_env, timeout=300,
+            ).decode()
+            # -e: listing still works before the browser interface is built for embedding.
+            modules.update(tuple(line.split(" ", 1)) for line in output.splitlines() if line.strip())
     return modules
 
 

@@ -77,3 +77,6 @@
     background: var(--vult-interaction-hover);
   }
 }
+.update-notice-close[data-hidden] {
+  visibility: hidden;
+}

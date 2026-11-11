@@ -51,63 +51,84 @@ func migrationSum(name string) string {
 
 // Apply verifies installed receipts and applies only missing forward migrations.
 func Apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string) error {
-	return apply(ctx, admin, runtimeRole, false)
+	_, err := apply(ctx, admin, runtimeRole, false)
+	return err
 }
 
 // Upgrade applies forward migrations only to a recognized, initialized ledger.
 // Missing or invalid schema receipts require recovery instead of initialization.
 func Upgrade(ctx context.Context, admin *pgxpool.Pool, runtimeRole string) error {
-	return apply(ctx, admin, runtimeRole, true)
+	_, err := apply(ctx, admin, runtimeRole, true)
+	return err
 }
 
-func apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string, initialized bool) error {
+// Migrate is the maintenance step: it initializes an empty database when
+// initialize is true, or applies the missing forward migrations to an
+// initialized one, all in one transaction. When it changes an existing
+// schema it compares the fact fingerprint before and after inside that
+// transaction and rolls everything back if they differ.
+func Migrate(ctx context.Context, admin *pgxpool.Pool, runtimeRole string, initialize bool) (MigrationResult, error) {
+	return apply(ctx, admin, runtimeRole, !initialize)
+}
+
+// beforeFactCheck lets tests stand in for a migration that changes facts.
+var beforeFactCheck func(context.Context, pgx.Tx) error
+
+func apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string, initialized bool) (result MigrationResult, err error) {
 	if runtimeRole == "" || strings.ContainsAny(runtimeRole, "\x00") {
-		return ErrInvalid
+		return result, ErrInvalid
 	}
 	tx, e := admin.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if e != nil {
-		return e
+		return result, e
 	}
 	defer tx.Rollback(context.Background())
 	if _, e = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(769305013)"); e != nil {
-		return e
+		return result, e
 	}
 	var exists bool
 	if e = tx.QueryRow(ctx, "SELECT to_regclass('public.schema_receipts') IS NOT NULL").Scan(&exists); e != nil {
-		return e
+		return result, e
 	}
 	names := migrationNames()
 	applied := 0
 	if exists {
 		if applied, e = verifyReceipts(ctx, tx, names, false); e != nil {
-			return e
+			return result, e
+		}
+		if applied < len(names) {
+			if result.Fingerprint, e = Fingerprint(ctx, tx); e != nil {
+				return result, e
+			}
 		}
 	} else {
 		if initialized {
-			return errors.New("stored schema is missing; recovery is required")
+			return result, errors.New("stored schema is missing; recovery is required")
 		}
 		var occupied bool
 		if e = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_tables WHERE schemaname='public')").Scan(&occupied); e != nil || occupied {
-			return errors.New("a fresh database is required")
+			return result, errors.New("a fresh database is required")
 		}
 		if _, e = tx.Exec(ctx, "CREATE TABLE public.schema_receipts(filename text PRIMARY KEY,sha256 text NOT NULL CHECK(sha256 ~ '^[a-f0-9]{64}$'),applied_at timestamptz NOT NULL DEFAULT clock_timestamp())"); e != nil {
-			return e
+			return result, e
 		}
 		if _, e = tx.Exec(ctx, "REVOKE ALL ON public.schema_receipts FROM PUBLIC"); e != nil {
-			return e
+			return result, e
 		}
+		result.Initialized = true
 	}
+	result.From, result.To = applied, len(names)
 	for _, name := range names[applied:] {
 		b, _ := migrations.ReadFile("migrations/" + name)
 		if _, e = tx.Exec(ctx, string(b)); e != nil {
 			var p *pgconn.PgError
 			if errors.As(e, &p) && p.Code == "23514" {
-				return &UpgradeRefusal{Message: p.Message, Hint: p.Hint}
+				return result, &UpgradeRefusal{Message: p.Message, Hint: p.Hint}
 			}
-			return e
+			return result, e
 		}
 		if _, e = tx.Exec(ctx, "INSERT INTO public.schema_receipts(filename,sha256) VALUES($1,$2)", name, migrationSum(name)); e != nil {
-			return e
+			return result, e
 		}
 	}
 	role := pgx.Identifier{runtimeRole}.Sanitize()
@@ -150,9 +171,23 @@ func apply(ctx context.Context, admin *pgxpool.Pool, runtimeRole string, initial
 		statements = append(statements, "GRANT EXECUTE ON FUNCTION public."+name+" TO "+role)
 	}
 	if _, e = tx.Exec(ctx, strings.Join(statements, ";\n")); e != nil {
-		return e
+		return result, e
 	}
-	return tx.Commit(ctx)
+	if beforeFactCheck != nil {
+		if e = beforeFactCheck(ctx, tx); e != nil {
+			return result, e
+		}
+	}
+	if exists && applied < len(names) {
+		after, e := Fingerprint(ctx, tx)
+		if e != nil {
+			return result, e
+		}
+		if after.SHA256 != result.Fingerprint.SHA256 {
+			return result, ErrFactsChanged
+		}
+	}
+	return result, tx.Commit(ctx)
 }
 
 // UpgradeRefusal is a schema change the database declined on purpose

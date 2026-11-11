@@ -65,6 +65,9 @@ type Options struct {
 	// Updates tells the owner when a newer release is published; only Vult on
 	// the owner's own computer sets it.
 	Updates *update.Checker
+	// Updater lets the owner install an update from Vult; only Vult built
+	// to update itself sets it.
+	Updater Updater
 	// Web is the built interface. It requires Access: every page reads the
 	// signed-in session, and /api/v1 serves only that session.
 	Web fs.FS
@@ -135,7 +138,7 @@ func New(c Config, options Options) (*http.Server, error) {
 				admitDecision: operationDecisionAdmission(options.Admission, ownerAdmission),
 				documents:     options.Documents, readDocument: options.ReadDocument,
 				uploadDocument: options.UploadDocument, documentUploads: make(chan struct{}, 4),
-				localBooks: options.LocalBooks, updates: options.Updates,
+				localBooks: options.LocalBooks, updates: options.Updates, updater: options.Updater,
 			}
 		}
 	}

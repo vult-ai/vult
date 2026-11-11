@@ -48,6 +48,8 @@ const help = `Vult ` + daemon.Version + ` — local general ledger
   vult export --documents --book ID --output FILE.tar
   vult backup --output FILE.age
   vult restore --input FILE.age
+  sudo vult recovery-point
+  sudo vult restore --recovery-point FILE
   vult update [--check]
   vult uninstall
   vult --version
@@ -142,6 +144,18 @@ func run(args []string, out, errout io.Writer) error {
 			return ledger.ErrInvalid
 		}
 		return daemon.ServeNative(ctx)
+	}
+	if args[0] == "recovery-point" {
+		if len(args) != 1 {
+			return ledger.ErrInvalid
+		}
+		return daemon.TakeRecoveryPoint(ctx, out)
+	}
+	if args[0] == "_maintenance" {
+		if len(args) != 2 {
+			return ledger.ErrInvalid
+		}
+		return daemon.Maintenance(ctx, args[1], os.Stdin, out)
 	}
 	if args[0] == "_stop" {
 		if len(args) != 1 {

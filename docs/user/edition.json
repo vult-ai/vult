@@ -1,7 +1,7 @@
 {
   "format": 1,
-  "edition": "v0.6.0",
-  "productVersion": "0.6.0",
+  "edition": "v0.7.0",
+  "productVersion": "0.7.0",
   "schema": 4,
   "defaultArticle": "get-started",
   "groups": [

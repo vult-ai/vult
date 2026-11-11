@@ -40,6 +40,29 @@ vult restore --input books.age
 
 Restore needs an empty installation. It brings back every recorded entry, original and approval. It doesn't bring back agent connections; create new ones afterwards.
 
+## Recovery points on a Mac {#recovery-points}
+
+A recovery point is a full copy of Vult's data taken while Vult is briefly stopped. An administrator can take one at any time:
+
+```sh
+sudo vult recovery-point
+```
+
+It saves two things in `/Library/Application Support/ai.vult.ledger/recovery`, readable only by administrators:
+
+- an instant copy of the data on this Mac;
+- `books.age`, an archive of every Book encrypted with your recovery key.
+
+Vult reads both back before it reports success, then starts again.
+
+To move your Books to another Mac, or to recover after this one fails, install Vult on the new Mac, copy `books.age` across, and run:
+
+```sh
+sudo vult restore --recovery-point books.age
+```
+
+Type your recovery key when asked. You don't need to sign in to Vult first, so this works on a Mac where nobody has set Vult up yet. As with any restore, Vult must have no Books yet, and agent connections need to be created again afterwards.
+
 ## Before an upgrade {#before-an-upgrade}
 
 Make a backup before installing a new version. Upgrades keep your Books, entries, originals and connections, and stop rather than start an empty ledger if anything doesn't check out.

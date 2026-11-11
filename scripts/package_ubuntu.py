@@ -28,6 +28,8 @@ SYSTEM_LIBRARIES = {"libc.so.6", "libm.so.6", "libpthread.so.0", "libdl.so.2",
                     "librt.so.1", "libresolv.so.2", "ld-linux-x86-64.so.2"}
 PUBLIC_FILES = ("packaging/ubuntu/ai.vult.ledger.service",
                 "packaging/ubuntu/ai.vult.browser.service",
+                "packaging/ubuntu/updater/ai.vult.update-helper.service",
+                "packaging/ubuntu/updater/ai.vult.update-helper.path",
                 "packaging/ubuntu/install.py", "packaging/ubuntu/README.md", "scripts/package_ubuntu.py",
                 "scripts/tests/test_ubuntu_installer.py")
 
@@ -181,6 +183,19 @@ def render_installer(control, pinned):
             "# An incomplete download must not start installation.\nvult_install \"$@\"\n")
 
 
+def updater_files(go, clean, env, work, control, trust):
+    """The update installer, its systemd units and the trust store it ships with."""
+    helper = work / "vult-update-helper"
+    run([go, "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-ldflags=-s -w",
+         "-o", helper, "./cmd/vult-update-helper"], clean, env)
+    files = {control.UPDATER_PROGRAM: helper.read_bytes()}
+    for unit in control.UPDATER_UNITS:
+        files[unit] = (clean / "packaging/ubuntu/updater" / Path(unit).name).read_bytes()
+    for path in control.UPDATER_TRUST:
+        files[path] = (trust / Path(path).name).read_bytes()
+    return files
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True, help="new artifact directory")
@@ -188,7 +203,14 @@ def main():
     parser.add_argument("--web-sha256", required=True, help="expected interface file-manifest checksum")
     parser.add_argument("--postgres-archive", type=Path, required=True, help="existing pinned PostgreSQL source archive; no download")
     parser.add_argument("--go", default="go", help="Go 1.27.3 executable with a populated module cache")
+    parser.add_argument("--updates", type=Path, help="include the update installer behind the app's Update button, trusting the update repository described in this directory (root.json and repository.json)")
     args = parser.parse_args()
+    if args.updates:
+        from package_macos import update_trust
+        try:
+            update_trust(args.updates)
+        except ValueError as error:
+            parser.error(str(error))
     ubuntu_host()
     if interface_files(args.web_dist)[1] != args.web_sha256:
         parser.error("interface build checksum mismatch")
@@ -218,7 +240,8 @@ def main():
         product = work / "product"
         product.mkdir()
         runtime_payload(pg, product / "postgres")
-        run([go, "build", "-mod=readonly", "-tags=webui", "-trimpath", "-buildvcs=false",
+        tags = "webui,vult_updates" if args.updates else "webui"
+        run([go, "build", "-mod=readonly", "-tags=" + tags, "-trimpath", "-buildvcs=false",
              "-ldflags=-s -w", "-o", product / "vult", "./cmd/vult"], clean, env)
         (product / "vult").chmod(0o755)
         for name in ("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"):
@@ -227,6 +250,8 @@ def main():
         external = {control.UNITS[name]: (clean / f"packaging/ubuntu/ai.vult.{name}.service").read_bytes()
                     for name in ("ledger", "browser")}
         external[control.POLICY] = (clean / "internal/local/ai.vult.owner.policy").read_bytes()
+        if args.updates:
+            external.update(updater_files(go, clean, env, work, control, args.updates))
         inventory = {"format": control.FORMAT, "version": VERSION,
                      "files": {path.relative_to(product).as_posix(): digest(path)
                                for path in sorted(product.rglob("*")) if path.is_file()},
@@ -235,7 +260,8 @@ def main():
         control.inventory(inventory_bytes, current=True)
         entries = {"opt/vult/" + path.relative_to(product).as_posix(): (path.read_bytes(), stat.S_IMODE(path.stat().st_mode))
                    for path in sorted(product.rglob("*")) if path.is_file()}
-        entries.update({path.lstrip("/"): (data, 0o644) for path, data in external.items()})
+        entries.update({path.lstrip("/"): (data, 0o755 if path == getattr(control, "UPDATER_PROGRAM", None) else 0o644)
+                        for path, data in external.items()})
         entries["opt/vult/program-files.json"] = (inventory_bytes, 0o644)
         bundle = output / f"vult-{VERSION}-{TARGET}.tar.gz"
         write_archive(bundle, entries)

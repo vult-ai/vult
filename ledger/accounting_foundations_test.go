@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -24,10 +25,33 @@ import (
 // releasedBookSchema installs the six migrations and runtime grants of the
 // previous release, so a Book can be recorded exactly as that release did.
 func releasedBookSchema(ctx context.Context, pool *pgxpool.Pool, role string) error {
+	return releasedSchemaThrough("0006_owner_recovery_codes.sql")(ctx, pool, role)
+}
+
+// releasedSchemaThrough initializes the schema a release had, ending with the
+// migration last, with that schema's runtime grants.
+func releasedSchemaThrough(last string) func(context.Context, *pgxpool.Pool, string) error {
+	return func(ctx context.Context, pool *pgxpool.Pool, role string) error {
+		return releasedSchemaFiles(ctx, pool, role, last)
+	}
+}
+
+func releasedSchemaFiles(ctx context.Context, pool *pgxpool.Pool, role, last string) error {
 	if _, err := pool.Exec(ctx, "CREATE TABLE public.schema_receipts(filename text PRIMARY KEY,sha256 text NOT NULL CHECK(sha256 ~ '^[a-f0-9]{64}$'),applied_at timestamptz NOT NULL DEFAULT clock_timestamp()); REVOKE ALL ON public.schema_receipts FROM PUBLIC"); err != nil {
 		return err
 	}
-	for _, name := range []string{"0001_ledger.sql", "0002_server_access.sql", "0003_documents.sql", "0004_recorded_book.sql", "0005_proposing_agents.sql", "0006_owner_recovery_codes.sql"} {
+	all := []string{"0001_ledger.sql", "0002_server_access.sql", "0003_documents.sql", "0004_recorded_book.sql", "0005_proposing_agents.sql", "0006_owner_recovery_codes.sql"}
+	names := []string{}
+	for _, name := range all {
+		names = append(names, name)
+		if name == last {
+			break
+		}
+	}
+	if names[len(names)-1] != last {
+		return fmt.Errorf("unknown released migration %s", last)
+	}
+	for _, name := range names {
 		data, err := os.ReadFile("migrations/" + name)
 		if err != nil {
 			return err

@@ -10,6 +10,8 @@ export function showStartupError(
   root: HTMLElement,
   error: unknown,
   copyOverride?: { title: string; detail: string },
+  /** Vult is coming back by itself: a spinner and no button. */
+  waiting = false,
 ) {
   const state = presentFailureState(error, { intent: "read", resource: "app" });
   const frame = document.createElement("main");
@@ -44,16 +46,20 @@ export function showStartupError(
     svg.setAttribute(name, value);
   const outline = document.createElementNS(
     ns,
-    state.severity === "critical" ? "polygon" : "circle",
+    waiting ? "path" : state.severity === "critical" ? "polygon" : "circle",
   );
-  if (state.severity === "critical")
+  if (waiting) {
+    outline.setAttribute("d", "M21 12a9 9 0 1 1-6.2-8.56");
+    svg.classList.add("vult-state-spinner");
+  } else if (state.severity === "critical")
     outline.setAttribute("points", "8,2 16,2 22,8 22,16 16,22 8,22 2,16 2,8");
   else
     for (const [name, value] of Object.entries({ cx: "12", cy: "12", r: "10" }))
       outline.setAttribute(name, value);
   const mark = document.createElementNS(ns, "path");
   mark.setAttribute("d", "M12 8v4m0 4h.01");
-  svg.append(outline, mark);
+  if (waiting) svg.append(outline);
+  else svg.append(outline, mark);
   icon.append(svg);
   const copy = document.createElement("div");
   copy.className = "vult-state-copy";
@@ -79,7 +85,10 @@ export function showStartupError(
   reload.append(label);
   reload.addEventListener("click", () => window.location.reload());
   actions.append(reload);
-  panel.append(icon, copy, actions);
+  if (waiting) {
+    panel.dataset.kind = "loading";
+    panel.append(icon, copy);
+  } else panel.append(icon, copy, actions);
   frame.append(panel);
   root.replaceChildren(frame);
   title.focus({ preventScroll: true });

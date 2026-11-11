@@ -59,6 +59,21 @@ directory survives reboot and is writable only by the service identity. Socket
 permissions permit reaching the service, not accessing financial data without
 authorization. PostgreSQL has no TCP listener and its own private socket.
 
+### Updates from the app
+
+`--updates DIR` adds the update installer behind the app's Update button. `DIR`
+holds the update repository's first `root.json` and a `repository.json` naming
+its HTTPS `metadata_url` and `targets_url`; the package trusts only that root.
+The build also writes `vult-VERSION-macos-arm64.tar`, the program directory as
+an update installs it. That archive is reproducible: two builds of the same
+commit with the pinned toolchain produce identical bytes. To list it in the
+update repository, write its release contract from the build's manifest:
+
+```sh
+python3 scripts/release_contract.py --manifest dist/manifest.json \
+  --commit FULL_COMMIT --out dist/contract.json
+```
+
 After the package bytes and checksums are final, prepare the root installer:
 
 ```sh

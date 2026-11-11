@@ -8,6 +8,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/vult-ai/vult/internal/update"
+	"github.com/vult-ai/vult/internal/updatestatus"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +17,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -58,7 +61,27 @@ func TestBrowserPreview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := New(configuration(), Options{Database: f.db.Runtime, Access: &Access{Sessions: f.sessions, HTTP: login}, Documents: f.vault, Web: os.DirFS(web)})
+	options := Options{Database: f.db.Runtime, Access: &Access{Sessions: f.sessions, HTTP: login}, Documents: f.vault, Web: os.DirFS(web)}
+	// VULT_PREVIEW_UPDATES names a folder of synthetic installer files. The
+	// preview then offers Vult 0.7.1 to a Vult 0.7.0 on the owner's own
+	// computer, and pressing Update takes it away for about 20 seconds, as an
+	// install does, before reporting 0.7.1 installed.
+	var awayUntil atomic.Int64
+	updates := os.Getenv("VULT_PREVIEW_UPDATES")
+	if updates != "" {
+		var installed atomic.Bool
+		manifest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			latest := "0.7.1"
+			if installed.Load() {
+				latest = "0.7.0"
+			}
+			_, _ = fmt.Fprintf(w, `{"version":%q}`, latest)
+		}))
+		defer manifest.Close()
+		options.Updates = &update.Checker{Current: "0.7.0", URL: manifest.URL, Client: manifest.Client(), Every: time.Second}
+		options.Updater = previewInstaller{dir: updates, away: &awayUntil, installed: &installed}
+	}
+	s, err := New(configuration(), options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,6 +96,17 @@ func TestBrowserPreview(t *testing.T) {
 	}
 	local := "http://" + addr
 	proxy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if time.Now().UnixNano() < awayUntil.Load() {
+			// Vult is stopped while an update installs: nothing answers.
+			if hj, ok := w.(http.Hijacker); ok {
+				if conn, _, err := hj.Hijack(); err == nil {
+					conn.Close()
+					return
+				}
+			}
+			http.Error(w, "away", http.StatusBadGateway)
+			return
+		}
 		if r.URL.Path == "/__preview/sign-in" {
 			// A fresh session each time, so signing out elsewhere never strands a reviewer.
 			f.identity.AuthenticatedAt = time.Now().UTC()
@@ -116,6 +150,18 @@ func TestBrowserPreview(t *testing.T) {
 			}
 			w.WriteHeader(page.Code)
 			_, _ = w.Write(page.Body.Bytes())
+			return
+		}
+		if updates != "" && r.URL.Path == "/auth/session" {
+			// Local mode needs passkeys on a loopback origin; the preview
+			// only reports it so the interface shows what a Mac shows.
+			page := httptest.NewRecorder()
+			s.Handler.ServeHTTP(page, r)
+			for key, values := range page.Header() {
+				w.Header()[key] = values
+			}
+			w.WriteHeader(page.Code)
+			_, _ = w.Write(bytes.Replace(page.Body.Bytes(), []byte(`"mode":"server"`), []byte(`"mode":"local"`), 1))
 			return
 		}
 		s.Handler.ServeHTTP(w, r)
@@ -443,4 +489,28 @@ func seedPayees(t *testing.T, f *documentServerFixture, scope ledger.Scope) {
 			}
 		}
 	}
+}
+
+// previewInstaller stands in for the Mac's update installer.
+type previewInstaller struct {
+	dir       string
+	away      *atomic.Int64
+	installed *atomic.Bool
+}
+
+func (p previewInstaller) Report() updatestatus.Report { return updatestatus.Read(p.dir) }
+
+func (p previewInstaller) Request(version string) error {
+	if err := updatestatus.WriteRequest(p.dir, updatestatus.Request{Version: version, Requested: time.Now().UTC()}); err != nil {
+		return err
+	}
+	go func() {
+		time.Sleep(4 * time.Second) // downloading and checking
+		p.away.Store(time.Now().Add(20 * time.Second).UnixNano())
+		time.Sleep(20 * time.Second)
+		_ = os.WriteFile(filepath.Join(p.dir, "installed.json"), []byte(`{"version":"0.7.1","sha256":"preview","schema":"0008"}`), 0o644)
+		_ = updatestatus.ClearRequest(p.dir)
+		p.installed.Store(true)
+	}()
+	return nil
 }

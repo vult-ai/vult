@@ -109,6 +109,9 @@ done
 /bin/chmod 0700 "$data"
 /bin/chmod 0755 "$base/socket"
 "$binary" _install
+# Create or update the database here, while the service is stopped. The
+# service itself only checks the schema when it starts.
+/usr/bin/sudo -u _vultledger "$binary" _maintenance migrate >/dev/null || fail "The database update did not complete. Stored Books were preserved and nothing was changed."
 
 # Install a shell shortcut only into protected directories, never over a command.
 safe_shortcut=yes
@@ -121,6 +124,49 @@ for path in /usr /usr/local /usr/local/bin; do
 done
 if [ "$safe_shortcut" = yes ] && [ ! -e /usr/local/bin/vult ] && [ ! -L /usr/local/bin/vult ]; then
     /bin/ln -s "$binary" /usr/local/bin/vult
+fi
+
+# The update installer, when this package carries it: the app's Update
+# button writes a request, and this root job installs the newest release
+# both signatures agree on.
+updater=/Library/PrivilegedHelperTools/ai.vult.updater
+ustate="/Library/Application Support/ai.vult.updater"
+if [ -f "$updater/vult-update-helper" ] && [ ! -L "$updater/vult-update-helper" ]; then
+    for path in "$ustate" "$ustate/trust" "$ustate/journal"; do
+        [ ! -L "$path" ] || fail "An update directory is a symbolic link."
+        /bin/mkdir -p "$path"
+        /usr/sbin/chown root:wheel "$path"
+        /bin/chmod -N "$path"
+        /bin/chmod 0755 "$path"
+    done
+    for path in "$ustate/trust/metadata" "$ustate/staging" "$ustate/copies"; do
+        [ ! -L "$path" ] || fail "An update directory is a symbolic link."
+        /bin/mkdir -p "$path"
+        /usr/sbin/chown root:wheel "$path"
+        /bin/chmod -N "$path"
+        /bin/chmod 0700 "$path"
+    done
+    # The owner's request, written by the app (which runs as the browser
+    # account) and read by the installer as untrusted input.
+    for request in "$ustate/request.json" "$ustate/check.json"; do
+        [ ! -L "$request" ] || fail "The update request file is a symbolic link."
+        [ -e "$request" ] || : > "$request"
+        [ -f "$request" ] || fail "The update request file is not a plain file."
+        /usr/sbin/chown "$browser_uid:$browser_gid" "$request"
+        /bin/chmod 0644 "$request"
+    done
+    # This package is what is installed now.
+    report=$(/usr/bin/sudo -u _vultledger "$binary" _maintenance validate) || fail "The installed database could not be checked."
+    schema=$(/usr/bin/printf '%s' "$report" | /usr/bin/plutil -extract schema raw -o - -) || fail "The installed schema is unknown."
+    installed_version=$("$binary" --version | /usr/bin/awk '{print $2}')
+    /usr/bin/printf '{"version":"%s","sha256":"package","schema":"%s"}\n' "$installed_version" "$schema" > "$ustate/installed.json.tmp"
+    /usr/sbin/chown root:wheel "$ustate/installed.json.tmp"
+    /bin/chmod 0644 "$ustate/installed.json.tmp"
+    /bin/mv -f "$ustate/installed.json.tmp" "$ustate/installed.json"
+    if /bin/launchctl print system/ai.vult.update-helper >/dev/null 2>&1; then
+        /bin/launchctl bootout system/ai.vult.update-helper || true
+    fi
+    /bin/launchctl bootstrap system /Library/LaunchDaemons/ai.vult.update-helper.plist
 fi
 
 /bin/launchctl bootstrap system /Library/LaunchDaemons/ai.vult.ledger.plist

@@ -1,3 +1,4 @@
+import { updatesInstallHere, waitForVult } from "./connection";
 import { errorCopy, failureStateCopy } from "./error-copy";
 /** Normalize failures and select approved copy. Server prose is never UI copy. */
 export type FailureIntent = "read" | "write" | "action";
@@ -263,15 +264,25 @@ export async function fetchResponse(
   init?: RequestInit,
 ): Promise<Response> {
   const method = (init?.method ?? "GET").toUpperCase();
+  const reading = ["GET", "HEAD"].includes(method);
   try {
     return await fetch(url, init);
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.name === "AbortError" &&
-      ["GET", "HEAD"].includes(method)
-    )
+    if (error instanceof Error && error.name === "AbortError" && reading)
       throw error;
+    // Vult can't be reached, usually because an update is installing. A
+    // read waits for it and then tries once more; a write is never repeated
+    // here, so the person sees it wasn't saved and can save again.
+    if (updatesInstallHere() && !init?.signal?.aborted) {
+      await waitForVult();
+      if (reading && !init?.signal?.aborted) {
+        try {
+          return await fetch(url, init);
+        } catch {
+          /* Fall through to the usual connection failure. */
+        }
+      }
+    }
     throw responseFailure(
       0,
       null,

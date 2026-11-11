@@ -31,6 +31,7 @@ type webAPI struct {
 	documentUploads chan struct{}
 	localBooks      LocalBooks
 	updates         *update.Checker
+	updater         Updater
 }
 
 const webBookLimit = 1000
@@ -121,11 +122,10 @@ func (a *webAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.books(w, r, session.Value)
 	case r.URL.Path == booksPath && r.Method == http.MethodPost:
 		a.createBook(w, r, session.Value)
-	case r.URL.Path == updatePath && r.Method == http.MethodGet && a.updates != nil && r.URL.RawQuery == "":
-		_ = json.NewEncoder(w).Encode(struct {
-			SchemaVersion int `json:"schema_version"`
-			update.Status
-		}{1, a.updates.Status(r.Context())})
+	case r.URL.Path == updatePath && r.Method == http.MethodGet && (a.updates != nil || a.updater != nil) && r.URL.RawQuery == "":
+		a.updateStatus(w, r)
+	case r.URL.Path == updateInstallPath && r.Method == http.MethodPost && a.updater != nil:
+		a.updateInstall(w, r, session.Value)
 	case r.URL.Path == accountChangesPath && r.Method == http.MethodPost:
 		a.accountChange(w, r, session.Value)
 	case r.URL.Path == payeesPath && r.Method == http.MethodGet:
