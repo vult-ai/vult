@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"slices"
 	"strings"
 	"time"
 
@@ -27,6 +28,9 @@ type OperationDecision struct {
 	ExecutorConnectionID string     `json:"executor_connection_id,omitempty"`
 	RecordedAt           time.Time  `json:"recorded_at"`
 	ExpiresAt            *time.Time `json:"expires_at,omitempty"`
+	// ReassignedTo is the Book the owner said a rejected cost belongs to
+	// instead: a linked Book's id, or personal (the Book that paid).
+	ReassignedTo string `json:"reassigned_to,omitempty"`
 }
 
 type DecideOperation struct {
@@ -37,6 +41,7 @@ type DecideOperation struct {
 	ExpectedRevision int64  `json:"expected_decision_revision"`
 	Decision         string `json:"decision"`
 	Reason           string `json:"reason"`
+	ReassignedTo     string `json:"reassigned_to,omitempty"`
 }
 
 // OperationDecisionResult is a recorded decision and, for an approval, the
@@ -65,10 +70,58 @@ type ProposalState struct {
 	// entry: the same date, lines and cited sources. Approving both can't post
 	// twice, since the sources' use is checked, but only one needs a decision.
 	DuplicateOf int64 `json:"duplicate_of,omitempty"`
+	// BankItems are the bank activity the proposal records or links, as the
+	// bank or statement wrote it, read now for the owner beside the agent's
+	// own words.
+	BankItems []ProposalBankItem `json:"bank_items,omitempty"`
+	// BankRecorded says the bank activity a waiting proposal would record is
+	// already recorded another way, such as by another copy of it. It can
+	// only be rejected, and shows no balances after.
+	BankRecorded bool `json:"bank_recorded,omitempty"`
+	// Pair is the other half when this proposal is half of a pair: a
+	// business cost paid personally, recorded in both linked Books and
+	// decided once.
+	Pair *ProposalPair `json:"pair,omitempty"`
+}
+
+// errBankRecorded refuses approving a proposal whose bank activity is
+// already recorded.
+var errBankRecorded = &RefusedError{Reason: "This bank item is already recorded, so this copy can only be rejected."}
+
+// bankAlreadyRecorded reports whether the bank activity a proposal would
+// record or link already has a live link.
+func bankAlreadyRecorded(ctx context.Context, tx pgx.Tx, s Scope, p OperationProposal) (bool, error) {
+	c := p.Preview.BankChange
+	if c == nil && p.Operation == "post_journal" {
+		// The business half of a pair stands for its card charge in the
+		// personal Book.
+		var recorded bool
+		err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM public.proposal_pairs x JOIN public.bank_transaction_links l
+ ON l.tenant_id=x.tenant_id AND l.book_id=x.payer_book_id AND l.transaction_id=x.transaction_id AND l.revoked_at IS NULL
+ WHERE x.tenant_id=$1 AND x.beneficiary_book_id=$2 AND x.beneficiary_proposal_id=$3)`, s.TenantID, s.BookID, p.ID).Scan(&recorded)
+		return recorded, dbError(err)
+	}
+	if c == nil || len(c.TransactionIDs) == 0 || c.Change != "record" && c.Change != "transfer" && c.Change != "link" {
+		return false, nil
+	}
+	var recorded bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM public.bank_transaction_links l
+ WHERE l.tenant_id=$1 AND l.book_id=$2 AND l.transaction_id=ANY($3::uuid[]) AND l.revoked_at IS NULL)`, s.TenantID, s.BookID, c.TransactionIDs).Scan(&recorded)
+	return recorded, dbError(err)
+}
+
+// ProposalBankItem is one bank item as its bank or statement wrote it.
+type ProposalBankItem struct {
+	ID           string `json:"id"`
+	Date         string `json:"date"`
+	AmountMinor  string `json:"amount_minor"`
+	Description  string `json:"description"`
+	Counterparty string `json:"counterparty,omitempty"`
+	Source       string `json:"source"`
 }
 
 const decisionColumns = `proposal_id::text,revision,owner_id::text,owner_epoch,request_key,sha256,decision,reason,
-    coalesce(executor_actor_id::text,''),coalesce(executor_connection_id::text,''),recorded_at,expires_at`
+    coalesce(executor_actor_id::text,''),coalesce(executor_connection_id::text,''),recorded_at,expires_at,coalesce(reassigned_to,'')`
 
 func validProposalSHA(value string) bool {
 	decoded, err := hex.DecodeString(value)
@@ -96,7 +149,7 @@ func holdProposalOwner(ctx context.Context, tx pgx.Tx, s Scope, input []byte) er
 func scanDecision(row pgx.Row) (OperationDecision, error) {
 	var d OperationDecision
 	err := row.Scan(&d.ProposalID, &d.Revision, &d.OwnerID, &d.ownerEpoch, &d.RequestKey, &d.SHA256, &d.Decision, &d.Reason,
-		&d.ExecutorActorID, &d.ExecutorConnectionID, &d.RecordedAt, &d.ExpiresAt)
+		&d.ExecutorActorID, &d.ExecutorConnectionID, &d.RecordedAt, &d.ExpiresAt, &d.ReassignedTo)
 	return d, err
 }
 
@@ -130,6 +183,13 @@ func proposalDependenciesNow(ctx context.Context, tx pgx.Tx, s Scope, p Operatio
 
 func readProposalState(ctx context.Context, tx pgx.Tx, s Scope, p OperationProposal, checkDependencies bool) (ProposalState, error) {
 	state := ProposalState{Version: 1, Proposal: p, Status: "approval_required"}
+	if pairedArguments(p.Arguments) {
+		pair, err := readProposalPair(ctx, tx, s, p.ID)
+		if err != nil {
+			return state, err
+		}
+		state.Pair = pair
+	}
 	var operation string
 	var result []byte
 	err := tx.QueryRow(ctx, `SELECT r.operation,r.result_bytes FROM public.operation_consumptions c JOIN public.requests r
@@ -181,6 +241,16 @@ func readProposalState(ctx context.Context, tx pgx.Tx, s Scope, p OperationPropo
 		}
 		state.Status = "approved"
 	}
+	if state.Status == "approval_required" {
+		recorded, err := bankAlreadyRecorded(ctx, tx, s, p)
+		if err != nil {
+			return state, err
+		}
+		if recorded {
+			state.BankRecorded = true
+			return state, nil
+		}
+	}
 	if checkDependencies {
 		matches, balances, err := proposalDependenciesNow(ctx, tx, s, p)
 		if err != nil {
@@ -199,7 +269,7 @@ func readProposalState(ctx context.Context, tx pgx.Tx, s Scope, p OperationPropo
 // same date, lines and cited sources. It is for showing the queue; approving
 // either can't post twice, since the sources' use is checked.
 func withDuplicate(ctx context.Context, tx pgx.Tx, s Scope, state ProposalState) (ProposalState, error) {
-	if state.Status != "approval_required" {
+	if state.Status != "approval_required" || state.BankRecorded {
 		return state, nil
 	}
 	// Each payload is read once; newer proposals come from the sequence index.
@@ -274,7 +344,7 @@ func (s Store) executeProposal(ctx context.Context, tx pgx.Tx, scope Scope, q Ex
 			return nil, err
 		}
 	}
-	result, err = dispatch(ctx, tx, scope, p.Operation, p.Arguments, s.AdmitWrite)
+	result, err = dispatch(withOwnerApproval(ctx), tx, scope, p.Operation, p.Arguments, s.AdmitWrite)
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +404,8 @@ func readDecisionOutcome(ctx context.Context, tx pgx.Tx, s Scope, d OperationDec
 func (a TenantAdmin) DecideOperation(ctx context.Context, ownerID string, q DecideOperation, admit DecisionAdmission) (OperationDecisionResult, error) {
 	var out OperationDecisionResult
 	if !a.valid() || !ValidID(ownerID) || !ValidID(q.BookID) || !ValidID(q.ProposalID) || !validProposalSHA(q.SHA256) || !validKey(q.RequestKey) || q.ExpectedRevision < 0 ||
-		(q.Decision != "approve" && q.Decision != "reject") || len(strings.TrimSpace(q.Reason)) < 1 || len(q.Reason) > 4000 {
+		(q.Decision != "approve" && q.Decision != "reject") || len(strings.TrimSpace(q.Reason)) < 1 || len(q.Reason) > 4000 ||
+		q.ReassignedTo != "" && (q.Decision != "reject" || !validAssignmentTarget(q.ReassignedTo)) {
 		return out, ErrInvalid
 	}
 	tx, owned, err := a.decisionTx(ctx)
@@ -366,7 +437,8 @@ func (a TenantAdmin) DecideOperation(ctx context.Context, ownerID string, q Deci
 	}
 	decision, err := scanDecision(tx.QueryRow(ctx, "SELECT "+decisionColumns+" FROM public.operation_decisions WHERE tenant_id=$1 AND book_id=$2 AND owner_id=$3 AND request_key=$4", a.tenantID, q.BookID, ownerID, q.RequestKey))
 	if err == nil {
-		if decision.ProposalID != q.ProposalID || decision.SHA256 != q.SHA256 || decision.Decision != q.Decision || decision.Reason != q.Reason || decision.Revision != q.ExpectedRevision+1 {
+		if decision.ProposalID != q.ProposalID || decision.SHA256 != q.SHA256 || decision.Decision != q.Decision || decision.Reason != q.Reason || decision.Revision != q.ExpectedRevision+1 ||
+			decision.ReassignedTo != q.ReassignedTo {
 			return out, ErrConflict
 		}
 		if out, err = readDecisionOutcome(ctx, tx, scope, decision); err != nil {
@@ -387,7 +459,32 @@ func (a TenantAdmin) DecideOperation(ctx context.Context, ownerID string, q Deci
 	if err = tx.QueryRow(ctx, "SELECT access.require_owner($1,true)::text", a.tenantID).Scan(&who); err != nil || who != ownerID {
 		return out, ErrDenied
 	}
-	if _, err = tx.Exec(ctx, "SELECT public.ledger_lock($1,$2)", a.tenantID, q.BookID); err != nil {
+	// Half of a pair is decided with its partner, in the other linked Book.
+	// Both Books are locked, in a fixed order, so two pairs can't deadlock.
+	pair, err := readProposalPair(ctx, tx, scope, q.ProposalID)
+	if err != nil {
+		return out, err
+	}
+	if pair != nil && pair.State != "paired" {
+		// A half still waiting for its partner has none to decide with: it
+		// is decided alone, and approving it is refused below.
+		pair = nil
+	}
+	locks := []string{q.BookID}
+	if pair != nil {
+		locks = append(locks, pair.BookID)
+		slices.Sort(locks)
+	}
+	for _, book := range locks {
+		// A Book is locked from its own context.
+		if err = setScope(ctx, tx, Scope{TenantID: a.tenantID, BookID: book}); err != nil {
+			return out, dbError(err)
+		}
+		if _, err = tx.Exec(ctx, "SELECT public.ledger_lock($1,$2)", a.tenantID, book); err != nil {
+			return out, dbError(err)
+		}
+	}
+	if err = setScope(ctx, tx, scope); err != nil {
 		return out, dbError(err)
 	}
 	p, err := readProposal(ctx, tx, scope, q.ProposalID)
@@ -412,6 +509,17 @@ func (a TenantAdmin) DecideOperation(ctx context.Context, ownerID string, q Deci
 		return out, ErrProposalExpired
 	}
 	if q.Decision == "approve" {
+		if state.BankRecorded {
+			return out, errBankRecorded
+		}
+		// Half of a pair is approved only with its partner, and only while
+		// its link is on.
+		if state.Pair != nil && state.Pair.State == "waiting_for_pair" {
+			return out, errPairWaiting
+		}
+		if state.Pair != nil && !state.Pair.LinkActive {
+			return out, errLinkOff
+		}
 		matches, e := proposalDependenciesMatch(ctx, tx, scope, p)
 		if e != nil {
 			return out, e
@@ -425,6 +533,9 @@ func (a TenantAdmin) DecideOperation(ctx context.Context, ownerID string, q Deci
 		revision = state.Decision.Revision
 	}
 	if revision != q.ExpectedRevision {
+		if state.Decision != nil && state.Decision.Decision == "reject" && state.Pair != nil {
+			return out, &RefusedError{Reason: "This pair was rejected since you opened it — reload to see it."}
+		}
 		return out, ErrProposalStale
 	}
 	if admit != nil {
@@ -432,9 +543,9 @@ func (a TenantAdmin) DecideOperation(ctx context.Context, ownerID string, q Deci
 			return out, err
 		}
 	}
-	decision, err = scanDecision(tx.QueryRow(ctx, `INSERT INTO public.operation_decisions(tenant_id,book_id,proposal_id,revision,owner_id,owner_epoch,request_key,sha256,decision,reason)
-        VALUES($1,$2,$3,$4,$5,0,$6,$7,$8,$9) RETURNING `+decisionColumns,
-		a.tenantID, q.BookID, q.ProposalID, revision+1, ownerID, q.RequestKey, q.SHA256, q.Decision, q.Reason))
+	decision, err = scanDecision(tx.QueryRow(ctx, `INSERT INTO public.operation_decisions(tenant_id,book_id,proposal_id,revision,owner_id,owner_epoch,request_key,sha256,decision,reason,reassigned_to)
+        VALUES($1,$2,$3,$4,$5,0,$6,$7,$8,$9,nullif($10,'')) RETURNING `+decisionColumns,
+		a.tenantID, q.BookID, q.ProposalID, revision+1, ownerID, q.RequestKey, q.SHA256, q.Decision, q.Reason, q.ReassignedTo))
 	if err != nil {
 		return out, dbError(err)
 	}
@@ -445,7 +556,168 @@ func (a TenantAdmin) DecideOperation(ctx context.Context, ownerID string, q Deci
 		}
 		out.Status = "committed"
 	}
+	if pair != nil {
+		// Checks deferred to commit read the session's Book and posting; run
+		// them now, before the session moves to the partner's Book.
+		if _, err = tx.Exec(ctx, "SET CONSTRAINTS ALL IMMEDIATE"); err != nil {
+			return OperationDecisionResult{}, dbError(err)
+		}
+		// The partner's checks wait again until its own posting is done.
+		if _, err = tx.Exec(ctx, "SET CONSTRAINTS ALL DEFERRED"); err != nil {
+			return OperationDecisionResult{}, dbError(err)
+		}
+		if err = a.decidePartner(ctx, tx, ownerID, q, p, out.Outcome, *pair, admit); err != nil {
+			return OperationDecisionResult{}, err
+		}
+	}
+	if q.ReassignedTo != "" {
+		if err = a.reassign(ctx, tx, ownerID, q, p, pair); err != nil {
+			return OperationDecisionResult{}, err
+		}
+	}
 	return out, commit()
+}
+
+// decidePartner decides the other half of a pair the same way, in its own
+// Book, and records the two entries an approval posted as one pair.
+func (a TenantAdmin) decidePartner(ctx context.Context, tx pgx.Tx, ownerID string, q DecideOperation, first OperationProposal, firstOutcome *Outcome, pair ProposalPair, admit DecisionAdmission) error {
+	if _, err := tx.Exec(ctx, "SELECT set_config('vult.actor_id','',true),set_config('vult.connection_id','',true),set_config('vult.owner_posting','',true)"); err != nil {
+		return dbError(err)
+	}
+	scope := Scope{TenantID: a.tenantID, BookID: pair.BookID}
+	if err := setScope(ctx, tx, scope); err != nil {
+		return dbError(err)
+	}
+	p, err := readProposal(ctx, tx, scope, pair.ProposalID)
+	if err != nil {
+		return dbError(err)
+	}
+	state, err := readProposalState(ctx, tx, scope, p, false)
+	if err != nil {
+		return err
+	}
+	if state.Status != "approval_required" {
+		// The halves are only ever decided together; one decided alone
+		// means the pair changed under this decision.
+		if state.Decision != nil && state.Decision.Decision == "reject" {
+			return &RefusedError{Reason: "This pair was rejected in " + pair.BookName + "; reject this half too."}
+		}
+		return &RefusedError{Reason: "This pair changed in " + pair.BookName + " since you opened it — reload to see it."}
+	}
+	if q.Decision == "approve" {
+		// When the first half of a cost pair was the payer's, it has just
+		// recorded the bank item itself (and would have refused one already
+		// recorded); the beneficiary's half then reads that item as
+		// recorded. Each half of a settlement records its own item.
+		if state.BankRecorded && !(pair.Side == "beneficiary" && pair.Kind != "settlement") {
+			return errBankRecorded
+		}
+		matches, err := proposalDependenciesMatch(ctx, tx, scope, p)
+		if err != nil {
+			return err
+		}
+		if !matches {
+			return pairHalfProblem(ctx, tx, scope, pair.BookName, p)
+		}
+	}
+	partner := q
+	partner.BookID, partner.ProposalID, partner.SHA256, partner.ExpectedRevision = pair.BookID, p.ID, p.SHA256, 0
+	if admit != nil {
+		if err = admit(ctx, tx, scope, "decide_operation", raw(partner)); err != nil {
+			return err
+		}
+	}
+	decision, err := scanDecision(tx.QueryRow(ctx, `INSERT INTO public.operation_decisions(tenant_id,book_id,proposal_id,revision,owner_id,owner_epoch,request_key,sha256,decision,reason,reassigned_to)
+        VALUES($1,$2,$3,1,$4,0,$5,$6,$7,$8,nullif($9,'')) RETURNING `+decisionColumns,
+		a.tenantID, pair.BookID, p.ID, ownerID, q.RequestKey, p.SHA256, q.Decision, q.Reason, q.ReassignedTo))
+	if err != nil {
+		return dbError(err)
+	}
+	if q.Decision != "approve" {
+		return nil
+	}
+	// What would stop the other half is said before it posts; a failure
+	// while posting can't be looked into after, and is said plainly.
+	if blocked, err := pairHalfBlocked(ctx, tx, scope, pair.BookName, p); err != nil || blocked != nil {
+		if err != nil {
+			return err
+		}
+		return blocked
+	}
+	failed := func(err error) error {
+		var refused *RefusedError
+		if errors.As(err, &refused) {
+			return &RefusedError{Reason: "In " + pair.BookName + ": " + refused.Reason}
+		}
+		return &RefusedError{Reason: "This pair's half in " + pair.BookName + " can't be recorded as it was prepared — reload to see it, or reject the pair."}
+	}
+	outcome, err := a.postApproved(ctx, tx, p, decision, admit)
+	if err != nil {
+		return failed(err)
+	}
+	if _, err = tx.Exec(ctx, "SET CONSTRAINTS ALL IMMEDIATE"); err != nil {
+		return failed(err)
+	}
+	// The partner's side names which half is the payer's.
+	payerOutcome, beneficiaryOutcome := outcome, firstOutcome
+	payerBook, beneficiaryBook := pair.BookID, first.BookID
+	if pair.Side == "beneficiary" {
+		payerOutcome, beneficiaryOutcome = firstOutcome, outcome
+		payerBook, beneficiaryBook = first.BookID, pair.BookID
+	}
+	payerEntry, beneficiaryEntry := outcomeEntry(payerOutcome), outcomeEntry(beneficiaryOutcome)
+	if payerEntry == "" || beneficiaryEntry == "" {
+		return ErrUncertain
+	}
+	kind := pair.Kind
+	if kind == "" {
+		kind = "cost"
+	}
+	if kind == "opening" {
+		_, err = tx.Exec(ctx, "SELECT public.open_link_balance($1,$2,$3,$4,$5,$6)", a.tenantID, pair.PairKey, payerBook, payerEntry, beneficiaryBook, beneficiaryEntry)
+		return linkError(err)
+	}
+	if kind == "settlement" {
+		var args RecordBankActivity
+		if err := json.Unmarshal(first.Arguments, &args); err != nil {
+			return ErrUncertain
+		}
+		repays := args.Repays
+		if repays == nil {
+			repays = []Repay{}
+		}
+		if _, err = tx.Exec(ctx, "SELECT public.settle_pair($1,$2,$3,$4,$5,$6,$7::jsonb)", a.tenantID, pair.PairKey, payerBook, payerEntry, beneficiaryBook, beneficiaryEntry, string(raw(repays))); err != nil {
+			return linkError(err)
+		}
+		return remindReceipts(ctx, tx, a.tenantID, payerBook, payerEntry, beneficiaryBook, ownerID)
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO public.entry_pairs(tenant_id,pair_key,kind,payer_book_id,payer_entry_id,beneficiary_book_id,beneficiary_entry_id)
+ VALUES($1,$2,$3,$4,$5,$6,$7)`, a.tenantID, pair.PairKey, kind, payerBook, payerEntry, beneficiaryBook, beneficiaryEntry)
+	if err != nil || kind != "cost" {
+		return dbError(err)
+	}
+	return reviewTerms(ctx, tx, a.tenantID, payerBook, beneficiaryBook, ownerID)
+}
+
+// outcomeEntry is the entry a posted operation wrote: a journal's own, or
+// the entry that records bank activity.
+func outcomeEntry(o *Outcome) string {
+	if o == nil {
+		return ""
+	}
+	var v struct {
+		ID    string `json:"id"`
+		Entry *struct {
+			ID string `json:"id"`
+		} `json:"entry"`
+	}
+	if json.Unmarshal(o.Result, &v) != nil {
+		return ""
+	}
+	if v.Entry != nil {
+		return v.Entry.ID
+	}
+	return v.ID
 }
 
 // postApproved posts the approved proposal under the preparing agent's actor
@@ -468,7 +740,7 @@ func (a TenantAdmin) postApproved(ctx context.Context, tx pgx.Tx, p OperationPro
 			return nil, err
 		}
 	}
-	result, err := dispatch(ctx, tx, author, p.Operation, p.Arguments, nil)
+	result, err := dispatch(withOwnerApproval(ctx), tx, author, p.Operation, p.Arguments, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -492,4 +764,79 @@ func (a TenantAdmin) postApproved(ctx context.Context, tx pgx.Tx, p OperationPro
 		return nil, dbError(err)
 	}
 	return &Outcome{Status: "recorded", Operation: p.Operation, Result: result}, nil
+}
+
+// reassign keeps the owner's word that a rejected charge belongs to another
+// Book as a rule for that bank item, in the Book whose item it is, so the
+// agent prepares it again for that Book.
+func (a TenantAdmin) reassign(ctx context.Context, tx pgx.Tx, ownerID string, q DecideOperation, p OperationProposal, pair *ProposalPair) error {
+	book, item := q.BookID, ""
+	switch {
+	case p.Operation == "record_bank_activity":
+		var args RecordBankActivity
+		if json.Unmarshal(p.Arguments, &args) != nil {
+			return ErrUncertain
+		}
+		item = args.TransactionID
+	case pair != nil && pair.Side == "payer":
+		book, item = pair.BookID, pair.TransactionID
+	}
+	if item == "" {
+		return &RefusedError{Reason: "Only a charge from the bank is reassigned to another Book."}
+	}
+	s := Scope{TenantID: a.tenantID, BookID: book, ActorID: ownerID}
+	if err := setScope(ctx, tx, s); err != nil {
+		return dbError(err)
+	}
+	return setAssignmentRule(ctx, tx, s, ownerID, AssignmentRuleChange{TransactionID: item, Target: q.ReassignedTo}, "reassigned")
+}
+
+// pairHalfProblem says why the other half of a pair can't be recorded as it
+// was prepared: a closed period or a retired account in its Book, or else
+// that it changed since. Nothing is recorded.
+func pairHalfProblem(ctx context.Context, tx pgx.Tx, s Scope, book string, p OperationProposal) error {
+	if blocked, err := pairHalfBlocked(ctx, tx, s, book, p); err != nil || blocked != nil {
+		if err != nil {
+			return err
+		}
+		return blocked
+	}
+	return &RefusedError{Reason: "This pair's half in " + book + " changed since it was prepared — reload to see it, or reject the pair."}
+}
+
+// pairHalfBlocked finds a closed period or a retired account in the other
+// half's Book that would stop it posting.
+func pairHalfBlocked(ctx context.Context, tx pgx.Tx, s Scope, book string, p OperationProposal) (*RefusedError, error) {
+	var args struct {
+		TransactionID  string     `json:"transaction_id"`
+		AccountingDate string     `json:"accounting_date"`
+		OtherAccountID string     `json:"other_account_id"`
+		Lines          []PostLine `json:"lines"`
+	}
+	_ = json.Unmarshal(p.Arguments, &args)
+	accounts := []string{}
+	if ValidID(args.OtherAccountID) {
+		accounts = append(accounts, args.OtherAccountID)
+	}
+	for _, l := range args.Lines {
+		if ValidID(l.AccountID) {
+			accounts = append(accounts, l.AccountID)
+		}
+	}
+	var closedThrough, retired *string
+	err := tx.QueryRow(ctx, `WITH d AS (SELECT coalesce(nullif($3,'')::date,
+   (SELECT t.occurred_on FROM public.bank_transactions t WHERE t.tenant_id=$1 AND t.book_id=$2 AND t.id::text=$4)) AS day)
+ SELECT (SELECT max(x.end_date)::text FROM public.accounting_periods x, d WHERE x.tenant_id=$1 AND x.book_id=$2 AND d.day BETWEEN x.start_date AND x.end_date
+   AND public.ledger_period_closed($1,$2,d.day)),
+  (SELECT string_agg(a.name,', ' ORDER BY a.name) FROM public.accounts a WHERE a.tenant_id=$1 AND a.book_id=$2 AND a.id::text=ANY($5) AND a.status='retired')`,
+		s.TenantID, s.BookID, args.AccountingDate, args.TransactionID, accounts).Scan(&closedThrough, &retired)
+	switch {
+	case err != nil:
+		return nil, dbError(err)
+	case closedThrough != nil:
+		return &RefusedError{Reason: book + "'s period through " + *closedThrough + " is closed; reopen it, or reject the pair."}, nil
+	case retired != nil:
+		return &RefusedError{Reason: *retired + " in " + book + " is retired; reactivate it, or reject the pair."}, nil
+	}
+	return nil, nil
 }

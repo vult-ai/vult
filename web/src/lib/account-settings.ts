@@ -38,7 +38,7 @@ export function parseAccountSettings(
 ): AccountSettings {
   const v = raw as AccountSettings;
   if (!v || v.user_id !== id)
-    throw new APIError("Personal settings User changed. Sign in again.", 403);
+    throw new APIError("Personal settings User changed. Sign in again.", 401);
   if (
     typeof v.revision !== "string" ||
     !/^(0|[1-9][0-9]{0,18})$/.test(v.revision) ||
@@ -187,8 +187,10 @@ export function createAccountSettingsStore(
     for (const f of listeners) f();
   };
   function failure(error: unknown) {
-    const denied =
-      error instanceof APIError && [401, 403].includes(error.status);
+    // Only a 401 means the session ended. A 403 refuses this save (an
+    // expired form token, a read-only Vult) while the owner stays signed in,
+    // so their choice stays on screen and can be saved again.
+    const denied = error instanceof APIError && error.status === 401;
     publish(
       denied
         ? "signed-out"

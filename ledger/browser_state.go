@@ -87,6 +87,14 @@ func (a TenantAdmin) browserState(ctx context.Context, book, view, from, to, uni
 			if err != nil {
 				return reportError(err)
 			}
+			catalog, err := readScopedCatalog(ctx, tx, scope)
+			if err != nil {
+				return err
+			}
+			headings := map[string]bool{}
+			for _, a := range catalog {
+				headings[a.ID] = a.Heading
+			}
 			for _, account := range in.Accounts {
 				class := account.Kind
 				switch class {
@@ -95,7 +103,7 @@ func (a TenantAdmin) browserState(ctx context.Context, book, view, from, to, uni
 				case "other_expense", "cost_of_sales", "cost_of_goods_sold":
 					class = "expense"
 				}
-				out.Accounts = append(out.Accounts, ActivityAccount{ID: account.ID, Code: account.ID, GLCode: account.GLCode, Name: account.Name, Kind: class, Role: account.Role, Revision: account.Revision})
+				out.Accounts = append(out.Accounts, ActivityAccount{ID: account.ID, Code: account.ID, GLCode: account.GLCode, Name: account.Name, Kind: class, Role: account.Role, Revision: account.Revision, Heading: headings[account.ID]})
 			}
 			out.DashboardSnapshot = &dashboard
 			out.AsOf, out.Period, out.CashStatus = to, &dashboard.Period, dashboard.CashStatus
@@ -133,7 +141,7 @@ func (a TenantAdmin) browserState(ctx context.Context, book, view, from, to, uni
 			out.CashStatus = "partial"
 		}
 		for _, account := range positions {
-			out.Accounts = append(out.Accounts, ActivityAccount{ID: account.ID, Code: account.ID, GLCode: account.GLCode, Name: account.Name, Kind: account.Kind, Role: account.Role, Revision: account.Revision})
+			out.Accounts = append(out.Accounts, ActivityAccount{ID: account.ID, Code: account.ID, GLCode: account.GLCode, Name: account.Name, Kind: account.Kind, Role: account.Role, Revision: account.Revision, Heading: account.Heading})
 		}
 		out.Revision = archiveHash(raw(struct {
 			Book      Book
@@ -182,7 +190,7 @@ func (a TenantAdmin) browserState(ctx context.Context, book, view, from, to, uni
 }
 
 func activityAccount(a Account) ActivityAccount {
-	return ActivityAccount{ID: a.ID, Code: a.ID, GLCode: a.Code, Name: a.Name, Kind: a.Class, Role: a.Role, Revision: a.Revision}
+	return ActivityAccount{ID: a.ID, Code: a.ID, GLCode: a.Code, Name: a.Name, Kind: a.Class, Role: a.Role, Revision: a.Revision, Heading: a.Heading}
 }
 
 func summarizePositions(accounts []AccountPositionRead) (RecordedPosition, StateSummary, error) {

@@ -75,7 +75,8 @@ func TestOwnerDirectWritesReachOnlyTheOwnersTables(t *testing.T) {
 	if _, err = store.Upload(ctx, scope, intake.UploadID, bytes.NewReader(data)); err != nil {
 		t.Fatal(err)
 	}
-	// Statements are imported by agents; the owner path never writes one.
+	// Statements are imported by agents; the owner path writes one only when
+	// adding a statement file Vult read itself, which marks its transaction.
 	insert := func() error {
 		tx, err := f.owners.Begin(ctx)
 		if err != nil {

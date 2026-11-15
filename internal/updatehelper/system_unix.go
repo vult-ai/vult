@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/vult-ai/vult/internal/browserkeys"
 	"github.com/vult-ai/vult/internal/local"
 	"github.com/vult-ai/vult/internal/recovery"
 	"golang.org/x/sys/unix"
@@ -173,4 +174,33 @@ func (m unixSystem) waitForLedgerStop(ctx context.Context) error {
 		case <-time.After(500 * time.Millisecond):
 		}
 	}
+}
+
+// lookupAccount finds a service account; tests replace it.
+var lookupAccount = user.Lookup
+
+// prepareBrowserKeys makes, on every update as the installer does, the
+// browser service's keys folder its account's alone and moves in any
+// keyring files left beside it. A computer without the browser service has
+// nothing to prepare.
+func prepareBrowserKeys(base, account string) error {
+	if base == "" {
+		return nil
+	}
+	if _, err := os.Lstat(base); errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	u, err := lookupAccount(account)
+	if err != nil {
+		return errors.New("the browser service's account is missing")
+	}
+	uid, err1 := strconv.ParseUint(u.Uid, 10, 32)
+	gid, err2 := strconv.ParseUint(u.Gid, 10, 32)
+	if err1 != nil || err2 != nil {
+		return errors.New("the browser service's account is unreadable")
+	}
+	if err := browserkeys.Prepare(base, uint32(uid), uint32(gid)); err != nil {
+		return fmt.Errorf("the browser's key folder couldn't be prepared: %w", err)
+	}
+	return nil
 }

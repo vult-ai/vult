@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/vult-ai/vult/internal/setaside"
 	"io"
 	"os"
 	"os/exec"
@@ -151,11 +152,31 @@ func run(args []string, out, errout io.Writer) error {
 		}
 		return daemon.TakeRecoveryPoint(ctx, out)
 	}
+	if args[0] == "_installer_point" {
+		if err := daemon.InstallerPoint(ctx, args[1:], out); err != nil {
+			return err
+		}
+		// The app reads the newest backup from the update installer's folder.
+		refreshBackups()
+		return nil
+	}
 	if args[0] == "_maintenance" {
 		if len(args) != 2 {
 			return ledger.ErrInvalid
 		}
 		return daemon.Maintenance(ctx, args[1], os.Stdin, out)
+	}
+	if args[0] == "_check_inventory" {
+		// The package build checks the inventory it wrote with the program
+		// it built, so the two can't drift apart.
+		if len(args) != 2 {
+			return ledger.ErrInvalid
+		}
+		data, err := os.ReadFile(args[1])
+		if err != nil {
+			return err
+		}
+		return daemon.CheckProgramInventory(data)
 	}
 	if args[0] == "_stop" {
 		if len(args) != 1 {
@@ -254,6 +275,20 @@ func run(args []string, out, errout io.Writer) error {
 				Currency string `json:"currency"`
 				Scale    int    `json:"scale"`
 			}{*name, *currency, *scale}
+		} else if args[1] == "delete" && !setaside.Commands["book delete"] {
+			// The machine's operator deletes a Book, with administrator
+			// approval: locked now, erased after the waiting period, or at
+			// once with --now.
+			f := flags("book delete")
+			book := f.String("book", "", "Book ID")
+			name := f.String("name", "", "the Book's exact name")
+			now := f.Bool("now", false, "erase now instead of after the waiting period")
+			cancel := f.Bool("cancel", false, "cancel the Book's deletion")
+			if parse(f, args[2:]) != nil || !ledger.ValidID(*book) || *cancel == (*name != "") || *cancel && *now {
+				return ledger.ErrInvalid
+			}
+			method = "book_delete"
+			payload = local.BookDeleteRequest{BookID: *book, Name: *name, Now: *now, Cancel: *cancel}
 		} else {
 			return ledger.ErrInvalid
 		}
@@ -354,7 +389,7 @@ func run(args []string, out, errout io.Writer) error {
 			return errors.New("invalid agent session")
 		}
 		transport.Authorization = session.Token
-		server := mcpserver.New(files.Call, session.Access, mcpserver.Options{Documents: true, LocalFiles: true, OwnerUploads: true})
+		server := mcpserver.New(files.Call, session.Access, mcpserver.Options{Documents: true, LocalFiles: true, OwnerUploads: true, ProposeReadings: true, SetAside: true})
 		return server.Run(ctx, &mcp.StdioTransport{})
 	default:
 		return errors.New("unknown command; run vult help")
@@ -435,6 +470,25 @@ func run(args []string, out, errout io.Writer) error {
 		}{"plaintext_export_written"})
 		return nil
 	}
+	if method == "status" {
+		result = withBackupLine(result, backupLine())
+	}
 	_, e = fmt.Fprintln(out, string(result))
 	return e
+}
+
+// withBackupLine adds what the newest backup is to status, when there is one.
+func withBackupLine(status json.RawMessage, line string) json.RawMessage {
+	if line == "" {
+		return status
+	}
+	var v map[string]any
+	if json.Unmarshal(status, &v) != nil || v == nil {
+		return status
+	}
+	v["backup"] = line
+	if b, err := json.Marshal(v); err == nil {
+		return b
+	}
+	return status
 }

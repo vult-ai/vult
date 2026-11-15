@@ -281,7 +281,7 @@ func validateCarrying(ctx context.Context, tx pgx.Tx, s Scope, book Book, line P
 }
 
 var snapshotOptionalColumns = map[string][]string{
-	"book_revisions":    {"logo", "logo_actor"},
+	"book_revisions":    {"logo", "logo_actor", "taxed_as"},
 	"accounts":          {"currency", "native_scale", "currency_definition", "role", "currency_revision", "native_origin_revision", "role_revision", "parent_account_id"},
 	"account_revisions": {"currency", "native_scale", "currency_definition", "role", "currency_revision", "native_origin_revision", "role_revision", "receipt_id", "parent_account_id", "transfer_entry_id"},
 	"entries":           {"measurement_policy"},

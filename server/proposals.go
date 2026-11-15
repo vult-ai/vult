@@ -31,8 +31,8 @@ func operationDecisionAdmission(policy Admission, owner access.OwnerAdmission) l
 				return ledger.ErrDenied
 			}
 			if transaction != nil {
-				if transaction.CheckTransaction(ctx, tx, scope, operation, input) != nil {
-					return ledger.ErrDenied
+				if e := transaction.CheckTransaction(ctx, tx, scope, operation, input); e != nil {
+					return ledger.AdmissionRefusal(e, ledger.ErrDenied)
 				}
 				return nil
 			}
@@ -87,6 +87,10 @@ func proposalQuery(r *http.Request, cursorName string) (string, int64, int, erro
 }
 
 func (a *webAPI) proposalRead(w http.ResponseWriter, r *http.Request, session string) {
+	if r.URL.Path == "/api/v1/agent-owner/plans/details" {
+		a.proposalStates(w, r, session)
+		return
+	}
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/agent-owner/plans")
 	id := ""
 	history := false
@@ -134,6 +138,31 @@ func (a *webAPI) proposalRead(w http.ResponseWriter, r *http.Request, session st
 	_ = json.NewEncoder(w).Encode(out)
 }
 
+func (a *webAPI) proposalStates(w http.ResponseWriter, r *http.Request, session string) {
+	q, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil || len(r.URL.RawQuery) > 4096 || len(q) != 2 || len(q["book_id"]) != 1 || len(q["ids"]) != 1 || !ledger.ValidID(q.Get("book_id")) {
+		apiFailure(w, ledger.ErrInvalid)
+		return
+	}
+	book := q.Get("book_id")
+	tenant, err := a.sessions.BookTenant(r.Context(), session, book)
+	if err != nil {
+		apiFailure(w, err)
+		return
+	}
+	var states []ledger.ProposalState
+	err = a.sessions.WithOwner(r.Context(), session, tenant, false, func(owner ledger.TenantAdmin) error {
+		var err error
+		states, err = owner.OperationProposalStates(r.Context(), book, strings.Split(q.Get("ids"), ","))
+		return err
+	})
+	if err != nil {
+		proposalFailure(w, err, "")
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"version": 1, "book_id": book, "states": states})
+}
+
 func (a *webAPI) proposalDecision(w http.ResponseWriter, r *http.Request, session string) {
 	if r.URL.RawQuery != "" || len(r.Header.Values("Content-Type")) != 1 || r.Header.Get("Content-Type") != "application/json" {
 		apiFailure(w, ledger.ErrInvalid)
@@ -152,6 +181,9 @@ func (a *webAPI) proposalDecision(w http.ResponseWriter, r *http.Request, sessio
 		RequestKey       string `json:"request_key"`
 		ExpectedRevision int64  `json:"expected_decision_revision"`
 		Reason           string `json:"reason"`
+		// ReassignedTo, on a rejection only, names the Book the cost belongs
+		// to instead, or personal.
+		ReassignedTo string `json:"reassigned_to"`
 	}
 	if strictjson.Decode(data, &q) != nil {
 		apiFailure(w, ledger.ErrInvalid)
@@ -177,13 +209,16 @@ func (a *webAPI) proposalDecision(w http.ResponseWriter, r *http.Request, sessio
 	decision := "approve"
 	if r.URL.Path == "/api/v1/agent-owner/reject" {
 		decision = "reject"
+	} else if _, ok := fields["reassigned_to"]; ok {
+		apiFailure(w, ledger.ErrInvalid)
+		return
 	}
 	tenant, err := a.sessions.BookTenant(r.Context(), session, q.BookID)
 	if err != nil {
 		apiFailure(w, err)
 		return
 	}
-	out, err := a.sessions.DecideOperation(r.Context(), session, tenant, ledger.DecideOperation{BookID: q.BookID, ProposalID: q.ProposalID, SHA256: q.SHA256, RequestKey: q.RequestKey, ExpectedRevision: q.ExpectedRevision, Decision: decision, Reason: q.Reason}, a.admitDecision)
+	out, err := a.sessions.DecideOperation(r.Context(), session, tenant, ledger.DecideOperation{BookID: q.BookID, ProposalID: q.ProposalID, SHA256: q.SHA256, RequestKey: q.RequestKey, ExpectedRevision: q.ExpectedRevision, Decision: decision, Reason: q.Reason, ReassignedTo: q.ReassignedTo}, a.admitDecision)
 	if err != nil {
 		proposalFailure(w, err, operationref.Encode(q.BookID, q.ProposalID))
 		return
@@ -196,7 +231,11 @@ func (a *webAPI) proposalDecision(w http.ResponseWriter, r *http.Request, sessio
 
 func proposalFailure(w http.ResponseWriter, err error, review string) {
 	status, code, message, next := 0, "", "", ""
+	var refused *ledger.RefusedError
 	switch {
+	case errors.As(err, &refused):
+		// The ledger's own reason, such as the bank item being recorded already.
+		status, code, message, next = http.StatusUnprocessableEntity, "refused", refused.Reason, "read_proposal"
 	case errors.Is(err, ledger.ErrProposalStale):
 		status, code, message, next = http.StatusConflict, "proposal_stale", "The operation's dependencies changed. Prepare and review a fresh proposal.", "prepare_operation"
 	case errors.Is(err, ledger.ErrProposalDecided):
@@ -206,7 +245,7 @@ func proposalFailure(w http.ResponseWriter, err error, review string) {
 	case errors.Is(err, ledger.ErrUncertain):
 		status, code, message, next = http.StatusServiceUnavailable, "decision_outcome_unresolved", "Check the proposal for the decision and any posted entry before deciding again.", "read_proposal"
 	case errors.Is(err, ledger.ErrFreshOwnerProof):
-		status, code, message, next = http.StatusForbidden, "fresh_authentication_required", "Sign in again, then review this same proposal.", "sign_in_and_review"
+		status, code, message, next = http.StatusForbidden, "fresh_authentication_required", "Confirm it’s you, then review this same proposal.", "sign_in_and_review"
 	default:
 		apiFailure(w, err)
 		return

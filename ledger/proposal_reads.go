@@ -24,6 +24,9 @@ type ProposalSummary struct {
 	DecisionRevision     int64      `json:"decision_revision"`
 	ExecutorConnectionID string     `json:"executor_connection_id,omitempty"`
 	DependencyStatus     string     `json:"dependency_status"`
+	// AgentDisconnected says the agent that prepared it was disconnected
+	// since; the owner may still decide it.
+	AgentDisconnected bool `json:"agent_disconnected,omitempty"`
 }
 
 type OperationProposalPage struct {
@@ -92,7 +95,8 @@ func (a TenantAdmin) OperationProposals(ctx context.Context, book string, before
             CASE WHEN c.proposal_id IS NOT NULL THEN 'committed' WHEN p.expires_at<=transaction_timestamp() THEN 'expired'
                 WHEN d.decision='reject' THEN 'rejected' WHEN d.decision='approve' AND coalesce(d.expires_at<=transaction_timestamp(),true) THEN 'expired'
                 WHEN d.decision='approve' THEN 'approved' ELSE 'approval_required' END,
-            coalesce(d.revision,0),coalesce(d.executor_connection_id::text,'')
+            coalesce(d.revision,0),coalesce(d.executor_connection_id::text,''),
+            EXISTS(SELECT 1 FROM public.connections k WHERE k.tenant_id=p.tenant_id AND k.book_id=p.book_id AND k.id=p.connection_id AND k.revoked_at IS NOT NULL)
             FROM public.operation_proposals p LEFT JOIN LATERAL (
                 SELECT revision,decision,expires_at,executor_connection_id FROM public.operation_decisions d
                 WHERE d.tenant_id=p.tenant_id AND d.book_id=p.book_id AND d.proposal_id=p.id ORDER BY revision DESC LIMIT 1
@@ -107,7 +111,7 @@ func (a TenantAdmin) OperationProposals(ctx context.Context, book string, before
 		defer rows.Close()
 		for rows.Next() {
 			var summary ProposalSummary
-			if err = rows.Scan(&summary.ID, &summary.Sequence, &summary.BookID, &summary.Operation, &summary.SHA256, &summary.CreatedAt, &summary.ExpiresAt, &summary.Description, &summary.EconomicDate, &summary.AccountingDate, &summary.Status, &summary.DecisionRevision, &summary.ExecutorConnectionID); err != nil {
+			if err = rows.Scan(&summary.ID, &summary.Sequence, &summary.BookID, &summary.Operation, &summary.SHA256, &summary.CreatedAt, &summary.ExpiresAt, &summary.Description, &summary.EconomicDate, &summary.AccountingDate, &summary.Status, &summary.DecisionRevision, &summary.ExecutorConnectionID, &summary.AgentDisconnected); err != nil {
 				return dbError(err)
 			}
 			if len(out.Plans) == limit {
@@ -129,15 +133,68 @@ func (a TenantAdmin) OperationProposal(ctx context.Context, book, id string) (Pr
 		return out, ErrInvalid
 	}
 	err := a.proposalRead(ctx, book, func(tx pgx.Tx, scope Scope) error {
-		p, err := readProposal(ctx, tx, scope, id)
-		if err != nil {
-			return dbError(err)
-		}
-		if out, err = readProposalState(ctx, tx, scope, p, true); err == nil {
-			out, err = withDuplicate(ctx, tx, scope, out)
-		}
+		var err error
+		out, err = readOwnerProposal(ctx, tx, scope, id)
 		return err
 	})
+	return out, err
+}
+
+// OperationProposalStates checks a bounded set of exact proposals in one snapshot.
+func (a TenantAdmin) OperationProposalStates(ctx context.Context, book string, ids []string) ([]ProposalState, error) {
+	out := []ProposalState{}
+	if len(ids) == 0 || len(ids) > 50 {
+		return out, ErrInvalid
+	}
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if !ValidID(id) || seen[id] {
+			return out, ErrInvalid
+		}
+		seen[id] = true
+	}
+	err := a.proposalRead(ctx, book, func(tx pgx.Tx, scope Scope) error {
+		for _, id := range ids {
+			state, err := readOwnerProposal(ctx, tx, scope, id)
+			if err != nil {
+				return err
+			}
+			out = append(out, state)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func readOwnerProposal(ctx context.Context, tx pgx.Tx, scope Scope, id string) (ProposalState, error) {
+	var out ProposalState
+
+	p, err := readProposal(ctx, tx, scope, id)
+	if err != nil {
+		return out, dbError(err)
+	}
+	if out, err = readProposalState(ctx, tx, scope, p, true); err == nil {
+		out, err = withDuplicate(ctx, tx, scope, out)
+	}
+	if err == nil && out.Proposal.Preview.BankChange != nil && len(out.Proposal.Preview.BankChange.TransactionIDs) > 0 {
+		rows, err := tx.Query(ctx, `SELECT id::text,occurred_on::text,amount_minor::text,description,counterparty,source FROM public.bank_transactions
+ WHERE tenant_id=$1 AND book_id=$2 AND id=ANY($3::uuid[]) ORDER BY occurred_on,id`, scope.TenantID, scope.BookID, out.Proposal.Preview.BankChange.TransactionIDs)
+		if err != nil {
+			return out, dbError(err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var item ProposalBankItem
+			if err := rows.Scan(&item.ID, &item.Date, &item.AmountMinor, &item.Description, &item.Counterparty, &item.Source); err != nil {
+				return out, dbError(err)
+			}
+			out.BankItems = append(out.BankItems, item)
+		}
+		return out, dbError(rows.Err())
+	}
 	return out, err
 }
 

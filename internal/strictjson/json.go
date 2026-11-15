@@ -124,10 +124,20 @@ func objectField(t reflect.Type, key string) (reflect.Type, bool) {
 	}
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
+		name := strings.Split(field.Tag.Get("json"), ",")[0]
+		// An embedded struct with no name of its own lends its fields, as
+		// encoding/json reads them.
+		if field.Anonymous && name == "" {
+			if inner := dereference(field.Type); inner != nil && inner.Kind() == reflect.Struct {
+				if child, ok := objectField(inner, key); ok {
+					return child, true
+				}
+				continue
+			}
+		}
 		if field.PkgPath != "" {
 			continue
 		}
-		name := strings.Split(field.Tag.Get("json"), ",")[0]
 		if name == "" {
 			name = field.Name
 		}

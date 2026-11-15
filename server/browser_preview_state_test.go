@@ -122,9 +122,18 @@ func keptPreview(t *testing.T, dir string) (f *documentServerFixture, fresh bool
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Applies the schema on first use and any newer migrations after that.
-	if err := ledger.Apply(ctx, admin, previewRuntimeRole); err != nil {
-		t.Fatal("preview schema: ", err)
+	// Kept data moves forward exactly as an installed Vult upgrades: the
+	// maintenance migration, forward only, with the fact check. A new database
+	// is initialized the same way. Nothing here ever deletes data: if the
+	// code's migrations no longer match the ones the data was made with (an
+	// unreleased migration was edited), the preview stops and says so, and the
+	// backup preview.sh took before starting is kept.
+	if result, err := ledger.Migrate(ctx, admin, previewRuntimeRole, fresh); err != nil {
+		t.Fatalf("preview data can't be moved to this code (%v). Nothing was changed. "+
+			"This happens when a migration the data already has was edited; a release never does that. "+
+			"The data and its backups are kept in the preview folder; ask the owner before resetting.", err)
+	} else if result.To != result.From && !fresh {
+		t.Logf("preview data moved forward from migration %d to %d", result.From, result.To)
 	}
 	pool := func(user, password string, conns int32) *pgxpool.Pool {
 		c := adminConfig.Copy()

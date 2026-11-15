@@ -1,6 +1,9 @@
 "use strict";
 
 const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
+// What to do for a fresh setup link: an installed Vult runs vult setup; a
+// development Vult beside it never points at that command.
+const setupAgain = () => document.querySelector('meta[name="vult-setup-again"]')?.content || "Close this tab and run vult setup again, or ask the agent to.";
 
 (() => {
   const button = document.getElementById("passkey-register") || document.getElementById("passkey-signin") || document.getElementById("passkey-recover");
@@ -70,7 +73,7 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
         authSetup.hidden = false;
         code?.focus?.();
       } catch {
-        say(status, { title: "Couldn’t start authenticator setup", detail: "Close this tab and run vult setup again, or ask the agent to." });
+        say(status, { title: "Couldn’t start authenticator setup", detail: setupAgain() });
         authSwitch.disabled = false;
       }
     });
@@ -134,7 +137,7 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
           say(authStatus, result.error === "invalid_code"
             ? { title: "Code not accepted", detail: "Enter the latest code from the authenticator app. If it keeps failing, check that the phone sets its time automatically.", invalidCode: true }
             : result.error === "too_many_attempts" ? { title: "Too many attempts", detail: "Wait five minutes, then try again.", tone: "warning" }
-            : { title: "Setup wasn’t confirmed", detail: "Close this tab and run vult setup again, or ask the agent to." });
+            : { title: "Setup wasn’t confirmed", detail: setupAgain() });
         } else if (result.signed_in === true && window.vultContinuation?.(result.continue)) {
           setup = "";
           try { sessionStorage.removeItem(setupKey); } catch { /* Nothing kept. */ }
@@ -143,7 +146,7 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
           else window.vultOpen(result.continue);
           return;
         } else {
-          say(authStatus, { title: "Setup wasn’t confirmed", detail: "Close this tab and run vult setup again, or ask the agent to." });
+          say(authStatus, { title: "Setup wasn’t confirmed", detail: setupAgain() });
         }
       } catch {
         say(authStatus, { title: "Setup wasn’t confirmed", detail: "Check the connection and try again." });
@@ -194,13 +197,29 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
 
   const decode = (value) => Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
   const encode = (value) => btoa(String.fromCharCode(...new Uint8Array(value))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  // A failed step says which step and what Vult answered, so the page can
+  // name the reason instead of one message for everything.
+  class StepFailure extends Error {
+    constructor(step, status) {
+      super(`${step} ${status}`);
+      this.name = "StepFailure";
+      this.step = step;
+      this.status = status;
+    }
+  }
   async function request(path, body) {
-    const response = await fetch(path, {
-      method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store",
-      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
-      body: JSON.stringify(body),
-    });
-    if (!response.ok || !response.headers.get("Content-Type")?.includes("application/json")) throw new Error("Passkey request failed");
+    let response;
+    try {
+      response = await fetch(path, {
+        method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      throw new StepFailure(path.endsWith("/verify") ? "verify" : "options", 0);
+    }
+    if (!response.ok || !response.headers.get("Content-Type")?.includes("application/json"))
+      throw new StepFailure(path.endsWith("/verify") ? "verify" : "options", response.status);
     return response.json();
   }
   function optionsFromJSON(options) {
@@ -224,6 +243,42 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
     return { id: credential.id, rawId: encode(credential.rawId), type: credential.type,
       authenticatorAttachment: credential.authenticatorAttachment, response,
       clientExtensionResults: credential.getClientExtensionResults() };
+  }
+  // The reason a passkey step failed, in plain words, with what to do next.
+  // The browser's own name for the error goes to the console for diagnosis.
+  function passkeyFailure(error, creating) {
+    const code = error?.name === "StepFailure" ? `${error.step} ${error.status || "unreachable"}` : error?.name || "unknown";
+    // The step and status are for diagnosis, in the console, not the owner's sentence.
+    console.info(`passkey step failed: ${code}`);
+    const more = "";
+    const other = document.getElementById("authenticator-switch") || document.getElementById("authenticator-signin-switch");
+    const alternative = other ? " or use an authenticator app" : "";
+    if (error?.name === "StepFailure") {
+      if (error.status === 0) return { title: "Vult couldn’t be reached", detail: `Check that Vult is running, then try again.${more}` };
+      if (error.step === "options" && creating && error.status === 401)
+        return { expired: true, title: "This setup link has expired or was replaced", detail: `A setup link works for five minutes, and only the newest one works. ${setupAgain()}${more}` };
+      if (error.status === 403) return { title: "This page’s sign-in check has expired", detail: `Reload the page and try again.${more}` };
+      // Vult confirmed, but the next step it named wasn't one this page goes to.
+      if (error.step === "verify" && error.status === 200)
+        return { title: "Sign-in wasn’t confirmed", detail: `Try the passkey again.${more}` };
+      if (error.step === "verify")
+        return { title: creating ? "Vult didn’t confirm the new passkey" : "Vult didn’t accept the passkey", detail: `Try again${alternative}.${more}` };
+      return { title: creating ? "Vult couldn’t start passkey setup" : "Vult couldn’t start sign-in", detail: `Try again${alternative}.${more}` };
+    }
+    switch (error?.name) {
+      case "NotAllowedError":
+      case "AbortError":
+        return { tone: "neutral", title: creating ? "The passkey window closed before a passkey was saved" : "The passkey window closed before you signed in",
+          detail: `This happens when it’s cancelled or takes too long. Try again${creating ? "; this setup link still works for a few minutes" : ""}.${more}` };
+      case "InvalidStateError":
+        return { title: "This device already has a passkey for this Vult", detail: `Sign in with it instead.${more}` };
+      case "SecurityError":
+        return { title: "This address isn’t trusted as secure", detail: `Open Vult at its secure address, with its certificate trusted, and try again.${more}` };
+      case "NotSupportedError":
+        return { title: "This browser can’t make this kind of passkey", detail: `Try another browser${alternative}.${more}` };
+      default:
+        return { title: creating ? "Passkey not created" : "Sign-in wasn’t confirmed", detail: `Try again${alternative}.${more}` };
+    }
   }
   button.addEventListener("click", async () => {
     if (button.disabled) return;
@@ -270,9 +325,9 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
       if (registering && setupInput) setupInput.value = "";
       if (registering && setupLabel) setupLabel.hidden = true;
       const credential = registering ? await navigator.credentials.create(optionsFromJSON(options)) : await navigator.credentials.get(optionsFromJSON(options));
-      if (!credential) throw new Error("Passkey was not used");
+      if (!credential) throw Object.assign(new Error("No passkey was returned"), { name: "NotAllowedError" });
       const result = await request(path + "/verify", { credential: credentialJSON(credential) });
-      if (result.signed_in !== true || !window.vultContinuation?.(result.continue)) throw new Error("Sign-in was not confirmed");
+      if (result.signed_in !== true || !window.vultContinuation?.(result.continue)) throw new StepFailure("verify", 200);
       setup = "";
       try { sessionStorage.removeItem(setupKey); } catch { /* Nothing kept. */ }
       if (dial) {
@@ -283,20 +338,26 @@ const say = (slot, feedback) => window.vultNotice?.(slot, feedback);
       }
       if (result.continue.startsWith("/auth/") || result.continue.startsWith("/oauth/")) location.replace(result.continue);
       else window.vultOpen(result.continue);
-    } catch {
+    } catch (error) {
       if (dial) dial.dataset.phase = "idle";
       for (const node of waiting) node.hidden = false;
-      // On this Mac the setup link's code stays for another try; there is
-      // never a code to type. A server asks for a fresh one.
-      if (registering && setupInput && setupLabel && !setupMissing) {
+      const reason = passkeyFailure(error, registering);
+      // The setup code stays in the page for another try, unless Vult said
+      // it's no longer valid. On a server it waits in the code field.
+      if (reason.expired) {
+        setup = "";
+        try { sessionStorage.removeItem(setupKey); } catch { /* Nothing kept. */ }
+        // A server asks for a fresh code in the same field.
+        if (setupInput && setupLabel && !setupMissing) {
+          setupInput.value = "";
+          setupLabel.hidden = false;
+        }
+      } else if (registering && setupInput && setupLabel && !setupMissing) {
         setupInput.value = setup;
         setupLabel.hidden = false;
         setup = "";
       }
-      say(status, registering && setupMissing
-        ? { title: "Passkey not created", detail: "Try again, or use an authenticator app.", tone: "neutral" }
-        : registering ? { title: "Passkey setup wasn’t confirmed", detail: "Try signing in with the passkey, or request a fresh setup code." }
-        : { title: "Sign-in wasn’t confirmed", detail: document.getElementById("authenticator-signin-switch") ? "Try the passkey again, or use the authenticator app." : "Try the passkey again." });
+      say(status, { title: reason.title, detail: reason.detail, tone: reason.tone });
       button.disabled = false;
     }
   });

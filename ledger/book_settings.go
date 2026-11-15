@@ -27,6 +27,8 @@ type ReviseBookSettings struct {
 	FiscalYearStartMonth *int    `json:"fiscal_year_start_month,omitempty"`
 	FiscalYearStartDay   *int    `json:"fiscal_year_start_day,omitempty"`
 	AccountingTimezone   *string `json:"accounting_timezone,omitempty"`
+	// TaxedAs is how the Book is taxed; empty goes back to the default.
+	TaxedAs *string `json:"taxed_as,omitempty"`
 }
 
 func validBookText(s string, max int) bool {
@@ -77,6 +79,26 @@ func applyBookSettings(book Book, q ReviseBookSettings) (Book, error) {
 		}
 		book.AccountingTimezone = zone
 	}
+	// A profile that no longer fits the choice clears it.
+	choice := book.taxedAs
+	if choice != nil && (book.Profile == "" || (book.Profile == "personal") != (*choice == TaxedPersonal)) {
+		choice = nil
+	}
+	if q.TaxedAs != nil {
+		switch *q.TaxedAs {
+		case "":
+			choice = nil
+		case TaxedSoleOwner, TaxedPartnership, TaxedSCorporation, TaxedCCorporation, TaxedPersonal:
+			if book.Profile == "" || (book.Profile == "personal") != (*q.TaxedAs == TaxedPersonal) {
+				return Book{}, &RefusedError{Reason: "A personal Book is taxed as personal, and a business Book as a sole owner, a partnership, an S corporation or a C corporation."}
+			}
+			value := *q.TaxedAs
+			choice = &value
+		default:
+			return Book{}, ErrInvalid
+		}
+	}
+	book.setTaxedAs(choice)
 	revision := int64(1)
 	if book.MetadataRevision != nil {
 		revision = *book.MetadataRevision + 1
@@ -158,12 +180,22 @@ func (a TenantAdmin) ReviseBook(ctx context.Context, actor string, q ReviseBookS
 	}
 	result = raw(after)
 	_, err = tx.Exec(ctx, `INSERT INTO public.book_revisions(tenant_id,book_id,revision,actor_id,request_key,prior_name,name,founder,profile,start_date,
- fiscal_year_start_month,fiscal_year_start_day,accounting_timezone,request_bytes,result_bytes,logo)
- VALUES($1,$2,$3,$4,$5,$6,$7,nullif($8,''),nullif($9,''),nullif($10,'')::date,$11,$12,nullif($13,''),$14,$15,$16)`,
+ fiscal_year_start_month,fiscal_year_start_day,accounting_timezone,request_bytes,result_bytes,logo,taxed_as)
+ VALUES($1,$2,$3,$4,$5,$6,$7,nullif($8,''),nullif($9,''),nullif($10,'')::date,$11,$12,nullif($13,''),$14,$15,$16,$17)`,
 		a.tenantID, q.BookID, *after.MetadataRevision, actor, q.RequestKey, before.Name, after.Name, after.Founder, after.Profile, after.StartDate,
-		after.FiscalYearStartMonth, after.FiscalYearStartDay, after.AccountingTimezone, []byte(canonical), result, after.Logo)
+		after.FiscalYearStartMonth, after.FiscalYearStartDay, after.AccountingTimezone, []byte(canonical), result, after.Logo, after.taxedAs)
 	if err != nil {
 		return nil, dbError(err)
+	}
+	// Links that no longer fit how the Book is taxed are for the owner to
+	// switch; nothing recorded changes.
+	if after.TaxedAs != before.TaxedAs {
+		if err = reviewTaxedLinks(ctx, tx, a.tenantID, q.BookID, actor); err != nil {
+			return nil, err
+		}
+		if err = renameDrawAccounts(ctx, tx, a.tenantID, q.BookID, actor, after.TaxedAs); err != nil {
+			return nil, err
+		}
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return nil, dbError(err)
@@ -189,6 +221,23 @@ func normalizeBookTables(s Snapshot, archive bool) (Snapshot, error) {
 		names, restore = prior, prior
 	case strings.HasSuffix(s.Format, "-v5"):
 		names, restore = details, details
+	case archive && strings.HasSuffix(s.Format, "-v7"):
+		// The whole Vult: the Books' records and everything else kept for them.
+		v7 := operationalTablesV7(s)
+		if v7 == nil {
+			return Snapshot{}, ErrInvalid
+		}
+		names = append(append([]string{}, current...), v7...)
+	case archive && strings.HasSuffix(s.Format, "-v8"):
+		// v8 adds the Vult's agent model and key, and later its projects.
+		v8 := operationalTablesV8(s)
+		if v8 == nil {
+			return Snapshot{}, ErrInvalid
+		}
+		names = append(append([]string{}, current...), v8...)
+	case archive && strings.HasSuffix(s.Format, "-v9"):
+		// v9 keeps what every payment repaid, in allocations.
+		names = append(append([]string{}, current...), operationalArchiveTables...)
 	}
 	if len(s.Tables) != len(names) {
 		return Snapshot{}, ErrInvalid

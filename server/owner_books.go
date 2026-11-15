@@ -55,7 +55,7 @@ func (a *webAPI) createBook(w http.ResponseWriter, r *http.Request, session stri
 		}
 		if time.Since(id.AuthenticatedAt) > localBookFreshness {
 			w.WriteHeader(http.StatusForbidden)
-			_, _ = io.WriteString(w, "{\"error\":\"sign_in_again\"}\n")
+			_, _ = io.WriteString(w, "{\"error\":\"fresh_authentication_required\",\"message\":\"Confirm it’s you, then make this change.\"}\n")
 			return
 		}
 		book, err := a.localBooks.Create(r.Context(), session, q.Name, q.Currency, q.Scale)
@@ -164,7 +164,7 @@ func (a *webAPI) periodChange(w http.ResponseWriter, r *http.Request, session, o
 	}
 	if errors.Is(err, ledger.ErrFreshOwnerProof) {
 		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "fresh_authentication_required", "message": "Sign in again, then make this change."})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "fresh_authentication_required", "message": "Confirm it’s you, then make this change."})
 		return
 	}
 	if err != nil {

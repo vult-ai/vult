@@ -193,7 +193,8 @@ func (a *webAPI) ownerConnections(w http.ResponseWriter, r *http.Request, sessio
 		}
 		tenant, err := a.sessions.ConnectionTenant(r.Context(), session, id)
 		if err == nil {
-			err = a.sessions.WithOwner(r.Context(), session, tenant, true, func(owner ledger.TenantAdmin) error {
+			// Stopping an agent never waits for a fresh sign-in.
+			err = a.sessions.WithOwnerSignedIn(r.Context(), session, tenant, func(owner ledger.TenantAdmin) error {
 				return owner.Revoke(r.Context(), id)
 			})
 		}

@@ -82,7 +82,7 @@ test("actual sign-in callback rejects substituted, ambiguous and noncanonical de
   assert.deepEqual(result.navigations, []);
 });
 
-async function register({ hash = "", code = "", recovering = false, local = false, failOptions = false, failFirstOptions = false, failCredential = false, failFirstCredential = false, failVerify = false } = {}) {
+async function register({ hash = "", code = "", recovering = false, local = false, failOptions = false, failFirstOptions = false, failCredential = false, failFirstCredential = false, failVerify = false, credentialError = "" } = {}) {
   let click;
   let rejectedOptions = false;
   let credentialAttempts = 0;
@@ -101,6 +101,7 @@ async function register({ hash = "", code = "", recovering = false, local = fals
     window: { isSecureContext: true, PublicKeyCredential: function PublicKeyCredential() {} },
     navigator: { credentials: { create: async () => {
       assert.equal(input.value, "", "setup input retained the code during credential creation");
+      if (credentialError && credentialAttempts++ === 0) throw Object.assign(new Error("browser said no"), { name: credentialError });
       if (failCredential || (failFirstCredential && credentialAttempts++ === 0)) throw new Error("canceled");
       return { toJSON: () => ({ id: "example", type: "public-key" }) };
     } } },
@@ -164,13 +165,39 @@ test("invalid manual setup codes make no registration requests and remain correc
 });
 
 test("a failed setup request does not navigate or invent a completed sign-in", async () => {
-  for (const options of [{ failOptions: true }, { failCredential: true }, { failVerify: true }]) {
+  // Each failure says which step failed, in words, and never shows the code.
+  for (const [options, said] of [
+    [{ failOptions: true }, "Vult couldn’t be reached Check that Vult is running, then try again."],
+    [{ failCredential: true }, "Passkey not created Try again."],
+    [{ failVerify: true }, "Vult couldn’t be reached Check that Vult is running, then try again."],
+  ]) {
     const result = await register({ code: reference, ...options });
     assert.deepEqual(result.navigations, []);
     assert.equal(result.button.disabled, false);
     assert.ok(!result.status.textContent.includes(reference));
-    assert.equal(result.status.textContent, "Passkey setup wasn’t confirmed Try signing in with the passkey, or request a fresh setup code.");
+    assert.equal(result.status.textContent, said);
   }
+});
+
+test("a passkey the browser didn't make says why, and the setup link still works for another try", async () => {
+  for (const [name, said] of [
+    ["NotAllowedError", /^The passkey window closed before a passkey was saved .*Try again; this setup link still works for a few minutes\.$/],
+    ["InvalidStateError", /^This device already has a passkey for this Vult Sign in with it instead\.$/],
+    ["SecurityError", /^This address isn’t trusted as secure .*try again\.$/],
+  ]) {
+    const result = await register({ local: true, hash: `#setup=${reference}`, credentialError: name });
+    assert.match(result.status.textContent, said);
+    assert.equal(result.label.hidden, true, "on this Mac there is never a code to type");
+    await result.click();
+    assert.deepEqual(result.requests.map((r) => r.body.setup_token).filter(Boolean), [reference, reference], "the same link works for the retry");
+  }
+});
+
+test("an expired or replaced setup link says so and asks for a fresh one", async () => {
+  const result = await register({ code: reference, failFirstOptions: true });
+  assert.match(result.status.textContent, /^This setup link has expired or was replaced .*five minutes.*$/);
+  assert.equal(result.label.hidden, false);
+  assert.equal(result.input.value, "");
 });
 
 test("rejected manual and fragment codes can be replaced after a real options rejection", async () => {
@@ -297,7 +324,7 @@ test("setup can switch to an authenticator app and continues to the recovery cod
 test("on this Mac a failed passkey keeps the setup link and never asks for a code", async () => {
   const result = await register({ local: true, hash: `#setup=${reference}`, failFirstCredential: true });
   assert.equal(result.label.hidden, true);
-  assert.equal(result.status.textContent, "Passkey not created Try again, or use an authenticator app.");
+  assert.equal(result.status.textContent, "Passkey not created Try again.");
   assert.equal(result.dial.dataset.phase, "idle");
   assert.equal(result.button.disabled, false);
   await result.click();

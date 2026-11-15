@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -386,7 +388,18 @@ func (c browserConfiguration) roles() (string, string) {
 func (c browserConfiguration) serverConfig() server.Config {
 	return server.Config{Origin: c.origin(), Listen: net.JoinHostPort("127.0.0.1", strconv.Itoa(c.Port)), LocalBrowser: true,
 		LocalCertificateFile: filepath.Join(local.BrowserPath, "certificate.pem"), LocalKeyFile: filepath.Join(local.BrowserPath, "key.pem"),
-		Authentication: &server.Authentication{Mode: "passkey", Username: localOwnerSubject, AuthDSNFile: filepath.Join(local.BrowserPath, "auth.dsn"), OwnerDSNFile: filepath.Join(local.BrowserPath, "owner.dsn")}}
+		Authentication: &server.Authentication{Mode: "passkey", Username: localOwnerSubject, AuthDSNFile: filepath.Join(local.BrowserPath, "auth.dsn"), OwnerDSNFile: filepath.Join(local.BrowserPath, "owner.dsn")},
+		VultID:         c.vultID()}
+}
+
+// vultID names this installation to Vult when the owner asks for a bank.
+// It is derived one way from a secret this installation keeps privately,
+// so it stays the same across restarts and upgrades, is random, and says
+// nothing about the owner or the Books.
+func (c browserConfiguration) vultID() string {
+	mac := hmac.New(sha256.New, []byte(c.OwnerPassword))
+	mac.Write([]byte("vult bank requests"))
+	return hex.EncodeToString(mac.Sum(nil))[:32]
 }
 
 func browserDSN(role, password string) string {

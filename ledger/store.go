@@ -55,6 +55,10 @@ func dbError(e error) error {
 		if p.Code == "VP001" {
 			return ErrProposalStale
 		}
+		// A Book being deleted refuses every change, and says so.
+		if p.Code == "VB423" || p.Code == "VB409" {
+			return &RefusedError{Reason: p.Message}
+		}
 		if p.Code == "42501" {
 			return ErrDenied
 		}
@@ -69,7 +73,8 @@ func dbError(e error) error {
 }
 func Writing(method string) bool {
 	switch method {
-	case "create_account", "revise_account", "post_journal", "reverse_journal", "add_document", "complete_document_upload", "correct_source_citation", "attach_evidence", "detach_evidence":
+	case "create_account", "revise_account", "post_journal", "reverse_journal", "add_document", "complete_document_upload", "correct_source_citation", "attach_evidence", "detach_evidence",
+		"set_document_group", "prepare_opening_balance":
 		return true
 	case "retire_account", "reactivate_account", "apply_starter_chart", "create_payee", "revise_payee", "set_entry_payee":
 		return true
@@ -77,16 +82,24 @@ func Writing(method string) bool {
 		return true
 	case "close_period", "reopen_period":
 		return true
+	case "link_bank_activity", "unlink_bank_activity", "record_bank_activity", "record_bank_transfer",
+		"link_bank_account", "disconnect_bank", "pause_bank_connection", "resume_bank_connection", "mark_bank_duplicate", "record_by_rule":
+		return true
 	case "prepare_operation", "execute_proposal", setBookLogoOperation:
 		return true
-	}
-	return false
-}
-func Supported(method string) bool {
-	if documentMethod(method) || citationMethod(method) || evidenceMethod(method) {
+	case "label_project":
 		return true
 	}
-	if method == "prepare_operation" || method == "get_operation_proposal" || method == "execute_proposal" || method == setBookLogoOperation {
+	return NoteMethod(method)
+}
+func Supported(method string) bool {
+	if NoteMethod(method) || noteRead(method) {
+		return true
+	}
+	if documentMethod(method) || citationMethod(method) || evidenceMethod(method) || documentCheckMethod(method) || projectMethod(method) {
+		return true
+	}
+	if method == "prepare_operation" || method == "get_operation_proposal" || method == "execute_proposal" || method == setBookLogoOperation || method == "prepare_opening_balance" {
 		return true
 	}
 	switch method {
@@ -104,7 +117,7 @@ func Supported(method string) bool {
 	case "close_period", "reopen_period", "get_period_review":
 		return true
 	}
-	return false
+	return bankMethod(method)
 }
 
 // Call holds the live connection and Book through transaction completion.
@@ -114,6 +127,12 @@ func (s Store) Call(ctx context.Context, scope Scope, method string, input json.
 	}
 	if method == "prepare_operation" {
 		return s.prepareOperation(ctx, scope, input)
+	}
+	if method == "prepare_opening_balance" {
+		return s.prepareOpeningBalance(ctx, scope, input)
+	}
+	if (method == "post_journal" || method == "record_bank_activity") && pairedArguments(input) {
+		return nil, errPairDirect
 	}
 	if method == setBookLogoOperation {
 		change, key, err := decodeBookLogoTool(input)
@@ -128,6 +147,12 @@ func (s Store) Call(ctx context.Context, scope Scope, method string, input json.
 		}
 		if documentMethod(method) {
 			return s.documentCall(ctx, tx, scope, method, input)
+		}
+		if documentCheckMethod(method) {
+			return documentCheckCall(ctx, tx, scope, method, input)
+		}
+		if projectMethod(method) {
+			return projectCall(ctx, tx, scope, method, input)
 		}
 		if citationMethod(method) {
 			return s.citationCall(ctx, tx, scope, method, input)
@@ -144,7 +169,13 @@ func (s Store) transact(ctx context.Context, scope Scope, method string, input j
 		return nil, ErrDenied
 	}
 	// A proposing agent writes only to prepare a proposal for the owner.
-	if Writing(method) && scope.Access != "write" && (method != "prepare_operation" || scope.Access != "propose") {
+	// A proposing connection the owner granted it may also record within
+	// the owner's rules; the database checks the grant and every entry.
+	byRule := scope.Access == "propose" && RuleRecordingMethod(method)
+	// Notes (questions, loops, the profile) never touch the books; any of
+	// the Book's agents keeps them, proposing ones included.
+	note := scope.Access == "propose" && NoteMethod(method)
+	if Writing(method) && scope.Access != "write" && (method != "prepare_operation" || scope.Access != "propose") && !byRule && !note {
 		return nil, ErrDenied
 	}
 	tx, e := s.Runtime.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
@@ -162,6 +193,11 @@ func (s Store) transact(ctx context.Context, scope Scope, method string, input j
 			return nil, dbError(e)
 		}
 	}
+	if byRule {
+		if _, e = tx.Exec(ctx, "SELECT set_config('vult.rule_recording','on',true)"); e != nil {
+			return nil, dbError(e)
+		}
+	}
 	if s.Authorize != nil {
 		if e = s.Authorize(ctx, tx, scope, method, input); e != nil {
 			return nil, e
@@ -172,7 +208,7 @@ func (s Store) transact(ctx context.Context, scope Scope, method string, input j
 	if e != nil || access != scope.Access {
 		return nil, ErrDenied
 	}
-	if Writing(method) {
+	if Writing(method) && !NoteMethod(method) {
 		if method == "execute_proposal" {
 			if e = holdProposalOwner(ctx, tx, scope, input); e != nil {
 				return nil, e
@@ -344,6 +380,9 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 		if decode(&q) != nil || validStarterChartRequest(q) != nil {
 			return nil, ErrInvalid
 		}
+		if err := starterChartFits(ctx, tx, s, q); err != nil {
+			return nil, err
+		}
 		return write(ctx, tx, s, method, q.RequestKey, raw(q), admit, func(receipt string) (json.RawMessage, error) {
 			return applyStarterChart(ctx, tx, s, q, receipt)
 		})
@@ -388,6 +427,15 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 		return statementWrite(ctx, tx, s, method, input, admit)
 	case "close_period", "reopen_period":
 		return periodWrite(ctx, tx, s, method, input, admit)
+	case "list_bank_activity", "suggest_bank_matches", "get_entry_origin", "prepare_bank_connection", "list_recording_rules", "list_operation_proposals":
+		return bankRead(ctx, tx, s, method, input)
+	case "list_agent_kinds", "get_agent_summary", "get_book_link", "get_book_links", "get_linked_balances", "list_assignment_rules":
+		return agentRead(ctx, tx, s, method, input)
+	case "list_agent_questions", "list_agent_loops", "get_agent_profile", "ask_question", "withdraw_question", "open_loop", "close_loop", "update_agent_profile":
+		return noteCall(ctx, tx, s, method, input)
+	case "link_bank_activity", "unlink_bank_activity", "record_bank_activity", "record_bank_transfer",
+		"link_bank_account", "disconnect_bank", "pause_bank_connection", "resume_bank_connection", "mark_bank_duplicate", "record_by_rule":
+		return bankWrite(ctx, tx, s, method, input, admit)
 	case "get_period_review":
 		var q PeriodReviewQuery
 		if decode(&q) != nil || !ValidDate(q.From) || !ValidDate(q.Through) || q.From > q.Through {
@@ -456,6 +504,15 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 			if e != nil {
 				return nil, e
 			}
+			// Half of a pair is reversed only with its partner, by the
+			// owner's undo, which reverses both.
+			if !pairUndoing(ctx) {
+				if partner, e := readEntryPair(ctx, tx, s, old.ID); e != nil {
+					return nil, e
+				} else if partner != nil {
+					return nil, pairUndoRefusal(partner)
+				}
+			}
 			v := Entry{ID: ID(), ReceiptID: receipt, ActorID: s.ActorID, EconomicDate: old.EconomicDate, AccountingDate: q.AccountingDate, Description: q.Reason, ReversalOf: old.ID, Lines: []Line{}, MeasurementPolicy: old.MeasurementPolicy}
 			for _, l := range old.Lines {
 				side := "debit"
@@ -467,10 +524,34 @@ func dispatch(ctx context.Context, tx pgx.Tx, s Scope, method string, input []by
 			if e := insertEntry(ctx, tx, s, &v); e != nil {
 				return nil, e
 			}
+			if e := freeUndoneBankItem(ctx, tx, s, old.ID, receipt); e != nil {
+				return nil, e
+			}
 			return raw(v), nil
 		})
 	}
 	return nil, ErrInvalid
+}
+
+// freeUndoneBankItem frees the bank item an undone entry recorded: its link
+// is revoked by the undo itself, so the item reads unrecorded and can be
+// recorded again, or for another Book. The undo already counted against
+// the agent's kind of activity; the revoked link doesn't count again.
+func freeUndoneBankItem(ctx context.Context, tx pgx.Tx, s Scope, entry, receipt string) error {
+	var linked bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM public.bank_transaction_links WHERE tenant_id=$1 AND book_id=$2 AND entry_id=$3 AND revoked_at IS NULL)",
+		s.TenantID, s.BookID, entry).Scan(&linked); err != nil || !linked {
+		return dbError(err)
+	}
+	if _, err := tx.Exec(ctx, "SELECT set_config('vult.undo_unlink','on',true)"); err != nil {
+		return dbError(err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE public.bank_transaction_links SET revoked_by=$4,revoke_reason='The entry was undone.',revoke_receipt_id=$5,revoked_at=clock_timestamp()
+ WHERE tenant_id=$1 AND book_id=$2 AND entry_id=$3 AND revoked_at IS NULL`, s.TenantID, s.BookID, entry, s.ActorID, receipt); err != nil {
+		return dbError(err)
+	}
+	_, err := tx.Exec(ctx, "SELECT set_config('vult.undo_unlink','',true)")
+	return dbError(err)
 }
 
 func validCode(code string) bool { return code == "" || codePattern.MatchString(code) }
@@ -498,6 +579,14 @@ func validAccount(class, code, name string) bool {
 }
 func validatePost(q PostJournal) error {
 	if validateSources(q.Sources) != nil {
+		return ErrInvalid
+	}
+	if q.Opening || q.OtherBookID != "" {
+		if !q.Opening || !validPairKey(q.PairKey) || !ValidID(q.OtherBookID) || q.PairedTransactionID != "" || q.PayerBookID != "" || len(q.Reason) > 4000 || q.AssignedBy != "" {
+			return ErrInvalid
+		}
+	} else if q.PairKey == "" && (q.PairedTransactionID != "" || q.Reason != "" || q.PayerBookID != "") ||
+		q.PairKey != "" && (!validPairKey(q.PairKey) || !ValidID(q.PairedTransactionID) || len(q.Reason) > 4000 || q.PayerBookID != "" && !ValidID(q.PayerBookID)) || !validAssignedBy(q.AssignedBy, q.PairKey) {
 		return ErrInvalid
 	}
 	if !validKey(q.RequestKey) || !ValidDate(q.EconomicDate) || !ValidDate(q.AccountingDate) || len(q.Description) < 1 || len(q.Description) > 4000 || len(q.Lines) < 2 || len(q.Lines) > 256 {
@@ -570,15 +659,18 @@ func write(ctx context.Context, tx pgx.Tx, s Scope, method, key string, request 
 }
 
 const bookColumns = `b.tenant_id::text,b.id::text,coalesce(m.name,b.name),b.currency,b.scale,b.created_at,m.revision,
- coalesce(m.founder,''),coalesce(m.profile,''),coalesce(m.start_date::text,''),m.fiscal_year_start_month,m.fiscal_year_start_day,coalesce(m.accounting_timezone,''),m.logo`
+ coalesce(m.founder,''),coalesce(m.profile,''),coalesce(m.start_date::text,''),m.fiscal_year_start_month,m.fiscal_year_start_day,coalesce(m.accounting_timezone,''),m.logo,m.taxed_as,
+ coalesce(public.keeps_expense_reports(b.tenant_id,b.id),false)`
 const bookFrom = ` FROM public.books b LEFT JOIN LATERAL(
- SELECT name,founder,profile,start_date,fiscal_year_start_month,fiscal_year_start_day,accounting_timezone,revision,logo
+ SELECT name,founder,profile,start_date,fiscal_year_start_month,fiscal_year_start_day,accounting_timezone,revision,logo,taxed_as
  FROM public.book_revisions r WHERE r.tenant_id=b.tenant_id AND r.book_id=b.id ORDER BY revision DESC LIMIT 1) m ON true`
 
 func scanBook(row pgx.Row) (Book, error) {
 	var b Book
+	var taxedAs *string
 	err := row.Scan(&b.TenantID, &b.ID, &b.Name, &b.Currency, &b.Scale, &b.CreatedAt, &b.MetadataRevision, &b.Founder, &b.Profile, &b.StartDate,
-		&b.FiscalYearStartMonth, &b.FiscalYearStartDay, &b.AccountingTimezone, &b.Logo)
+		&b.FiscalYearStartMonth, &b.FiscalYearStartDay, &b.AccountingTimezone, &b.Logo, &taxedAs, &b.ExpenseReports)
+	b.setTaxedAs(taxedAs)
 	return b, err
 }
 func readBook(ctx context.Context, tx pgx.Tx, s Scope) (Book, error) {

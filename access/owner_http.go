@@ -23,6 +23,15 @@ func NewOwnerHTTP(s *Service, login *HTTP, admit OwnerAdmission) *OwnerHTTP {
 	return &OwnerHTTP{s, login, admit}
 }
 func ownerFailure(w http.ResponseWriter, e error) {
+	var limit *ledger.PlanLimitError
+	if errors.As(e, &limit) {
+		oauthJSON(w, http.StatusPaymentRequired, ledger.PlanLimitResponse(limit))
+		return
+	}
+	if errors.Is(e, ledger.ErrFreshOwnerProof) {
+		oauthJSON(w, http.StatusForbidden, map[string]string{"error": "fresh_authentication_required", "message": "Confirm it’s you, then make this change."})
+		return
+	}
 	status := 503
 	code := "outcome_unresolved"
 	switch {

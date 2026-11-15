@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	vultserver "github.com/vult-ai/vult/server"
 	"io"
 	"net/url"
 	"os"
@@ -69,7 +70,7 @@ func installationCode() error {
 			return e
 		}
 	}
-	for _, p := range []string{local.BinaryPath, filepath.Join(PostgresPath, "bin/postgres"), filepath.Join(PostgresPath, "bin/initdb"), filepath.Join(PostgresPath, "bin/pg_ctl")} {
+	for _, p := range []string{local.BinaryPath, filepath.Join(PostgresPath, "bin/postgres"), filepath.Join(PostgresPath, "bin/initdb"), filepath.Join(PostgresPath, "bin/pg_ctl"), filepath.Join(PostgresPath, "bin/pg_controldata")} {
 		if e := protected(p, 0, false); e != nil {
 			return e
 		}
@@ -586,7 +587,16 @@ func ServeNative(ctx context.Context) error {
 			return errors.New("local browser document access unavailable")
 		}
 	}
-	server := &Server{Admin: ledger.Admin{DB: admin}, Ledger: ledger.Store{Runtime: runtimePool, Documents: documents.vault}, RecoveryKey: conf.RecoveryKey, ProvisionKeys: documents.keys.Provision, Browser: browser, AuthorizeOwner: local.NativeOwnerAuthorizer()}
+	// Books whose deletion waiting period is over are erased here, where
+	// their documents and document keys are kept.
+	eraser := &vultserver.BookEraser{DB: admin, Documents: documents.vault}
+	erasing := make(chan struct{})
+	go func() {
+		defer close(erasing)
+		eraser.Run(maintenance)
+	}()
+	defer func() { cancelMaintenance(); <-erasing }()
+	server := &Server{Admin: ledger.Admin{DB: admin}, Ledger: ledger.Store{Runtime: runtimePool, Documents: documents.vault}, RecoveryKey: conf.RecoveryKey, ProvisionKeys: documents.keys.Provision, Browser: browser, AuthorizeOwner: local.NativeOwnerAuthorizer(), EraseBooks: eraser.EraseDue}
 	e = server.Serve(ctx, listener)
 	if e != nil && !strings.Contains(e.Error(), "closed") {
 		return errors.New("local service stopped unexpectedly")

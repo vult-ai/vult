@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -25,6 +26,115 @@ var archiveDocumentTables = []string{"documents", "document_uploads", "source_ci
 var priorArchiveTables = append(append([]string{}, proposalSnapshotTables...), archiveDocumentTables...)
 var bookDetailArchiveTables = append(append([]string{}, bookDetailSnapshotTables...), archiveDocumentTables...)
 var archiveTables = append(append([]string{}, bookDetailArchiveTables...), foundationTables...)
+
+// operationalArchiveTables are everything else a Vult keeps for its Books:
+// agent connections (restored revoked: agents connect again) and what the
+// owner decided for agents, bank logins,
+// accounts, activity and how each item was recorded, recording and
+// assignment rules, agents' questions and notes, links between Books and
+// their pairs and settlements, document filings and the checks Vult ran on
+// each document. Sealed keys and tokens
+// stay sealed; on another Mac they don't open, and banks and keys are
+// connected again there. Search indexes are rebuilt, not kept.
+// operationalArchiveTablesV7 is what a v7 archive held, before the Vult
+// kept its agent's model and key.
+var operationalArchiveTablesV7 = []string{"connections", "vult_bank_provider_settings", "bank_provider_settings", "bank_connections",
+	"bank_accounts", "bank_account_aliases", "bank_transactions", "bank_transaction_aliases", "bank_transaction_duplicates",
+	"bank_transaction_links", "recording_rules", "recording_rule_parts", "rule_recording_grants", "agent_settings", "agent_policy",
+	"agent_profile", "agent_questions", "agent_loops", "agent_seen", "agent_kinds", "agent_kind_events", "agent_tax_sensitive_accounts",
+	"book_links", "book_link_terms", "proposal_pairs", "entry_pairs", "settlement_repays", "assignment_rules", "document_groups",
+	"archived_books", "book_deletions"}
+
+// v7DocumentTables are what some v7 archives also held: a bank item moved
+// between accounts, and the checks and readings of documents. A v7 archive
+// holds all three or none; it's judged by the tables present.
+var v7DocumentTables = []string{"bank_transaction_moves", "document_checks", "document_readings"}
+
+// operationalTablesV7 is what this v7 archive holds besides the Books'
+// records, or nil when it holds the later tables only in part.
+func operationalTablesV7(s Snapshot) []string {
+	present := 0
+	for _, name := range v7DocumentTables {
+		if _, ok := s.Tables[name]; ok {
+			present++
+		}
+	}
+	switch present {
+	case 0:
+		return operationalArchiveTablesV7
+	case len(v7DocumentTables):
+		return append(append([]string{}, operationalArchiveTablesV7...), v7DocumentTables...)
+	}
+	return nil
+}
+
+// operationalArchiveTablesV8 is what a v8 archive held: settlements kept
+// what they repaid in settlement_repays, which a restore turns into
+// allocations.
+var operationalArchiveTablesV8 = []string{"connections", "vult_bank_provider_settings", "vult_agent_settings", "bank_provider_settings", "bank_connections",
+	"bank_accounts", "bank_account_aliases", "bank_transactions", "bank_transaction_aliases", "bank_transaction_duplicates",
+	"bank_transaction_links", "bank_transaction_moves", "recording_rules", "recording_rule_parts", "rule_recording_grants", "agent_settings", "agent_policy",
+	"agent_profile", "agent_questions", "agent_loops", "agent_seen", "agent_kinds", "agent_kind_events", "agent_tax_sensitive_accounts",
+	"book_links", "book_link_terms", "proposal_pairs", "entry_pairs", "settlement_repays", "assignment_rules", "document_groups",
+	"document_checks", "document_readings", "archived_books", "book_deletions", "projects", "project_labels", "project_rules", "project_promotions", "project_carried"}
+
+// operationalArchiveTables is what this release's archive holds besides
+// the Books' records: as v8, with every payment's allocations in place of
+// settlement_repays.
+var operationalArchiveTables = append([]string{"connections", "vult_bank_provider_settings", "vult_agent_settings", "bank_provider_settings", "bank_connections",
+	"bank_accounts", "bank_account_aliases", "bank_transactions", "bank_transaction_aliases", "bank_transaction_duplicates",
+	"bank_transaction_links", "bank_transaction_moves", "recording_rules", "recording_rule_parts", "rule_recording_grants", "agent_settings", "agent_policy",
+	"agent_profile", "agent_questions", "agent_loops", "agent_seen", "agent_kinds", "agent_kind_events", "agent_tax_sensitive_accounts",
+	"book_links", "book_link_terms", "proposal_pairs", "entry_pairs", "allocations", "assignment_rules", "document_groups",
+	"document_checks", "document_readings", "archived_books", "book_deletions", "projects", "project_labels", "project_rules", "project_promotions", "project_carried", "report_notes"},
+	expenseReportTableList...)
+
+// expenseReportTableList holds a business's expense reports, in the order
+// they restore: rows keyed by its Book in business_book_id.
+var expenseReportTableList = []string{"people", "person_revisions", "report_policies", "expense_reports", "claims", "claim_evidence", "report_revisions", "report_lines",
+	"report_approvals", "report_events", "recoverables", "recoverable_events", "settlement_statements", "retired_report_references", "recoverable_reviews", "payment_residuals", "claim_obligations", "claim_obligation_adjustments"}
+
+// ExpenseReportTables names the tables that hold expense reports in an
+// archive: the business's, and the notes kept in each Book.
+func ExpenseReportTables() []string {
+	return append(append([]string{}, expenseReportTableList...), "report_notes")
+}
+
+var expenseReportTables = func() map[string]bool {
+	out := map[string]bool{}
+	for _, t := range expenseReportTableList {
+		out[t] = true
+	}
+	return out
+}()
+
+// v8ProjectTables are what later v8 archives also hold: a Book's projects,
+// their labels and rules. A v8 archive holds all three or none.
+var v8ProjectTables = []string{"projects", "project_labels", "project_rules", "project_promotions", "project_carried"}
+
+// operationalTablesV8 is what this v8 archive holds besides the Books'
+// records, or nil when it holds the project tables only in part.
+func operationalTablesV8(s Snapshot) []string {
+	present := 0
+	for _, name := range v8ProjectTables {
+		if _, ok := s.Tables[name]; ok {
+			present++
+		}
+	}
+	switch present {
+	case len(v8ProjectTables):
+		return operationalArchiveTablesV8
+	case 0:
+		return operationalArchiveTablesV8[:len(operationalArchiveTablesV8)-len(v8ProjectTables)]
+	}
+	return nil
+}
+
+// linkedBookColumns names, for tables of rows between two Books, the
+// columns that hold a Book; a Book's archive keeps the rows touching it.
+var linkedBookColumns = map[string][2]string{"book_links": {"book_a", "book_b"}, "book_link_terms": {"payer_book_id", "beneficiary_book_id"},
+	"proposal_pairs": {"payer_book_id", "beneficiary_book_id"}, "entry_pairs": {"payer_book_id", "beneficiary_book_id"},
+	"settlement_repays": {"settlement_book_id", "cost_book_id"}, "allocations": {"debtor_book_id", "creditor_book_id"}}
 
 // Order portable rows by indexed keys before encoding, rather than sorting the
 // Book's serialized JSON. The order is deterministic for every table.
@@ -45,7 +155,9 @@ var archiveRowOrder = map[string]string{
 	"statement_matches": "tenant_id,book_id,id", "statement_match_parts": "tenant_id,book_id,match_id,part",
 	"statement_match_revocations": "tenant_id,book_id,match_id", "statement_adjustments": "tenant_id,book_id,row_id",
 	"statement_reviews": "tenant_id,book_id,statement_id,revision", "accounting_periods": "tenant_id,book_id,id",
-	"accounting_period_events": "tenant_id,book_id,period_id,revision",
+	"accounting_period_events": "tenant_id,book_id,period_id,revision", "document_checks": "tenant_id,book_id,sequence", "document_readings": "tenant_id,book_id,sequence",
+	"projects": "tenant_id,book_id,id", "project_labels": "tenant_id,book_id,line_id,project_id", "project_rules": "tenant_id,book_id,id",
+	"project_promotions": "tenant_id,book_id,request_key", "project_carried": "tenant_id,book_id,entry_id",
 }
 
 type archiveManifest struct {
@@ -176,13 +288,17 @@ func captureArchive(ctx context.Context, tx pgx.Tx, scope Scope, owner bool) (Bo
 	if err := tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&cutoff); err != nil {
 		return BookArchive{}, err
 	}
-	manifest := archiveManifest{Format: "vult-archive-v6", Migrations: map[string]string{}, Snapshot: Snapshot{Format: "vult-documents-backup-v6", SchemaSHA256: SchemaSHA256(), CreatedAt: cutoff.UTC(), Tables: map[string]json.RawMessage{}}, Originals: []documents.Object{}}
+	manifest := archiveManifest{Format: "vult-archive-v9", Migrations: map[string]string{}, Snapshot: Snapshot{Format: "vult-documents-backup-v9", SchemaSHA256: SchemaSHA256(), CreatedAt: cutoff.UTC(), Tables: map[string]json.RawMessage{}}, Originals: []documents.Object{}}
 	for _, name := range migrationNames() {
 		manifest.Migrations[name] = migrationSum(name)
 	}
 	total := 0
-	for _, table := range archiveTables {
-		data, err := readSnapshotRows(ctx, tx, table, scope, archiveRowOrder[table], owner, int(maxArchiveMetadata)-total)
+	for _, table := range append(append([]string{}, archiveTables...), operationalArchiveTables...) {
+		order := archiveRowOrder[table]
+		if order == "" {
+			order = "rowdata"
+		}
+		data, err := readSnapshotRows(ctx, tx, table, scope, order, owner, int(maxArchiveMetadata)-total)
 		if err != nil {
 			return BookArchive{}, err
 		}
@@ -326,11 +442,11 @@ func readArchiveManifest(reader *tar.Reader) (archiveManifest, error) {
 			return manifest, ErrInvalid
 		}
 		expected = 3
-	case "vult-archive-v5", "vult-archive-v6":
+	case "vult-archive-v5", "vult-archive-v6", "vult-archive-v7", "vult-archive-v8", "vult-archive-v9":
 		_, foundations := manifest.Migrations[foundationsMigration]
 		if _, ok := manifest.Migrations[recordedBookMigration]; !ok ||
 			manifest.Snapshot.Format != strings.Replace(manifest.Format, "vult-archive-", "vult-documents-backup-", 1) ||
-			foundations != (manifest.Format == "vult-archive-v6") {
+			foundations != (manifest.Format != "vult-archive-v5") {
 			return manifest, ErrInvalid
 		}
 		// Accept only a complete known prefix containing the recorded Book
@@ -339,13 +455,8 @@ func readArchiveManifest(reader *tar.Reader) (archiveManifest, error) {
 	default:
 		return manifest, ErrInvalid
 	}
-	if len(manifest.Migrations) != expected || expected > len(names) {
+	if len(manifest.Migrations) != expected || !knownMigrations(names, manifest.Migrations) {
 		return manifest, ErrInvalid
-	}
-	for _, name := range names[:expected] {
-		if manifest.Migrations[name] != migrationSum(name) {
-			return manifest, ErrInvalid
-		}
 	}
 	snapshot, normalizeErr := normalizeBookTables(manifest.Snapshot, true)
 	if normalizeErr != nil {
@@ -414,7 +525,7 @@ func (a Admin) RestoreArchive(ctx context.Context, vault *documents.Vault, sourc
 	}
 	versions := map[string]string{}
 	// The v5 manifest requires the v0.4 receipt, which covers owner uploads.
-	current := manifest.Format == "vult-archive-v5" || manifest.Format == "vult-archive-v6"
+	current := manifest.Format == "vult-archive-v5" || manifest.Format == "vult-archive-v6" || manifest.Format == "vult-archive-v7" || manifest.Format == "vult-archive-v8" || manifest.Format == "vult-archive-v9"
 	oldObjects := map[string]documents.Object{}
 	states := map[string]string{}
 	newObjects := map[string]documents.Object{}
@@ -435,13 +546,13 @@ func (a Admin) RestoreArchive(ctx context.Context, vault *documents.Vault, sourc
 		if state == "expired" {
 			continue
 		}
-		version, ok := versions[object.TenantID]
+		version, ok := versions[object.TenantID+"/"+object.BookID]
 		if !ok {
-			version, err = vault.Keys.Current(ctx, object.TenantID)
+			version, err = vault.KeyFor(ctx, object.TenantID, object.BookID)
 			if err != nil {
 				return documents.ErrUnavailable
 			}
-			versions[object.TenantID] = version
+			versions[object.TenantID+"/"+object.BookID] = version
 		}
 		fresh := object
 		fresh.StorageID = strings.ReplaceAll(ID()+ID(), "-", "")
@@ -527,13 +638,20 @@ func (a Admin) RestoreArchive(ctx context.Context, vault *documents.Vault, sourc
 		return documents.ErrIntegrity
 	}
 	tables := priorArchiveTables
+	var operational []string
 	switch manifest.Format {
 	case "vult-archive-v5":
 		tables = bookDetailArchiveTables
 	case "vult-archive-v6":
 		tables = archiveTables
+	case "vult-archive-v7":
+		tables, operational = archiveTables, operationalTablesV7(manifest.Snapshot)
+	case "vult-archive-v8":
+		tables, operational = archiveTables, operationalTablesV8(manifest.Snapshot)
+	case "vult-archive-v9":
+		tables, operational = archiveTables, operationalArchiveTables
 	}
-	if err = restoreSnapshotRows(ctx, tx, manifest.Snapshot, tables, true); err != nil {
+	if err = restoreSnapshotRows(ctx, tx, manifest.Snapshot, tables, true, operational...); err != nil {
 		return err
 	}
 	// Once COMMIT is attempted its outcome may be uncertain. Never remove bytes
@@ -557,4 +675,47 @@ func (s *archiveStaging) Create(ctx context.Context, id string, write func(io.Wr
 		*s.created = (*s.created)[:len(*s.created)-1]
 	}
 	return err
+}
+
+// knownMigrations reports whether an archive's migrations are ones this
+// release knows: a prefix of its own, from the first; or, from a Vult that
+// took 0.8's steps one by one, 0001 to 0007 then a prefix of those steps,
+// with the squashed migration once all of them are in.
+func knownMigrations(names []string, got map[string]string) bool {
+	got = withEarlierSquash(got)
+	steps := bridgeNames()
+	took := 0
+	for _, name := range steps {
+		if _, ok := got[name]; ok {
+			took++
+		}
+	}
+	applied := 0
+	for applied < len(names) {
+		sum, ok := got[names[applied]]
+		if !ok || sum != migrationSum(names[applied]) {
+			break
+		}
+		applied++
+	}
+	if took == 0 {
+		return applied == len(got)
+	}
+	squashed := slices.Index(names, squashedMigration)
+	if squashed < 0 || applied < squashed {
+		return false
+	}
+	for i, name := range steps {
+		sum, ok := got[name]
+		if !ok {
+			if took != i || applied > squashed {
+				return false
+			}
+			break
+		}
+		if sum != bridgeSum(name) {
+			return false
+		}
+	}
+	return applied+took == len(got)
 }

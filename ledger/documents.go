@@ -37,6 +37,12 @@ type Document struct {
 	ReadyAt   *time.Time `json:"ready_at,omitempty"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	UsedAt    *time.Time `json:"used_at,omitempty"`
+	// Group is where the document is filed: statement, receipt (receipts
+	// and invoices), company (company records) or tax. GroupSet is false
+	// when nobody filed it and the group is read from what it is: a
+	// statement when one was imported from it, else a receipt.
+	Group    string `json:"group,omitempty"`
+	GroupSet bool   `json:"group_set"`
 }
 
 type DocumentIntake struct {
@@ -77,7 +83,7 @@ func (d storedDocument) object(s Scope) documents.Object {
 }
 
 func documentMethod(method string) bool {
-	return method == "add_document" || method == "get_document" || method == "list_documents"
+	return method == "add_document" || method == "get_document" || method == "list_documents" || method == "set_document_group"
 }
 
 func validDocument(q AddDocument) bool {
@@ -107,13 +113,77 @@ func validOriginal(q AddDocument) bool {
 func scanDocument(row pgx.Row) (storedDocument, error) {
 	var d storedDocument
 	err := row.Scan(&d.ID, &d.Sequence, &d.Name, &d.MediaType, &d.Size, &d.SHA256, &d.State,
-		&d.CreatedAt, &d.ReadyAt, &d.ExpiresAt, &d.UsedAt, &d.storageID, &d.keyID, &d.live)
+		&d.CreatedAt, &d.ReadyAt, &d.ExpiresAt, &d.UsedAt, &d.storageID, &d.keyID, &d.live, &d.Group, &d.GroupSet)
 	return d, err
 }
 
-const documentColumns = `id::text,sequence,original_name,media_type,size_bytes,sha256,state,
+const documentBaseColumns = `id::text,sequence,original_name,media_type,size_bytes,sha256,state,
     created_at,ready_at,expires_at,used_at,storage_id,key_id,
     (used_at IS NOT NULL OR expires_at IS NULL OR expires_at>clock_timestamp())`
+
+// documentColumns read a document without its group, which only lists and
+// filing read; documentGroupedColumns read it with it.
+const documentColumns = documentBaseColumns + `,'' AS filed_group,false AS filed`
+const documentGroupedColumns = documentBaseColumns + "," + documentGroupColumns
+
+// documentGroupColumns read a document's group, filed or derived, from a
+// query over public.documents.
+const documentGroupColumns = `coalesce((SELECT g.document_group FROM public.document_groups g
+      WHERE g.tenant_id=documents.tenant_id AND g.book_id=documents.book_id AND g.document_id=documents.id),
+    CASE WHEN EXISTS(SELECT 1 FROM public.statements st WHERE st.tenant_id=documents.tenant_id AND st.book_id=documents.book_id AND st.document_id=documents.id)
+      THEN 'statement' ELSE 'receipt' END) AS filed_group,
+    EXISTS(SELECT 1 FROM public.document_groups g WHERE g.tenant_id=documents.tenant_id AND g.book_id=documents.book_id AND g.document_id=documents.id) AS filed`
+
+// validDocumentGroup reports whether a group is one documents are filed in.
+func validDocumentGroup(group string) bool {
+	return group == "statement" || group == "receipt" || group == "company" || group == "tax"
+}
+
+// SetDocumentGroup files a document in a group.
+type SetDocumentGroup struct {
+	DocumentID string `json:"document_id"`
+	Group      string `json:"group"`
+}
+
+// setDocumentGroup files a ready document of the Book in a group.
+func setDocumentGroup(ctx context.Context, tx pgx.Tx, s Scope, q SetDocumentGroup) (Document, error) {
+	if !ValidID(q.DocumentID) || !validDocumentGroup(q.Group) {
+		return Document{}, ErrInvalid
+	}
+	d, err := readDocument(ctx, tx, s, q.DocumentID)
+	if err != nil {
+		return Document{}, dbError(err)
+	}
+	if d.State != "ready" {
+		return Document{}, &RefusedError{Reason: "Only a stored document is filed; finish its upload first."}
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO public.document_groups(tenant_id,book_id,document_id,document_group,actor_id) VALUES($1,$2,$3,$4,$5)
+ ON CONFLICT (tenant_id,book_id,document_id) DO UPDATE SET document_group=EXCLUDED.document_group,actor_id=EXCLUDED.actor_id`,
+		s.TenantID, s.BookID, q.DocumentID, q.Group, s.ActorID); err != nil {
+		return Document{}, dbError(err)
+	}
+	d, err = scanDocument(tx.QueryRow(ctx, "SELECT "+documentGroupedColumns+" FROM public.documents WHERE tenant_id=$1 AND book_id=$2 AND id=$3", s.TenantID, s.BookID, q.DocumentID))
+	return d.Document, dbError(err)
+}
+
+// SetDocumentGroup files one of the Book's documents for the owner, who
+// needs to be signed in but not freshly: filing changes no records.
+func (a TenantAdmin) SetDocumentGroup(ctx context.Context, book, actor string, q SetDocumentGroup) (Document, error) {
+	var out Document
+	if !ValidID(actor) {
+		return out, ErrDenied
+	}
+	err := a.withBookTransaction(ctx, book, pgx.ReadCommitted, func(tx pgx.Tx, s Scope, _ Book) error {
+		s.ActorID = actor
+		if err := setScope(ctx, tx, s); err != nil {
+			return dbError(err)
+		}
+		var err error
+		out, err = setDocumentGroup(ctx, tx, s, q)
+		return err
+	})
+	return out, err
+}
 
 func readDocument(ctx context.Context, tx pgx.Tx, s Scope, id string) (storedDocument, error) {
 	return scanDocument(tx.QueryRow(ctx, "SELECT "+documentColumns+" FROM public.documents WHERE tenant_id=$1 AND book_id=$2 AND id=$3", s.TenantID, s.BookID, id))
@@ -135,6 +205,13 @@ func (s Store) documentCall(ctx context.Context, tx pgx.Tx, scope Scope, method 
 		return raw(result), err
 	case "list_documents":
 		result, err := documentPage(ctx, tx, scope, input)
+		return raw(result), err
+	case "set_document_group":
+		var q SetDocumentGroup
+		if strictjson.Decode(input, &q) != nil {
+			return nil, ErrInvalid
+		}
+		result, err := setDocumentGroup(ctx, tx, scope, q)
 		return raw(result), err
 	}
 	return nil, ErrInvalid
@@ -162,7 +239,7 @@ func (s Store) prepareDocument(ctx context.Context, tx pgx.Tx, scope Scope, q Ad
 			d.State = "expired"
 		}
 		if d.ID == "" || d.State == "expired" {
-			key, err := s.Documents.Keys.Current(ctx, scope.TenantID)
+			key, err := s.Documents.KeyFor(ctx, scope.TenantID, scope.BookID)
 			if err != nil {
 				return nil, documents.ErrUnavailable
 			}

@@ -134,3 +134,32 @@ func TestOwnerChangesAgentAccessLevel(t *testing.T) {
 	}
 	ownerAPIStatus(t, ownerAPICall(s, f.session, http.MethodPost, path, `{"access":"write"}`, true), 200)
 }
+
+// Stopping an agent never waits for a fresh sign-in; any other change to it
+// asks the person to sign in again, by its code, never as a refusal.
+func TestAnyValidSignInDisconnectsAnAgent(t *testing.T) {
+	f, s := browserServer(t)
+	ctx := f.db.Context
+	token := f.token(t, "write")
+	scope, err := f.sessions.ResolveAgent(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.db.Admin.Exec(ctx, "UPDATE access.sessions SET authenticated_at=clock_timestamp()-interval '10 minutes' WHERE token_hash=$1", access.Hash(f.session)); err != nil {
+		t.Fatal(err)
+	}
+	w := ownerAPICall(s, f.session, http.MethodPost, connectionPath+"/"+scope.ConnectionID+"/access", `{"access":"read"}`, true)
+	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), `"error":"fresh_authentication_required"`) {
+		t.Fatal("a stale sign-in changing access must be asked to sign in again", w.Code, w.Body.String())
+	}
+	// The database lets an older sign-in end a connection and nothing else.
+	if err = f.sessions.WithOwnerSignedIn(ctx, f.session, f.book.TenantID, func(a ledger.TenantAdmin) error {
+		return a.ChangeAccess(ctx, scope.ConnectionID, "read")
+	}); err == nil {
+		t.Fatal("an older sign-in changed an agent's access")
+	}
+	ownerAPIStatus(t, ownerAPICall(s, f.session, http.MethodPost, connectionPath+"/"+scope.ConnectionID+"/revoke", `{}`, true), 200)
+	if _, err = f.sessions.ResolveAgent(ctx, token); err == nil {
+		t.Fatal("the disconnected agent's token still works")
+	}
+}

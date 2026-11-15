@@ -42,15 +42,17 @@ type Server struct {
 	ProvisionKeys  func(context.Context, string) error
 	Browser        *browserOwner
 	AuthorizeOwner func(context.Context, local.Peer, local.OwnerRequest) error
-	mu             sync.Mutex
-	grants         map[string]grant
-	sessions       map[string]session
-	ownerPrompts   map[uint32]bool
-	agents         map[string]*agentRequest
-	draft          *local.BookDraft
-	recovery       *pendingRecovery
-	activity       map[string]*bookActivity
-	agentNames     map[string]string
+	// EraseBooks erases Books whose deletion is due, now.
+	EraseBooks   func(context.Context) (int, error)
+	mu           sync.Mutex
+	grants       map[string]grant
+	sessions     map[string]session
+	ownerPrompts map[uint32]bool
+	agents       map[string]*agentRequest
+	draft        *local.BookDraft
+	recovery     *pendingRecovery
+	activity     map[string]*bookActivity
+	agentNames   map[string]string
 }
 
 func (s *Server) initMaps() {
@@ -362,6 +364,46 @@ func (s *Server) owner(ctx context.Context, uid uint32, method string, input []b
 		}
 		period, err := s.Admin.ClosePeriodDecision(ctx, q.BookID, actor, ledger.ClosePeriod{RequestKey: q.RequestKey, From: q.From, Through: q.Through, Reason: q.Reason})
 		return marshal(period), err
+	case "book_delete":
+		// The machine's operator deletes a Book: the administrator's
+		// approval stands in for the owner's passkey. With now, the Book is
+		// erased at once instead of after the waiting period.
+		var q local.BookDeleteRequest
+		if decode(&q) != nil || !ledger.ValidID(q.BookID) {
+			return nil, ledger.ErrInvalid
+		}
+		if q.Cancel {
+			if err := s.Admin.OperatorCancelBookDeletion(ctx, q.BookID); err != nil {
+				return nil, err
+			}
+			return marshal(struct {
+				Status string `json:"status"`
+			}{"cancelled"}), nil
+		}
+		out, err := s.Admin.OperatorDeleteBook(ctx, q.BookID, q.Name, q.Now)
+		if err != nil {
+			return nil, err
+		}
+		if q.Now && s.EraseBooks != nil {
+			if _, err := s.EraseBooks(ctx); err != nil {
+				return marshal(struct {
+					Status   string `json:"status"`
+					Deletion any    `json:"deletion"`
+					Message  string `json:"message"`
+				}{"erasing", out, "Erasure started and continues in the background; a bank whose access hasn't ended yet holds it."}), nil
+			}
+			var left bool
+			_ = s.Admin.DB.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM public.books WHERE id=$1)", q.BookID).Scan(&left)
+			if !left {
+				return marshal(struct {
+					Status string `json:"status"`
+				}{"erased"}), nil
+			}
+		}
+		return marshal(struct {
+			Status   string `json:"status"`
+			Deletion any    `json:"deletion"`
+		}{"deleting", out}), nil
 	case "verify", "export":
 		var q struct {
 			BookID string `json:"book_id"`

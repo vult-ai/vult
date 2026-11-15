@@ -86,16 +86,28 @@ func TestPortableArchiveRequiresTheRecordedBookMigration(t *testing.T) {
 	if err := source.Admin.QueryRow(source.Context, "SELECT jsonb_object_agg(filename,sha256) FROM public.schema_receipts").Scan(&receipts); err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Format != "vult-documents-backup-v6" || len(receipts) != 7 || receipts[folded] == "" {
+	if snapshot.Format != "vult-documents-backup-v9" || len(receipts) != 8 || receipts[folded] == "" || receipts["0008_bank_activity_agents_and_linked_books.sql"] == "" {
 		t.Fatal("the archive did not identify the current Book format")
 	}
+	// Later migrations kept the Book format; the cases below are about the
+	// formats before them.
+	delete(receipts, "0008_bank_activity_agents_and_linked_books.sql")
 	// The previous release wrote the same archive without the accounting
 	// foundation tables.
 	previous := func(s ledger.Snapshot) ledger.Snapshot {
 		s.Format, s.Tables = "vult-documents-backup-v5", maps.Clone(s.Tables)
 		for _, name := range []string{"payees", "payee_revisions", "entry_payees", "statements", "statement_rows", "statement_duplicates",
 			"statement_matches", "statement_match_parts", "statement_match_revocations", "statement_adjustments", "statement_reviews",
-			"accounting_periods", "accounting_period_events"} {
+			"accounting_periods", "accounting_period_events",
+			// Nor what else the Vult kept for its Books.
+			"connections", "vult_bank_provider_settings", "vult_agent_settings", "bank_provider_settings", "bank_connections", "bank_accounts", "bank_account_aliases",
+			"bank_transactions", "bank_transaction_aliases", "bank_transaction_duplicates", "bank_transaction_links", "bank_transaction_moves", "recording_rules",
+			"recording_rule_parts", "rule_recording_grants", "agent_settings", "agent_policy", "agent_profile", "agent_questions", "agent_loops",
+			"agent_seen", "agent_kinds", "agent_kind_events", "agent_tax_sensitive_accounts", "book_links", "book_link_terms", "proposal_pairs",
+			"entry_pairs", "settlement_repays", "allocations", "assignment_rules", "document_groups", "document_checks", "document_readings", "archived_books", "book_deletions", "projects", "project_labels", "project_rules", "project_promotions", "project_carried"} {
+			delete(s.Tables, name)
+		}
+		for _, name := range ledger.ExpenseReportTables() {
 			delete(s.Tables, name)
 		}
 		return s

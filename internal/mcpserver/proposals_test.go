@@ -16,10 +16,10 @@ import (
 )
 
 func TestProposalCatalogPreservesLegacyAndOwnerBoundaries(t *testing.T) {
-	read := []string{"get_book", "list_accounts", "get_journal", "list_journals", "get_balance", "get_trial_balance", "get_request_outcome", "get_operation_proposal", "search_book", "list_closed_periods", "get_exchange_rate", "list_starter_charts", "list_payees", "get_entry_payee", "list_recurring_charges", "get_cash_flow", "list_statements", "get_statement_reconciliation", "suggest_statement_matches", "get_period_review"}
-	write := []string{"create_account", "revise_account", "retire_account", "reactivate_account", "apply_starter_chart", "create_payee", "revise_payee", "set_entry_payee", "import_statement", "mark_statement_duplicate", "match_statement", "revoke_statement_match", "record_statement_adjustment", "review_statement", "close_period", "post_journal", "reverse_journal", "prepare_operation", "execute_proposal", "set_book_logo"}
-	docRead := []string{"get_document", "list_documents", "get_entry_documents", "get_source_usage", "list_entries_missing_evidence"}
-	docWrite := []string{"add_document", "correct_source_citation", "attach_evidence", "detach_evidence"}
+	read := []string{"list_operation_proposals", "list_recording_rules", "list_agent_kinds", "get_agent_summary", "get_book_link", "get_book_links", "get_linked_balances", "list_assignment_rules", "list_agent_questions", "list_agent_loops", "get_agent_profile", "list_bank_activity", "suggest_bank_matches", "get_entry_origin", "prepare_bank_connection", "get_book", "list_accounts", "get_journal", "list_journals", "get_balance", "get_trial_balance", "get_request_outcome", "get_operation_proposal", "search_book", "list_closed_periods", "get_exchange_rate", "list_starter_charts", "list_payees", "get_entry_payee", "list_recurring_charges", "list_projects", "get_project_report", "get_cash_flow", "list_statements", "get_statement_reconciliation", "suggest_statement_matches", "get_period_review"}
+	write := []string{"label_project", "ask_question", "withdraw_question", "open_loop", "close_loop", "update_agent_profile", "record_by_rule", "mark_bank_duplicate", "link_bank_activity", "unlink_bank_activity", "record_bank_activity", "record_bank_transfer", "create_account", "revise_account", "retire_account", "reactivate_account", "apply_starter_chart", "create_payee", "revise_payee", "set_entry_payee", "import_statement", "mark_statement_duplicate", "match_statement", "revoke_statement_match", "record_statement_adjustment", "review_statement", "close_period", "post_journal", "reverse_journal", "prepare_operation", "prepare_opening_balance", "execute_proposal", "set_book_logo"}
+	docRead := []string{"list_document_checks", "get_document", "list_documents", "get_entry_documents", "get_source_usage", "list_entries_missing_evidence"}
+	docWrite := []string{"add_document", "set_document_group", "correct_source_citation", "attach_evidence", "detach_evidence"}
 	for _, documents := range []bool{false, true} {
 		for _, permission := range []string{"read", "write"} {
 			name := permission
@@ -273,6 +273,41 @@ func TestMCPProposalLostReplyAndReadOnlyOutcomeRecovery(t *testing.T) {
 		result, err := reader.CallTool(db.Context, &mcp.CallToolParams{Name: name, Arguments: map[string]any{}})
 		if err == nil && !result.IsError {
 			t.Fatal("reader gained proposal authority", name)
+		}
+	}
+}
+
+// Recording bank activity takes the project its spending is for, in the
+// same shape whether it is recorded directly or prepared.
+func TestBankActivitySchemaTakesAProject(t *testing.T) {
+	client := connect(t, context.Background(), func(context.Context, string, json.RawMessage) (json.RawMessage, error) {
+		return json.RawMessage(`{}`), nil
+	}, "write")
+	schema := proposalInputSchemas(t, client)["prepare_operation"]
+	prepared := func(extra map[string]any) map[string]any {
+		args := map[string]any{"request_key": "record", "transaction_id": ledger.ID(), "description": "Example charge", "other_account_id": ledger.ID()}
+		for k, v := range extra {
+			args[k] = v
+		}
+		return map[string]any{"request_key": "prepare", "operation": "record_bank_activity", "arguments": args}
+	}
+	for _, extra := range []map[string]any{
+		{"project_id": ledger.ID()},
+		{"project_splits": []any{map[string]any{"project_id": ledger.ID(), "amount_minor": "100"}}},
+		{"new_project_name": "Example project"},
+	} {
+		if err := schema.Validate(schemaInput(t, prepared(extra))); err != nil {
+			t.Fatal("advertised schema rejects a project", extra, err)
+		}
+	}
+	for _, extra := range []map[string]any{
+		{"project": "Example project"},
+		{"new_project_name": ""},
+		{"project_splits": []any{}},
+		{"project_splits": []any{map[string]any{"project_id": ledger.ID(), "line_id": ledger.ID()}}},
+	} {
+		if err := schema.Validate(schemaInput(t, prepared(extra))); err == nil {
+			t.Fatal("advertised schema accepts an invalid project", extra)
 		}
 	}
 }

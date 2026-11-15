@@ -65,7 +65,7 @@ func (s *Server) documentStream(ctx context.Context, uid uint32, q local.Request
 		return
 	}
 	_ = json.NewEncoder(dst).Encode(local.Response{Result: json.RawMessage(`{"status":"complete"}`)})
-	s.note(scope, local.AgentActivity{Kind: "opened", Document: clip(inspection.Document.Name, 255)})
+	s.note(scope, local.AgentActivity{Kind: "opened", DocumentID: inspection.Document.ID, Document: clip(inspection.Document.Name, 255)})
 }
 
 func (s *Server) ownerDocumentPeer(uid uint32) bool {

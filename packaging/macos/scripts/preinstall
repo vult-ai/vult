@@ -41,6 +41,12 @@ if /usr/bin/dscl . -read /Users/_vultledger >/dev/null 2>&1; then
     config="$data/configuration.json"
     [ -f "$config" ] && [ ! -L "$config" ] || fail "Stored configuration is missing; recovery is required."
     [ "$(/usr/bin/stat -f %u "$config")" = "$uid" ] && [ "$(/usr/bin/stat -f %Lp "$config")" = 400 ] || fail "Stored configuration is not protected."
+    # The installer backs up the data before updating it. The copy shares
+    # storage until the update changes it, so allow for the data again.
+    used=$(/usr/bin/du -sk "$data" | /usr/bin/awk '{print $1}')
+    free=$(/bin/df -k "$data" | /usr/bin/awk 'NR==2 {print $4}')
+    need=$((used + 262144))
+    [ "$free" -ge "$need" ] || fail "There isn't enough free disk space to back up your Vult before updating it: about $((need / 1024)) MB is needed and $((free / 1024)) MB is free. Nothing was changed; free up space and run the installer again."
 elif [ -e "$marker" ] || /usr/bin/dscl . -read /Groups/_vultledger >/dev/null 2>&1; then
     fail "An incomplete installation needs administrator inspection. No records were replaced."
 fi

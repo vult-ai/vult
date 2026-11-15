@@ -17,8 +17,10 @@ var DefaultLayout = Layout{
 	TrustFiles:    "/opt/vult-updater",
 	ArchivePrefix: "opt/vult/",
 	Data:          local.DataPath,
+	Recovery:      local.RecoveryPath,
 	Copies:        "/var/lib/vult/updater/copies",
 	State:         "/var/lib/vult/updater",
+	Browser:       local.BrowserPath,
 }
 
 // LinuxSystem is the real System on Ubuntu: systemd runs the services.
@@ -47,6 +49,9 @@ func (s LinuxSystem) StartServices(ctx context.Context) error {
 		return errors.New("could not start the ledger")
 	}
 	if err := s.Healthy(ctx); err != nil {
+		return err
+	}
+	if err := prepareBrowserKeys(s.Layout.Browser, local.BrowserUser); err != nil {
 		return err
 	}
 	if err := systemctl(ctx, "start", "ai.vult.browser.service"); err != nil {

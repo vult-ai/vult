@@ -166,15 +166,15 @@ func TestStarterChartsApplyOnlyToABookWithoutAccounts(t *testing.T) {
 		Charts []ledger.StarterChartTemplate `json:"charts"`
 	}
 	if json.Unmarshal(db.Call(t, s, "list_starter_charts", map[string]string{}), &charts) != nil || len(charts.Charts) != 2 ||
-		charts.Charts[0].ID != "business-v1" || charts.Charts[1].ID != "personal-v1" {
-		t.Fatal("starter charts are listed by versioned ID")
+		charts.Charts[0].ID != "business-v2" || charts.Charts[1].ID != "personal-v2" {
+		t.Fatal("the current starter charts are listed by versioned ID")
 	}
 	if err := callError(db, s, "apply_starter_chart", ledger.ApplyStarterChart{RequestKey: "unknown", Template: "business-v0"}); !errors.Is(err, ledger.ErrInvalid) {
 		t.Fatal("an unknown chart was applied", err)
 	}
 	var applied ledger.AppliedStarterChart
-	if json.Unmarshal(db.Call(t, s, "apply_starter_chart", ledger.ApplyStarterChart{RequestKey: "chart", Template: "business-v1"}), &applied) != nil ||
-		applied.Template != "business-v1" || len(applied.Accounts) != len(charts.Charts[0].Accounts) {
+	if json.Unmarshal(db.Call(t, s, "apply_starter_chart", ledger.ApplyStarterChart{RequestKey: "chart", Template: "business-v2"}), &applied) != nil ||
+		applied.Template != "business-v2" || len(applied.Accounts) != len(charts.Charts[0].Accounts) {
 		t.Fatal("the chart's accounts were not created")
 	}
 	byCode := map[string]ledger.Account{}
@@ -189,11 +189,21 @@ func TestStarterChartsApplyOnlyToABookWithoutAccounts(t *testing.T) {
 		}
 	}
 	var request []byte
-	if err := db.Admin.QueryRow(db.Context, "SELECT request_bytes FROM public.requests WHERE request_key='chart'").Scan(&request); err != nil || !strings.Contains(string(request), `"template":"business-v1"`) {
+	if err := db.Admin.QueryRow(db.Context, "SELECT request_bytes FROM public.requests WHERE request_key='chart'").Scan(&request); err != nil || !strings.Contains(string(request), `"template":"business-v2"`) {
 		t.Fatal("the request must record the template ID and version", err)
 	}
-	if err := callError(db, s, "apply_starter_chart", ledger.ApplyStarterChart{RequestKey: "second", Template: "personal-v1"}); !errors.Is(err, ledger.ErrConflict) {
+	var chartRefused *ledger.RefusedError
+	if err := callError(db, s, "apply_starter_chart", ledger.ApplyStarterChart{RequestKey: "second", Template: "personal-v2"}); !errors.As(err, &chartRefused) || !strings.Contains(chartRefused.Reason, "already has accounts") {
 		t.Fatal("a chart was applied to a Book with accounts", err)
+	}
+	// Every current and earlier chart applies with its roles.
+	for _, id := range []string{"personal-v2", "business-v1", "personal-v1"} {
+		_, book := db.Book(t, "Example "+id)
+		chart, _ := ledger.StarterChart(id)
+		if json.Unmarshal(db.Call(t, book, "apply_starter_chart", ledger.ApplyStarterChart{RequestKey: "chart", Template: id}), &applied) != nil ||
+			applied.Template != id || len(applied.Accounts) != len(chart.Accounts) {
+			t.Fatal("a starter chart did not apply", id)
+		}
 	}
 	// The database refuses it too, whatever the caller checks first.
 	_, other := db.Book(t, "Example other Book")

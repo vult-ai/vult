@@ -239,16 +239,19 @@ func (c Client) SetupSecrets(ctx context.Context, session string) (SetupSecrets,
 const (
 	WaitForDocumentMethod = "wait_for_document"
 	ReportUnusableMethod  = "report_unusable_document"
+	ProposeReadingMethod  = "propose_document_reading"
 )
 
 // AgentActivity is one step of an agent's work in a Book, as the service saw
 // it. Kind is opened, checked, account, entry, review, compared, balanced or
-// unusable.
+// unusable. The checks Vult ran on each document are kept by the ledger
+// (list_document_checks), not here.
 type AgentActivity struct {
 	Seq         int64     `json:"seq"`
 	At          time.Time `json:"at"`
 	Agent       string    `json:"agent"`
 	Kind        string    `json:"kind"`
+	DocumentID  string    `json:"document_id,omitempty"`
 	Document    string    `json:"document,omitempty"`
 	Name        string    `json:"name,omitempty"`
 	Date        string    `json:"date,omitempty"`

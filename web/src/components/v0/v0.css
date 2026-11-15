@@ -433,3 +433,4 @@
     padding: 16px;
   }
 }
+.v0-record-actions { display: inline-flex; gap: 8px; flex: none; }

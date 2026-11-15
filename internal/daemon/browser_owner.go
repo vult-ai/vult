@@ -14,6 +14,21 @@ type browserOwner struct {
 	configuration browserConfiguration
 	uid           uint32
 	documents     *access.OwnerDocumentReader
+	// developmentOrigin is a development Vult's own address; it has no
+	// installed browser configuration.
+	developmentOrigin string
+}
+
+// agentOrigin is where the owner approves an agent, or empty when this Vult
+// has no browser to approve it in.
+func (b *browserOwner) agentOrigin() string {
+	if b == nil {
+		return ""
+	}
+	if b.configuration.valid() {
+		return b.configuration.origin()
+	}
+	return b.developmentOrigin
 }
 
 func loadBrowserOwner(data string, uid uint32) *browserOwner {

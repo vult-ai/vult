@@ -492,3 +492,85 @@ func TestLocalBrowserOwnerDocumentUploadUsesProtectedBridge(t *testing.T) {
 		t.Fatal("local browser bypassed its upload bridge")
 	}
 }
+
+// Documents are filed in groups: on upload, by the owner later, or by a
+// connection that writes. Unfiled ones read as receipts; the list filters
+// by group.
+func TestDocumentsAreFiledInGroups(t *testing.T) {
+	f, writer := browserDocuments(t)
+	s := f.server
+	book := f.book.ID
+	var readConn ledger.Connection
+	if err := f.sessions.WithOwner(f.db.Context, f.session, f.tenant, true, func(owner ledger.TenantAdmin) error {
+		var err error
+		readConn, err = owner.CreateConnection(f.db.Context, book, "Example reader", "read")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reader := ledger.Scope{TenantID: readConn.TenantID, BookID: readConn.BookID, ActorID: readConn.ActorID, ConnectionID: readConn.ID, Access: readConn.Access}
+	upload := func(key, name, group string, data []byte) ledger.Document {
+		r := ownerUploadRequest(f.session, book, key, name, "application/pdf", data)
+		if group != "" {
+			r.Header.Set("X-Vult-Document-Group", group)
+		}
+		return decodeOwnerUpload(t, runOwnerUpload(s, r), http.StatusCreated).Document
+	}
+	articles := upload("articles", "articles.pdf", "company", []byte("%PDF-1.7 example articles"))
+	receipt := upload("receipt", "receipt.pdf", "", []byte("%PDF-1.7 example receipt"))
+	if articles.Group != "company" || !articles.GroupSet || receipt.GroupSet {
+		t.Fatalf("on upload: %+v %+v", articles, receipt)
+	}
+	bad := ownerUploadRequest(f.session, book, "bad", "bad.pdf", "application/pdf", []byte("%PDF-1.7 example bad"))
+	bad.Header.Set("X-Vult-Document-Group", "misc")
+	if w := runOwnerUpload(s, bad); w.Code != http.StatusBadRequest {
+		t.Fatal("an unknown group", w.Code, w.Body.String())
+	}
+	// Unfiled, it reads as a receipt.
+	unfiled := ownerAPICall(s, f.session, http.MethodGet, "/api/v1/documents?book_id="+book+"&group=receipt", "", false)
+	var receipts ledger.DocumentPage
+	if json.Unmarshal(unfiled.Body.Bytes(), &receipts) != nil || len(receipts.Documents) != 1 || receipts.Documents[0].ID != receipt.ID || receipts.Documents[0].GroupSet {
+		t.Fatal("unfiled", unfiled.Code, unfiled.Body.String())
+	}
+	// The owner files the receipt as tax, signed in but not freshly.
+	if _, err := f.db.Admin.Exec(f.db.Context, "UPDATE access.sessions SET authenticated_at=clock_timestamp()-interval '10 minutes' WHERE token_hash=$1", access.Hash(f.session)); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(map[string]string{"book_id": book, "document_id": receipt.ID, "group": "tax"})
+	w := bankCall(t, s, f.session, http.MethodPost, documentGroupPath, string(body))
+	var filed struct {
+		Document ledger.Document `json:"document"`
+	}
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &filed) != nil || filed.Document.Group != "tax" || !filed.Document.GroupSet {
+		t.Fatal("file as tax", w.Code, w.Body.String())
+	}
+	list := func(group string) []ledger.Document {
+		path := "/api/v1/documents?book_id=" + book
+		if group != "" {
+			path += "&group=" + group
+		}
+		w := ownerAPICall(s, f.session, http.MethodGet, path, "", false)
+		var page ledger.DocumentPage
+		if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &page) != nil {
+			t.Fatal("list", group, w.Code, w.Body.String())
+		}
+		return page.Documents
+	}
+	if docs := list("tax"); len(docs) != 1 || docs[0].ID != receipt.ID {
+		t.Fatalf("tax: %+v", docs)
+	}
+	if docs := list("company"); len(docs) != 1 || docs[0].ID != articles.ID {
+		t.Fatalf("company: %+v", docs)
+	}
+	if docs := list(""); len(docs) != 2 {
+		t.Fatalf("all: %+v", docs)
+	}
+	// A writing connection files what it adds; a reading one can't.
+	if _, err := f.db.Store.Call(f.db.Context, reader, "set_document_group", mustJSON(ledger.SetDocumentGroup{DocumentID: articles.ID, Group: "tax"})); err == nil {
+		t.Fatal("a read connection filed a document")
+	}
+	var got ledger.Document
+	if json.Unmarshal(f.db.Call(t, writer, "set_document_group", ledger.SetDocumentGroup{DocumentID: articles.ID, Group: "statement"}), &got) != nil || got.Group != "statement" {
+		t.Fatalf("filed by a connection: %+v", got)
+	}
+}

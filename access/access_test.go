@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -96,7 +97,16 @@ func (f *fixture) book(t *testing.T, tenant, session string) ledger.Book {
 	var book ledger.Book
 	e := f.service.WithOwner(f.db.Context, session, tenant, true, func(owner ledger.TenantAdmin) error {
 		var err error
-		book, err = owner.CreateBook(f.db.Context, "Example Book", "USD", 2)
+		// A Vult's Books have different names: the first is Example Book.
+		existing, err := owner.Books(f.db.Context)
+		if err != nil {
+			return err
+		}
+		name := "Example Book"
+		if len(existing) > 0 {
+			name = fmt.Sprintf("Example Book %d", len(existing)+1)
+		}
+		book, err = owner.CreateBook(f.db.Context, name, "USD", 2)
 		return err
 	})
 	if e != nil {
@@ -278,8 +288,9 @@ func TestRevocationExpiryRealmAndFreshProof(t *testing.T) {
 	if _, e = db.Admin.Exec(db.Context, "UPDATE access.sessions SET authenticated_at=clock_timestamp()-interval '10 minutes' WHERE token_hash=$1", access.Hash(session)); e != nil {
 		t.Fatal(e)
 	}
-	if e = f.service.WithOwner(db.Context, session, tenant, true, func(ledger.TenantAdmin) error { return nil }); !errors.Is(e, access.ErrDenied) {
-		t.Fatal("old proof authorized a new owner change")
+	// An old sign-in is asked to sign in again, not told it lacks permission.
+	if e = f.service.WithOwner(db.Context, session, tenant, true, func(ledger.TenantAdmin) error { return nil }); !errors.Is(e, ledger.ErrFreshOwnerProof) {
+		t.Fatal("old proof authorized a new owner change", e)
 	}
 	if e = f.service.WithOwner(db.Context, session, tenant, false, func(o ledger.TenantAdmin) error { _, e := o.Book(db.Context, book.ID); return e }); e != nil {
 		t.Fatal("existing session could not read", e)

@@ -17,5 +17,5 @@ const browserSetupApp = "/Library/PrivilegedHelperTools/ai.vult.ledger/Vult Brow
 func nativeSupported() bool     { return runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" }
 func nativeStartupReady() error { return nil }
 func nativeRemovalPaths() removalPaths {
-	return removalPaths{Code: programRoot, Startup: ledgerStartup, Shortcut: "/usr/local/bin/vult", Retained: filepath.Dir(local.DataPath)}
+	return removalPaths{Code: programRoot, Startup: ledgerStartup, Updater: filepath.Dir(updaterProgram), Shortcut: "/usr/local/bin/vult", Retained: filepath.Dir(local.DataPath)}
 }

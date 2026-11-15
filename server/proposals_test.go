@@ -93,6 +93,23 @@ func TestBrowserProposalReadsAreScopedBoundedAndExplicit(t *testing.T) {
 	if json.Unmarshal(read(path+"&status=approval_required", http.StatusOK).Body.Bytes(), &waiting) != nil || waiting.Waiting != 2 || len(waiting.Plans) != 1 || first.Waiting != 2 {
 		t.Fatal("queue does not count waiting proposals")
 	}
+	batchPath := "/api/v1/agent-owner/plans/details?book_id=" + f.book.ID + "&ids=" + p.ID + "," + first.Plans[0].ID
+	var batch struct {
+		States []ledger.ProposalState `json:"states"`
+	}
+	if json.Unmarshal(read(batchPath, http.StatusOK).Body.Bytes(), &batch) != nil || len(batch.States) != 2 || batch.States[0].Proposal.ID != p.ID || batch.States[1].Proposal.ID != first.Plans[0].ID {
+		t.Fatal("one batch keeps exact proposal order", batch)
+	}
+	json.Unmarshal(read(detailPath, http.StatusOK).Body.Bytes(), &detail)
+	if !bytes.Equal(mustJSON(detail), mustJSON(batch.States[0])) {
+		t.Fatal("batch details bypassed an exact-state check")
+	}
+	for _, ids := range []string{"", "bad", p.ID + "," + p.ID, strings.TrimSuffix(strings.Repeat(ledger.ID()+",", 51), ",")} {
+		read("/api/v1/agent-owner/plans/details?book_id="+f.book.ID+"&ids="+ids, http.StatusBadRequest)
+	}
+	read("/api/v1/agent-owner/plans/details?book_id="+f.book.ID+"&ids="+ledger.ID(), http.StatusNotFound)
+	read(batchPath+"&unexpected=1", http.StatusBadRequest)
+	read(batchPath+"&ids="+p.ID, http.StatusBadRequest)
 	for _, query := range []string{"&limit=101", "&limit=0", "&before=-1", "&book_id=" + f.book.ID, "&unexpected=x", "&before=9223372036854775808", "&status=committed", "&status=approval_required&status=approval_required"} {
 		read("/api/v1/agent-owner/plans?book_id="+f.book.ID+query, http.StatusBadRequest)
 	}

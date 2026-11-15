@@ -13,7 +13,7 @@ identity-provider or deployment policy configuration.
 
 ## Build
 
-Use Go 1.27.3, Node 26.7.0 and npm 11.19.0. Build the interface from the same
+Use Go 1.27.4, Node 26.7.0 and npm 11.19.0. Build the interface from the same
 committed source:
 
 ```sh

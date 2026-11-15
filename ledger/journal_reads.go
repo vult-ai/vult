@@ -19,6 +19,8 @@ type JournalRead struct {
 	RecordedBy    *JournalRecorder `json:"recorded_by,omitempty"`
 	// Payee is who the entry was with, a separate decision from the entry.
 	Payee *EntryPayeeRead `json:"payee,omitempty"`
+	// ProjectLabels say which projects the entry's spending went to.
+	ProjectLabels []ProjectLabel `json:"project_labels,omitempty"`
 }
 
 // JournalRecorder is the display identity of the entry's recorded actor.
@@ -72,6 +74,9 @@ func (a TenantAdmin) Journal(ctx context.Context, book, entry string) (JournalRe
 			return err
 		}
 		out.Payee = &payee
+		if out.ProjectLabels, err = readEntryLabels(ctx, tx, scope, entry); err != nil {
+			return err
+		}
 		if connectionID != nil && connectionName != nil {
 			out.RecordedBy = &JournalRecorder{Kind: "agent", Name: *connectionName, ConnectionID: *connectionID}
 		} else if ownerName != nil {

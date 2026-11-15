@@ -116,7 +116,73 @@ if os.environ.get('FIXTURE_INSTALL_FAIL'):sys.exit(1)
         self.assertLess(postinstall.index('"$binary" _install\n'), postinstall.index(migrate))
         self.assertLess(postinstall.index(migrate), postinstall.index("/bin/launchctl bootstrap system /Library/LaunchDaemons/ai.vult.ledger.plist"))
         line = next(l for l in postinstall.splitlines() if migrate in l)
-        self.assertIn("|| fail", line)
+        self.assertTrue(line.startswith("if ! "), line)
+
+    def update_fixture(self):
+        """The installer's actual database update block, with a synthetic
+        control program that logs its calls."""
+        self.update_log = self.work / "update.json"
+        self.env["FIXTURE_UPDATE_LOG"] = str(self.update_log)
+        control = self.mock("control", """#!/usr/bin/python3
+import json, os, pathlib, sys
+log=pathlib.Path(os.environ['FIXTURE_UPDATE_LOG'])
+calls=json.loads(log.read_text()) if log.exists() else []
+calls.append(sys.argv[1:])
+log.write_text(json.dumps(calls))
+args=sys.argv[1:]
+if args==['_installer_point','take']:
+    if os.environ.get('FIXTURE_TAKE_FAILS'): sys.exit(1)
+    if os.environ.get('FIXTURE_EXISTING'): print('installer-20261113T090000Z-0a0b0c0d')
+if args==['_maintenance','migrate'] and os.environ.get('FIXTURE_MIGRATE_FAILS'): sys.exit(1)
+if args[:2]==['_installer_point','restore'] and os.environ.get('FIXTURE_RESTORE_FAILS'): sys.exit(1)
+""")
+        sudo = self.mock("sudo", "#!/bin/sh\nshift 2\nexec \"$@\"\n")
+        postinstall = (ROOT / "packaging/macos/scripts/postinstall").read_text()
+        start = postinstall.index("# Before updating an existing Vult")
+        end = postinstall.index("# End of the database update.")
+        block = postinstall[start:end].replace("/usr/bin/sudo", sudo).replace('"$binary"', control)
+        return 'set -eu\nfail() { echo "Vult: $*" >&2; exit 1; }\nbinary=/synthetic/vult\n' + block + 'echo "point=$point"\n'
+
+    def update_calls(self):
+        return json.loads(self.update_log.read_text())
+
+    def test_upgrade_backs_up_then_updates_and_keeps_the_newest(self):
+        result = self.run_shell(self.update_fixture(), extra_env={"FIXTURE_EXISTING": "1"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        point = "installer-20261113T090000Z-0a0b0c0d"
+        self.assertEqual(self.update_calls(), [["_installer_point", "take"], ["_install"], ["_maintenance", "migrate"], ["_installer_point", "finish", point]])
+        self.assertIn("point=" + point, result.stdout)
+
+    def test_failed_update_puts_the_vult_back(self):
+        result = self.run_shell(self.update_fixture(), extra_env={"FIXTURE_EXISTING": "1", "FIXTURE_MIGRATE_FAILS": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        point = "installer-20261113T090000Z-0a0b0c0d"
+        self.assertEqual(self.update_calls()[-1], ["_installer_point", "restore", point])
+        self.assertIn("put back as it was", result.stderr)
+
+    def test_failed_restore_says_how_to_restore(self):
+        result = self.run_shell(self.update_fixture(), extra_env={"FIXTURE_EXISTING": "1", "FIXTURE_MIGRATE_FAILS": "1", "FIXTURE_RESTORE_FAILS": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("run: sudo /synthetic/vult _installer_point restore installer-20261113T090000Z-0a0b0c0d", result.stderr)
+
+    def test_new_install_takes_no_backup(self):
+        result = self.run_shell(self.update_fixture())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.update_calls(), [["_installer_point", "take"], ["_install"], ["_maintenance", "migrate"]])
+        failed = self.run_shell(self.update_fixture(), extra_env={"FIXTURE_MIGRATE_FAILS": "1"})
+        self.assertIn("nothing was changed", failed.stderr)
+        self.assertNotIn("restore", json.dumps(self.update_calls()))
+
+    def test_no_update_without_a_backup(self):
+        result = self.run_shell(self.update_fixture(), extra_env={"FIXTURE_EXISTING": "1", "FIXTURE_TAKE_FAILS": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.update_calls(), [["_installer_point", "take"]])
+        self.assertIn("Your Books are unchanged", result.stderr)
+
+    def test_preinstall_stops_before_changing_anything_without_room(self):
+        preinstall = (ROOT / "packaging/macos/scripts/preinstall").read_text()
+        check = preinstall.index("There isn't enough free disk space")
+        self.assertLess(check, preinstall.index('"$binary" _stop'))
 
     def test_postinstall_sets_up_the_update_installer_only_when_carried(self):
         postinstall = (ROOT / "packaging/macos/scripts/postinstall").read_text()
@@ -155,7 +221,7 @@ log.write_text(json.dumps(calls))
         postinstall = (ROOT / "packaging/macos/scripts/postinstall").read_text()
         start = postinstall.index("/bin/launchctl bootstrap system /Library/LaunchDaemons/ai.vult.ledger.plist")
         startup = postinstall[start:].replace("/bin/launchctl", launchctl).replace('"$binary"', control)
-        return 'set -eu\nfail() { echo "Vult: $*" >&2; exit 1; }\nbinary=/synthetic/vult\n' + startup
+        return 'set -eu\nfail() { echo "Vult: $*" >&2; exit 1; }\nbinary=/synthetic/vult\npoint=${FIXTURE_POINT:-}\n' + startup
 
     def test_package_waits_for_browser_readiness_before_reporting_success(self):
         result = self.run_shell(self.postinstall_startup_fixture())
@@ -163,6 +229,12 @@ log.write_text(json.dumps(calls))
         calls = json.loads(self.startup_log.read_text())
         self.assertEqual(calls[-2:], [["launchctl", "kickstart", "system/ai.vult.browser"], ["vult", "_browser_check"]])
         self.assertIn("Vult installed.", result.stdout)
+
+    def test_upgrade_says_the_vult_was_backed_up_first(self):
+        result = self.run_shell(self.postinstall_startup_fixture(), extra_env={"FIXTURE_POINT": "installer-20261113T090000Z-0a0b0c0d"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Your Vult was backed up first.", result.stdout)
+        self.assertNotIn("Vult installed.", result.stdout)
 
     def test_package_never_reports_success_when_browser_readiness_fails(self):
         result = self.run_shell(self.postinstall_startup_fixture(), extra_env={"FIXTURE_BROWSER_UNAVAILABLE": "1"})
@@ -212,6 +284,25 @@ log.write_text(json.dumps(calls))
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(self.owner_log.exists())
 
+    def test_fresh_install_and_upgrade_say_what_happened(self):
+        here = "vult=/Library/PrivilegedHelperTools/ai.vult.ledger/vult"
+        fresh = self.run_shell(self.outer_fixture().replace(here, "vult=" + str(self.work / "none" / "vult")))
+        self.assertEqual(fresh.returncode, 0, fresh.stderr)
+        self.assertIn("Installing Vult 0.1.0.", fresh.stdout)
+        self.assertIn("mcp install, then", fresh.stdout)
+        existing = self.mock("vult", "#!/bin/sh\n[ \"$1\" = --version ] && printf 'Vult 0.0.9\\n'\n")
+        upgrade = self.run_shell(self.outer_fixture().replace(here, "vult=" + str(self.work / "vult")))
+        self.assertEqual(upgrade.returncode, 0, upgrade.stderr)
+        self.assertIn("Upgrading Vult from 0.0.9 to 0.1.0.", upgrade.stdout)
+        self.assertIn("Vult upgraded from 0.0.9 to 0.1.0. Your books and sign-in are unchanged.", upgrade.stdout)
+        self.assertNotIn("passkey", upgrade.stdout)
+        self.assertNotIn("mcp install", upgrade.stdout)
+        # A cancelled upgrade never reports success.
+        cancelled = self.run_shell(self.outer_fixture().replace(here, "vult=" + str(self.work / "vult")), extra_env={"FIXTURE_OWNER_FAIL": "1"})
+        self.assertNotEqual(cancelled.returncode, 0)
+        self.assertNotIn("upgraded", cancelled.stdout)
+        del existing
+
     def test_unsupported_platforms_fail_before_approval(self):
         for env in ({"FIXTURE_OS": "Linux"}, {"FIXTURE_ARCH": "x86_64"}, {"FIXTURE_VERSION": "25.6"}, {"FIXTURE_VERSION": "invalid"}):
             with self.subTest(env=env):
@@ -230,7 +321,7 @@ log.write_text(json.dumps(calls))
         self.assertNotEqual(r.returncode, 0)
         self.assertFalse(self.owner_log.exists())
         entry = text.rindex('vult_install "$@"')
-        for prefix in (text[:entry], text[:text.index("VULT_ADMIN\n}")], text[:text.index("do shell script")]):
+        for prefix in (text[:entry], text[:text.index("\nVULT_ADMIN\n")], text[:text.index("do shell script")]):
             with self.subTest(length=len(prefix)):
                 self.run_shell(prefix)
                 self.assertFalse(self.owner_log.exists())

@@ -6,12 +6,15 @@
 #   scripts/check-changes.sh --files web/src/main.tsx ledger/store.go
 #                                       checks the named files
 #   scripts/check-changes.sh --full     every check, as before a commit
+#   scripts/check-changes.sh --release  every check plus the vulnerability
+#                                       scans, as before a release
 #
 # Web changes: typecheck, the design checks for styles and components, and the
 # unit tests that load a changed file or the whole app. Go changes: vet and the tests of the
 # changed packages, without the race detector. --full runs vet, the whole Go
 # suite with the race detector, the web build (with all its checks) and every
-# web unit test.
+# web unit test. --release adds scripts/check-vulnerabilities.sh, which needs
+# network access to read the public advisory databases.
 #
 # Go tests need the disposable PostgreSQL described in CONTRIBUTING.md:
 # VULT_TEST_ISOLATED=1 and VULT_TEST_DSN_FILE. Without them Go tests fail; they
@@ -22,13 +25,15 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 base="HEAD"
 full=0
+release=0
 files=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --full) full=1 ;;
+    --release) full=1; release=1 ;;
     --base) base="$2"; shift ;;
     --files) shift; while [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; do files+=("$1"); shift; done; continue ;;
-    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,21p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -47,6 +52,9 @@ if [ "$full" = 1 ]; then
   step "go tests (race)" go test -race -count=1 ./...
   step "web build and checks" npm --prefix web run -s build
   step "web unit tests" npm --prefix web run -s test:ui
+  if [ "$release" = 1 ]; then
+    step "vulnerability scans" scripts/check-vulnerabilities.sh
+  fi
   echo
   echo "All checks passed. The browser journey test needs the preview running; see CONTRIBUTING.md."
   exit 0

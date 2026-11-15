@@ -191,6 +191,41 @@ func (s *Service) WithOwner(ctx context.Context, raw, tenant string, writing boo
 	return s.withOwner(ctx, raw, tenant, writing, writing, "", func(_ pgx.Tx, o ledger.TenantAdmin, _ string) error { return call(o) })
 }
 
+// RecentSignIn is how long a sign-in counts as recent for changes that need
+// one, as the database's owner check measures it.
+const RecentSignIn = 5 * time.Minute
+
+// errFreshProof refuses a valid sign-in that is too old for this change. It
+// is still a denial, and also says the person only needs to sign in again.
+var errFreshProof = freshProof{}
+
+type freshProof struct{}
+
+func (freshProof) Error() string { return ledger.ErrFreshOwnerProof.Error() }
+func (freshProof) Is(target error) bool {
+	return target == ledger.ErrFreshOwnerProof || target == ErrDenied
+}
+
+// WithOwnerSignedIn runs a write that any valid sign-in may make, without a
+// fresh one: disconnecting an agent. The database allows such a write to
+// end a connection and nothing else.
+func (s *Service) WithOwnerSignedIn(ctx context.Context, raw, tenant string, call func(ledger.TenantAdmin) error) error {
+	if call == nil {
+		return ErrDenied
+	}
+	return s.withOwner(ctx, raw, tenant, true, false, "", func(_ pgx.Tx, o ledger.TenantAdmin, _ string) error { return call(o) })
+}
+
+// OwnerAct runs one owner change that keeps no retained request, such as
+// storing keys that must never be kept in the clear. The change itself
+// checks for a fresh sign-in and says so when one is needed.
+func (s *Service) OwnerAct(ctx context.Context, raw, tenant string, call func(ledger.TenantAdmin, string) error) error {
+	if call == nil {
+		return ErrDenied
+	}
+	return s.withOwner(ctx, raw, tenant, true, false, "", func(_ pgx.Tx, o ledger.TenantAdmin, who string) error { return call(o, who) })
+}
+
 func (s *Service) withOwner(ctx context.Context, raw, tenant string, writing, fresh bool, requestLock string, call func(pgx.Tx, ledger.TenantAdmin, string) error) error {
 	return withOwnerPool(ctx, s.owners, s.origin, raw, tenant, writing, fresh, requestLock, call)
 }
@@ -217,8 +252,15 @@ func withOwnerPool(ctx context.Context, owners *pgxpool.Pool, origin, raw, tenan
 		return ErrDenied
 	}
 	var who string
-	if e = tx.QueryRow(ctx, "SELECT access.require_owner($1,$2)::text", tenant, fresh).Scan(&who); e != nil {
+	if e = tx.QueryRow(ctx, "SELECT access.require_owner($1,false)::text", tenant).Scan(&who); e != nil {
 		return ErrDenied
+	}
+	// A valid but older sign-in is asked to sign in again, never refused as
+	// if the person had no access.
+	if fresh {
+		if e = tx.QueryRow(ctx, "SELECT access.require_owner($1,true)::text", tenant).Scan(&who); e != nil {
+			return errFreshProof
+		}
 	}
 	owner, e := ledger.TenantTransaction(tx, tenant)
 	if e != nil {
@@ -231,6 +273,9 @@ func withOwnerPool(ctx context.Context, owners *pgxpool.Pool, origin, raw, tenan
 	// the session or its required fresh proof while the callback is running.
 	var confirmed string
 	if e = tx.QueryRow(ctx, "SELECT access.require_owner($1,$2)::text", tenant, fresh).Scan(&confirmed); e != nil || confirmed != who {
+		if fresh && e != nil {
+			return errFreshProof
+		}
 		return ErrDenied
 	}
 	if e = tx.Commit(ctx); e != nil {

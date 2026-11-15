@@ -12,10 +12,12 @@ import (
 
 // DefaultLayout is where a macOS installation keeps things.
 var DefaultLayout = Layout{
-	Program: "/Library/PrivilegedHelperTools/ai.vult.ledger",
-	Data:    local.DataPath,
-	Copies:  "/Library/Application Support/ai.vult.updater/copies",
-	State:   "/Library/Application Support/ai.vult.updater",
+	Program:  "/Library/PrivilegedHelperTools/ai.vult.ledger",
+	Data:     local.DataPath,
+	Recovery: local.RecoveryPath,
+	Copies:   "/Library/Application Support/ai.vult.updater/copies",
+	State:    "/Library/Application Support/ai.vult.updater",
+	Browser:  local.BrowserPath,
 }
 
 const (
@@ -53,6 +55,9 @@ func (m MacSystem) StartServices(ctx context.Context) error {
 		}
 	}
 	if err := m.Healthy(ctx); err != nil {
+		return err
+	}
+	if err := prepareBrowserKeys(m.Layout.Browser, local.BrowserUser); err != nil {
 		return err
 	}
 	if _, err := os.Lstat(browserPlist); err == nil && launchctl(ctx, "print", "system/ai.vult.browser") != nil {

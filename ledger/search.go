@@ -77,6 +77,20 @@ type SearchEntry struct {
 	ReversalOf  string   `json:"reversal_of,omitempty"`
 	Accounts    []string `json:"accounts"`
 }
+
+// SearchTotals are exact sums over all of a search's matching entries, in
+// the Book's currency and minor units. Spending is what they debited to
+// expense accounts less what they credited back; income is what they
+// credited to income accounts less what they debited back. An entry and its
+// reversal, when both match, cancel.
+type SearchTotals struct {
+	Entries       int    `json:"entries"`
+	ExpensesMinor string `json:"expenses_minor"`
+	IncomeMinor   string `json:"income_minor"`
+	FirstDate     string `json:"first_date,omitempty"`
+	LastDate      string `json:"last_date,omitempty"`
+}
+
 type SearchAccount struct {
 	ID    string `json:"id"`
 	Code  string `json:"code"`
@@ -99,12 +113,16 @@ type SearchResult struct {
 	Currency      string `json:"currency"`
 	Scale         int    `json:"scale"`
 	RecordedState
-	Query          string                          `json:"query"`
-	Transactions   SearchGroup[SearchEntry]        `json:"transactions"`
-	Accounts       SearchGroup[SearchAccount]      `json:"accounts"`
-	AccountIDs     []string                        `json:"account_ids,omitempty"`
-	Counterparties SearchGroup[SearchCounterparty] `json:"counterparties"`
-	Sources        SearchGroup[SearchSource]       `json:"sources"`
+	Query        string                   `json:"query"`
+	Transactions SearchGroup[SearchEntry] `json:"transactions"`
+	// TransactionTotals adds up every matching entry, not only the ones
+	// listed: what they spent and brought in, by the types of the accounts
+	// they post to.
+	TransactionTotals *SearchTotals                   `json:"transaction_totals,omitempty"`
+	Accounts          SearchGroup[SearchAccount]      `json:"accounts"`
+	AccountIDs        []string                        `json:"account_ids,omitempty"`
+	Counterparties    SearchGroup[SearchCounterparty] `json:"counterparties"`
+	Sources           SearchGroup[SearchSource]       `json:"sources"`
 }
 
 // SearchBook answers a Book search for the Book's owner. The results and the
@@ -184,6 +202,11 @@ func searchBook(ctx context.Context, tx pgx.Tx, s Scope, q SearchQuery, cutoff t
 			return out, err
 		}
 		out.Transactions.Total = total
+		if total > 0 {
+			if out.TransactionTotals, err = plan.entryTotals(ctx, tx, cutoff); err != nil {
+				return out, err
+			}
+		}
 		if out.Transactions.Items, err = searchEntryItems(ctx, tx, s, ids); err != nil {
 			return out, err
 		}
@@ -640,6 +663,29 @@ func (p searchPlan) entries(ctx context.Context, tx pgx.Tx, limit int, cutoff ti
 		ids = append(ids, id)
 	}
 	return ids, total, dbError(rows.Err())
+}
+
+// entryTotals adds up every matching entry by the types of its accounts.
+func (p searchPlan) entryTotals(ctx context.Context, tx pgx.Tx, cutoff time.Time) (*SearchTotals, error) {
+	matched, args, e := p.matchedSQL(0)
+	if e != nil {
+		return nil, e
+	}
+	list := sqlArgs(args)
+	tenant, book := list.add(p.s.TenantID), list.add(p.s.BookID)
+	query := fmt.Sprintf(`SELECT count(DISTINCT e.id),
+ coalesce(sum(CASE WHEN a.class='expense' THEN CASE l.side WHEN 'debit' THEN l.amount_minor ELSE -l.amount_minor END END),0)::text,
+ coalesce(sum(CASE WHEN a.class='income' THEN CASE l.side WHEN 'credit' THEN l.amount_minor ELSE -l.amount_minor END END),0)::text,
+ coalesce(min(e.accounting_date)::text,''), coalesce(max(e.accounting_date)::text,'')
+ FROM (%s) m JOIN public.entries e ON e.tenant_id=%s AND e.book_id=%s AND e.id=m.entry_id AND e.recorded_at<=%s::timestamptz
+ JOIN public.lines l ON l.tenant_id=e.tenant_id AND l.book_id=e.book_id AND l.entry_id=e.id
+ JOIN public.accounts a ON a.tenant_id=l.tenant_id AND a.book_id=l.book_id AND a.id=l.account_id`,
+		matched, tenant, book, list.add(cutoff))
+	var out SearchTotals
+	if e = tx.QueryRow(ctx, query, list...).Scan(&out.Entries, &out.ExpensesMinor, &out.IncomeMinor, &out.FirstDate, &out.LastDate); e != nil {
+		return nil, dbError(e)
+	}
+	return &out, nil
 }
 
 // matchedSQL selects (entry_id, r): every entry matching all terms, with its

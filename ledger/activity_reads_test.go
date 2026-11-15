@@ -168,11 +168,15 @@ func TestActivityTabsCountCardOnlyIncomeAndExpenses(t *testing.T) {
 	foreign := line(food, "debit", "5382")
 	foreign.Contexts = []ledger.ContextMeasurement{{Role: "transaction_amount", Amount: charged}}
 	db.Call(t, s, "post_journal", ledger.PostJournal{RequestKey: "card-foreign", EconomicDate: "2026-01-05", AccountingDate: "2026-01-05", Description: "Example grocer", Lines: []ledger.PostLine{foreign, line(card, "credit", "5382")}})
-	owner, err := db.Owner.ForTenant(db.Context, book.TenantID)
+	pool, counts := traceQueries(t, db.Admin)
+	owner, err := (ledger.Admin{DB: pool}).ForTenant(db.Context, book.TenantID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	all, err := owner.Activity(db.Context, book.ID, ledger.ActivityPageQuery{Limit: 25})
+	if counts.stateReads.Load() != 1 || counts.reads.Load() != 2 {
+		t.Fatal("the page and tab counts share one population and captured state", counts.stateReads.Load(), counts.reads.Load())
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

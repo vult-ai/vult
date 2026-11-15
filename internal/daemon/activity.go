@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vult-ai/vult/doccheck"
+	"github.com/vult-ai/vult/internal/docread"
 	"github.com/vult-ai/vult/internal/local"
 	"github.com/vult-ai/vult/internal/strictjson"
 	"github.com/vult-ai/vult/ledger"
@@ -152,6 +154,13 @@ func (s *Server) agentTool(ctx context.Context, scope ledger.Scope, method strin
 		}
 		out, err := s.waitForDocument(ctx, scope, wait)
 		return out, err, true
+	case local.ProposeReadingMethod:
+		// Vult checks the agent's proposal against the document on this
+		// computer, with local text recognition and no AI.
+		ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+		defer cancel()
+		out, err := doccheck.ProposeFromAgent(ctx, doccheck.Tools{OCR: docread.LocalOCR()}, s.Ledger, scope, s.agentName(scope), input)
+		return out, err, true
 	case local.ReportUnusableMethod:
 		if scope.Access != "write" {
 			return nil, ledger.ErrDenied, true
@@ -174,7 +183,7 @@ func (s *Server) agentTool(ctx context.Context, scope ledger.Scope, method strin
 		if json.Unmarshal(metadata, &inspection) != nil {
 			return nil, ledger.ErrNotFound, true
 		}
-		s.note(scope, local.AgentActivity{Kind: "unusable", Document: clip(inspection.Document.Name, 255), Reason: clip(q.Reason, 300)})
+		s.note(scope, local.AgentActivity{Kind: "unusable", DocumentID: inspection.Document.ID, Document: clip(inspection.Document.Name, 255), Reason: clip(q.Reason, 300)})
 		return marshal(struct {
 			Status  string `json:"status"`
 			Message string `json:"message"`

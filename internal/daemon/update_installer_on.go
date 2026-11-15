@@ -33,3 +33,21 @@ func installer(goos string) server.Updater {
 	}
 	return updaterFiles{updatestatus.Dir}
 }
+
+func (u updaterFiles) LatestBackup() (*updatestatus.Backup, error) {
+	return updatestatus.ReadBackups(u.dir)
+}
+
+func (u updaterFiles) NoticeSeen() string { return updatestatus.NoticeSeen(u.dir) }
+
+func (u updaterFiles) MarkNoticeSeen(backup string) error {
+	return updatestatus.MarkNoticeSeen(u.dir, backup)
+}
+
+func (u updaterFiles) RequestRestore(backup, job string) error {
+	return updatestatus.WriteRestoreRequest(u.dir, backup, job, time.Now())
+}
+
+func (u updaterFiles) RestoreStatus() (updatestatus.RestoreStatus, bool) {
+	return updatestatus.ReadRestoreStatus(u.dir)
+}

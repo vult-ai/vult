@@ -94,7 +94,7 @@ func TestDocumentCompanionUsesRealSocketAndCurrentAuthority(t *testing.T) {
 	}
 	defer cs.Close()
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "add_document", Arguments: map[string]any{"request_key": "original", "file": "example.pdf"}})
-	if err != nil || result.IsError || len(result.Content) != 1 {
+	if err != nil || result.IsError || len(result.Content) == 0 {
 		t.Fatal("companion upload failed", err, result)
 	}
 	var doc ledger.Document

@@ -34,7 +34,16 @@ type OwnerAdmission interface {
 	CheckOwnerTransaction(context.Context, pgx.Tx, string, string, json.RawMessage) error
 }
 
-func remoteCall(ctx context.Context, db *pgxpool.Pool, sessions *access.Service, token string, scope ledger.Scope, admission Admission, transfers *documentTransfers, method string, input json.RawMessage) (json.RawMessage, error) {
+func remoteCall(ctx context.Context, db *pgxpool.Pool, sessions *access.Service, token string, scope ledger.Scope, admission Admission, transfers *documentTransfers, method string, input json.RawMessage) (_ json.RawMessage, err error) {
+	// The MCP library runs each tool call on its own goroutine, where a panic
+	// would stop the whole server. A failed call fails alone; its transaction
+	// has already rolled back.
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("mcp tool call failed", "method", method, "panic", r)
+			err = errOperation
+		}
+	}()
 	if !ledger.Supported(method) {
 		return nil, ledger.ErrDenied
 	}
@@ -80,7 +89,18 @@ func remoteCall(ctx context.Context, db *pgxpool.Pool, sessions *access.Service,
 		result, e = transfers.issue(scope, token, inspection)
 	}
 	if e != nil {
-		for _, safe := range []error{ledger.ErrInvalid, ledger.ErrDenied, ledger.ErrConflict, ledger.ErrNotFound, ledger.ErrUncertain, ledger.ErrProposalStale, ledger.ErrProposalExpired, ledger.ErrApprovalRequired, ErrResponseLimit, documents.ErrIntegrity, documents.ErrUnavailable} {
+		// A refusal's reason is written for the agent and the owner: a rule
+		// they can act on. It names no other Book's data.
+		var refused *ledger.RefusedError
+		if errors.As(e, &refused) {
+			return nil, refused
+		}
+		// A plan limit reaches the agent in the same plain words.
+		var limit *ledger.PlanLimitError
+		if errors.As(e, &limit) {
+			return nil, &ledger.RefusedError{Reason: limit.Message}
+		}
+		for _, safe := range []error{ledger.ErrInvalid, ledger.ErrDenied, ledger.ErrConflict, ledger.ErrNotFound, ledger.ErrUncertain, ledger.ErrProposalStale, ledger.ErrProposalExpired, ledger.ErrApprovalRequired, ledger.ErrLimit, ErrResponseLimit, documents.ErrIntegrity, documents.ErrUnavailable} {
 			if errors.Is(e, safe) {
 				return nil, safe
 			}
@@ -111,8 +131,8 @@ func remoteStore(db *pgxpool.Pool, sessions *access.Service, token string, admis
 	}}
 	if check, ok := admission.(TransactionAdmission); ok {
 		store.AdmitWrite = func(ctx context.Context, tx pgx.Tx, s ledger.Scope, m string, b json.RawMessage) error {
-			if check.CheckTransaction(ctx, tx, s, m, b) != nil {
-				return ledger.ErrDenied
+			if e := check.CheckTransaction(ctx, tx, s, m, b); e != nil {
+				return ledger.AdmissionRefusal(e, ledger.ErrDenied)
 			}
 			return nil
 		}
@@ -120,7 +140,11 @@ func remoteStore(db *pgxpool.Pool, sessions *access.Service, token string, admis
 	return store
 }
 
-func remoteMCP(db *pgxpool.Pool, sessions *access.Service, admission Admission, transfers *documentTransfers) http.Handler {
+// proposeTime bounds checking an agent's proposed reading, which may read a
+// scan on this machine.
+const proposeTime = 90 * time.Second
+
+func remoteMCP(db *pgxpool.Pool, sessions *access.Service, admission Admission, transfers *documentTransfers, propose ProposeReading, setAside bool) http.Handler {
 	slots := make(chan struct{}, 4)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if len(r.Header.Values("Cookie")) != 0 || r.URL.RawQuery != "" {
@@ -148,10 +172,20 @@ func remoteMCP(db *pgxpool.Pool, sessions *access.Service, admission Admission, 
 		}
 		handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 			return mcpserver.NewRemote(func(ctx context.Context, method string, input json.RawMessage) (json.RawMessage, error) {
+				// An agent's proposed reading is checked by Vult against the
+				// document; the agent never writes a check.
+				if method == mcpserver.ProposeReadingTool {
+					if propose == nil || transfers == nil || admission != nil && admission.Check(ctx, scope, method) != nil {
+						return nil, ledger.ErrDenied
+					}
+					ctx, cancel := context.WithTimeout(ctx, proposeTime)
+					defer cancel()
+					return propose(ctx, remoteStore(db, sessions, token, admission, transfers.vault), scope, "", input)
+				}
 				ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 				defer cancel()
 				return remoteCall(ctx, db, sessions, token, scope, admission, transfers, method, input)
-			}, scope.Access, mcpserver.Options{Documents: transfers != nil})
+			}, scope.Access, mcpserver.Options{Documents: transfers != nil, ProposeReadings: transfers != nil && propose != nil, SetAside: setAside})
 		}, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 1 << 20, DisableLocalhostProtection: true, PropagateRequestCancellation: true, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 		// The enclosing ingress validates exact public Host/HTTPS and trusted proxy;
 		// this transport must therefore accept that proxy's loopback connection.

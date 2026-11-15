@@ -21,6 +21,8 @@ func TestMigrationsRunInsideOneTransaction(t *testing.T) {
 	// Comments and string literals (messages) aren't statements.
 	comment := regexp.MustCompile(`--[^\n]*|'(?:[^']|'')*'`)
 	files, err := filepath.Glob("migrations/*.sql")
+	steps, _ := filepath.Glob("migrations/bridge/*.sql")
+	files = append(files, steps...)
 	if err != nil || len(files) == 0 {
 		t.Fatal("no migrations found", err)
 	}

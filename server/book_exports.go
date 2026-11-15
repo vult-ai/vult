@@ -7,6 +7,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -86,6 +88,8 @@ type stagedBookExport struct {
 	body  io.Reader
 	size  int64
 	state ledger.RecordedState
+	// title is the Book's name, for the downloaded file's name.
+	title string
 }
 
 func (a *webAPI) stageBookExport(ctx context.Context, session, tenant, book, name string) (out stagedBookExport, err error) {
@@ -119,6 +123,9 @@ func (a *webAPI) stageBookExport(ctx context.Context, session, tenant, book, nam
 	var archive ledger.BookArchive
 	err = a.sessions.WithBookExportSnapshot(ctx, session, tenant, func(owner ledger.TenantAdmin) error {
 		var err error
+		if b, err := owner.Book(ctx, book); err == nil {
+			out.title = b.Name
+		}
 		if name == "book.tar" {
 			archive, out.state, err = owner.PrepareBookArchive(ctx, book)
 		} else {
@@ -215,9 +222,38 @@ func (a *webAPI) bookExport(w http.ResponseWriter, r *http.Request, session stri
 		return
 	}
 	w.Header().Set("Content-Type", bookExportType(r.URL.Path))
-	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+	w.Header().Set("Content-Disposition", exportDisposition(out.title, name))
 	w.Header().Set("Content-Length", strconv.FormatInt(out.size, 10))
 	w.Header().Set("X-Vult-State-Revision", out.state.StateRevision)
 	w.Header().Set("X-Vult-State-Captured-At", out.state.StateCapturedAt)
 	_, _ = io.Copy(exportTransfer{ctx, w}, out.body)
+}
+
+// exportDisposition names a download after its Book: "Example Studio.tar",
+// or "Example Studio - journal.json", with a plain ASCII name for browsers
+// that need one.
+func exportDisposition(title, name string) string {
+	ext := path.Ext(name)
+	if kind := strings.TrimSuffix(name, ext); kind != "book" && strings.TrimSpace(title) != "" {
+		title += " - " + kind
+	}
+	plain := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == ' ', r == '-', r == '_', r == '.', r == ',', r == '(', r == ')':
+			return r
+		}
+		return -1
+	}, title)
+	plain = strings.Trim(strings.Join(strings.Fields(plain), " "), " .")
+	if len(plain) > 100 {
+		plain = strings.TrimSpace(plain[:100])
+	}
+	if plain == "" {
+		return `attachment; filename="` + name + `"`
+	}
+	full := strings.TrimSpace(title)
+	if r := []rune(full); len(r) > 100 {
+		full = string(r[:100])
+	}
+	return `attachment; filename="` + plain + ext + `"; filename*=UTF-8''` + url.PathEscape(full+ext)
 }

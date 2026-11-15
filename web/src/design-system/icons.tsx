@@ -13,6 +13,7 @@ import {
   ArrowLeft as PhArrowLeft,
   ArrowRight as PhArrowRight,
   Fingerprint as PhFingerprint,
+  ClockCounterClockwise as PhClockCounterClockwise,
   ArrowUUpLeft as PhArrowUUpLeft,
   ArrowUpRight as PhArrowUpRight,
   ArrowsLeftRight as PhArrowsLeftRight,
@@ -106,6 +107,7 @@ export const ArrowDownLeft = icon(PhArrowDownLeft, "ArrowDownLeft");
 export const ArrowLeft = icon(PhArrowLeft, "ArrowLeft");
 export const ArrowRight = icon(PhArrowRight, "ArrowRight");
 export const Fingerprint = icon(PhFingerprint, "Fingerprint");
+export const ClockCounterClockwise = icon(PhClockCounterClockwise, "ClockCounterClockwise");
 export const ArrowUpRight = icon(PhArrowUpRight, "ArrowUpRight");
 export const BarChart07 = icon(PhChartBar, "BarChart07");
 export const BookOpen01 = icon(PhBookOpen, "BookOpen01");

@@ -201,7 +201,7 @@ func TestHTTPMCPPreservesExactJournalAndLostReplyOutcome(t *testing.T) {
 	if e != nil {
 		t.Fatal("write catalog changed", e)
 	}
-	expectRemoteTools(t, catalog.Tools, []string{"apply_starter_chart", "close_period", "create_account", "create_payee", "execute_proposal", "get_balance", "get_book", "get_cash_flow", "get_entry_payee", "get_exchange_rate", "get_journal", "get_operation_proposal", "get_period_review", "get_request_outcome", "get_statement_reconciliation", "get_trial_balance", "import_statement", "list_accounts", "list_closed_periods", "list_journals", "list_payees", "list_recurring_charges", "list_starter_charts", "list_statements", "mark_statement_duplicate", "match_statement", "post_journal", "prepare_operation", "reactivate_account", "record_statement_adjustment", "retire_account", "reverse_journal", "review_statement", "revise_account", "revise_payee", "revoke_statement_match", "search_book", "set_book_logo", "set_entry_payee", "suggest_statement_matches"})
+	expectRemoteTools(t, catalog.Tools, []string{"apply_starter_chart", "ask_question", "close_loop", "close_period", "create_account", "create_payee", "execute_proposal", "get_agent_profile", "get_agent_summary", "get_balance", "get_book", "get_book_link", "get_book_links", "get_cash_flow", "get_entry_origin", "get_entry_payee", "get_exchange_rate", "get_journal", "get_linked_balances", "get_operation_proposal", "get_period_review", "get_project_report", "get_request_outcome", "get_statement_reconciliation", "get_trial_balance", "import_statement", "label_project", "link_bank_activity", "list_accounts", "list_agent_kinds", "list_agent_loops", "list_agent_questions", "list_assignment_rules", "list_bank_activity", "list_closed_periods", "list_journals", "list_operation_proposals", "list_payees", "list_projects", "list_recording_rules", "list_recurring_charges", "list_starter_charts", "list_statements", "mark_bank_duplicate", "mark_statement_duplicate", "match_statement", "open_loop", "post_journal", "prepare_bank_connection", "prepare_opening_balance", "prepare_operation", "reactivate_account", "record_bank_activity", "record_bank_transfer", "record_by_rule", "record_statement_adjustment", "retire_account", "reverse_journal", "review_statement", "revise_account", "revise_payee", "revoke_statement_match", "search_book", "set_book_logo", "set_entry_payee", "suggest_bank_matches", "suggest_statement_matches", "unlink_bank_activity", "update_agent_profile", "withdraw_question"})
 	for _, tool := range catalog.Tools {
 		if strings.Contains(tool.Name, "owner") || strings.Contains(tool.Name, "admin") {
 			t.Fatal("agent gained owner tools")
@@ -268,7 +268,7 @@ func TestHTTPMCPReadScopeAndSanitizedAdmissionFailure(t *testing.T) {
 	if e != nil {
 		t.Fatal("read catalog expanded", e)
 	}
-	expectRemoteTools(t, catalog.Tools, []string{"get_balance", "get_book", "get_cash_flow", "get_entry_payee", "get_exchange_rate", "get_journal", "get_operation_proposal", "get_period_review", "get_request_outcome", "get_statement_reconciliation", "get_trial_balance", "list_accounts", "list_closed_periods", "list_journals", "list_payees", "list_recurring_charges", "list_starter_charts", "list_statements", "search_book", "suggest_statement_matches"})
+	expectRemoteTools(t, catalog.Tools, []string{"get_agent_profile", "get_agent_summary", "get_balance", "get_book", "get_book_link", "get_book_links", "get_cash_flow", "get_entry_origin", "get_entry_payee", "get_exchange_rate", "get_journal", "get_linked_balances", "get_operation_proposal", "get_period_review", "get_project_report", "get_request_outcome", "get_statement_reconciliation", "get_trial_balance", "list_accounts", "list_agent_kinds", "list_agent_loops", "list_agent_questions", "list_assignment_rules", "list_bank_activity", "list_closed_periods", "list_journals", "list_operation_proposals", "list_payees", "list_projects", "list_recording_rules", "list_recurring_charges", "list_starter_charts", "list_statements", "prepare_bank_connection", "search_book", "suggest_bank_matches", "suggest_statement_matches"})
 	result, e := m.CallTool(ctx, &mcp.CallToolParams{Name: "create_account", Arguments: ledger.CreateAccount{RequestKey: "denied", Class: "asset", Code: "1000", Name: "Example"}})
 	if e == nil && !result.IsError {
 		t.Fatal("read credential gained write tool")
@@ -418,3 +418,49 @@ func TestRegistrationMetadataCannotGrantAuthority(t *testing.T) {
 		t.Fatal("optional client name prevented registration")
 	}
 }
+
+func TestOAuthHTTPAcceptsAnySetOfTheAdvertisedScopes(t *testing.T) {
+	f := fresh(t)
+	h := f.network(t, nil)
+	ctx := f.db.Context
+	tenant, session, _ := f.owner(t, "alpha")
+	f.book(t, tenant, session)
+	client := f.client(t)
+	sessionCookie := &http.Cookie{Name: access.SessionCookie, Value: session}
+	start := func(scope *string) *httptest.ResponseRecorder {
+		q := url.Values{"response_type": {"code"}, "client_id": {client.ID}, "redirect_uri": {client.Redirects[0]}, "resource": {f.service.Resource()},
+			"code_challenge": {access.Challenge(access.Random())}, "code_challenge_method": {"S256"}, "state": {"s"}}
+		if scope != nil {
+			q.Set("scope", *scope)
+		}
+		return networkRequest(ctx, h, "GET", "/oauth/authorize?"+q.Encode(), "")
+	}
+	for _, c := range []struct {
+		scope *string
+		write bool
+	}{{ptr("ledger:read ledger:write"), true}, {ptr("ledger:write ledger:read"), true}, {ptr("ledger:write"), true}, {ptr("ledger:read"), false}, {nil, true}} {
+		w := start(c.scope)
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("scope %v refused: %s", c.scope, w.Body.String())
+		}
+		pending := responseCookie(t, w, "__Host-vult-oauth-request")
+		w = networkRequest(ctx, h, "GET", "/oauth/authorize?request="+pending.Value, "", pending, sessionCookie)
+		if w.Code != 200 || strings.Contains(w.Body.String(), `value="write"`) != c.write {
+			t.Fatalf("scope %v: consent offered the wrong access", c.scope)
+		}
+	}
+	for _, scope := range []string{"ledger:admin", "ledger:read owner:admin", "ledger:read ledger:read", " ledger:read", "ledger:read  ledger:write", " "} {
+		w := start(&scope)
+		if w.Code != 400 || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") || !strings.Contains(w.Body.String(), "Couldn") {
+			t.Fatalf("scope %q: want a readable refusal, got %d %s", scope, w.Code, w.Body.String())
+		}
+	}
+	other := f.service.Resource() + "/elsewhere"
+	q := url.Values{"response_type": {"code"}, "client_id": {client.ID}, "redirect_uri": {client.Redirects[0]}, "resource": {other},
+		"code_challenge": {access.Challenge(access.Random())}, "code_challenge_method": {"S256"}, "scope": {"ledger:read"}}
+	if w := networkRequest(ctx, h, "GET", "/oauth/authorize?"+q.Encode(), ""); w.Code != 400 || strings.Contains(w.Body.String(), "error_description") {
+		t.Fatal("a wrong resource should get a readable page", w.Body.String())
+	}
+}
+
+func ptr(s string) *string { return &s }

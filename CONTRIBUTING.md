@@ -35,7 +35,7 @@ Every change must preserve these:
 
 ## Build and test
 
-Use Go 1.27.3. Native local targets are Apple Silicon macOS and Ubuntu 24.04
+Use Go 1.27.4. Native local targets are Apple Silicon macOS and Ubuntu 24.04
 x86-64; the separate server supports Linux. Build the local command with:
 
 ```sh
@@ -73,6 +73,11 @@ typical edit takes seconds. Before committing, run every check once:
 ```sh
 VULT_TEST_ISOLATED=1 VULT_TEST_DSN_FILE=/path/to/synthetic-dsn scripts/check-changes.sh --full
 ```
+
+Before a release, use `--release` instead. It also runs
+`scripts/check-vulnerabilities.sh`: `govulncheck` for the Go code and
+`npm audit --audit-level=high` for the interface. Any finding blocks the
+release until the dependency or Go toolchain is updated.
 
 Browser components follow the [typography standard](docs/design/typography.md).
 

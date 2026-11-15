@@ -60,7 +60,7 @@ func (a *webAPI) localBook(w http.ResponseWriter, r *http.Request, session strin
 	if time.Since(id.AuthenticatedAt) > localBookFreshness {
 		// The browser signs in with the passkey again and comes back.
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = io.WriteString(w, "{\"error\":\"sign_in_again\"}\n")
+		_, _ = io.WriteString(w, "{\"error\":\"fresh_authentication_required\",\"message\":\"Confirm it’s you, then make this change.\"}\n")
 		return
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
@@ -133,7 +133,7 @@ func (a *webAPI) localDecision(w http.ResponseWriter, r *http.Request, session s
 		}
 		if time.Since(id.AuthenticatedAt) > localBookFreshness {
 			w.WriteHeader(http.StatusForbidden)
-			_, _ = io.WriteString(w, "{\"error\":\"sign_in_again\"}\n")
+			_, _ = io.WriteString(w, "{\"error\":\"fresh_authentication_required\",\"message\":\"Confirm it’s you, then make this change.\"}\n")
 			return
 		}
 	}

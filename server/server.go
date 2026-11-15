@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"github.com/vult-ai/vult/agentconfig"
+	"github.com/vult-ai/vult/internal/setaside"
 	"github.com/vult-ai/vult/internal/update"
 	"io"
 	"io/fs"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vult-ai/vult/access"
+	"github.com/vult-ai/vult/bankconnect"
 	"github.com/vult-ai/vult/documents"
 	"github.com/vult-ai/vult/ledger"
 	"golang.org/x/time/rate"
@@ -68,10 +71,66 @@ type Options struct {
 	// Updater lets the owner install an update from Vult; only Vult built
 	// to update itself sets it.
 	Updater Updater
+	// InstitutionRequests passes the owner's requests for a missing bank
+	// on, for a host with its own receiver; otherwise the configured
+	// address, if any, receives them.
+	InstitutionRequests InstitutionRequests
+	// lookupHost stands in for DNS in tests.
+	lookupHost func(context.Context, string) error
 	// Web is the built interface. It requires Access: every page reads the
 	// signed-in session, and /api/v1 serves only that session.
 	Web fs.FS
+	// Banks connects Books to the owner's bank. It requires Web. Its sync
+	// loop is the caller's to run.
+	Banks *bankconnect.Service
+	// BankScreen is the provider whose own connection screen the browser
+	// opens to link a bank. Without one, this Vult offers no such screen.
+	BankScreen *BankScreen
+	// BankLimit is how many bank logins each Vult may hold, for a caller
+	// that sets it directly; otherwise the configuration's own applies.
+	BankLimit *BankLimitSetting
+	// BankOperator, with Banks, provides bank access with the operator's own
+	// provider account.
+	BankOperator BankOperator
+	// Agent keeps the built-in agent's settings; it requires Banks, whose
+	// keyring seals the owner's API key.
+	Agent *agentconfig.Service
+	// AgentChat answers what the owner writes to a Book's agent. Without
+	// one, the chat route says the agent is off.
+	AgentChat AgentChat
+	// ActivityArrived, when set, is told when an owner's statement import
+	// puts new activity in a Book's inbox, or the owner links a bank account
+	// to a Book account so its activity can be recorded, so the agent can
+	// work it now.
+	// owner runs a change as that owner, in their session, for example to
+	// turn on an agent the service provides; it never exposes the session.
+	ActivityArrived func(ctx context.Context, t ledger.AgentTarget, owner OwnerAct)
+	// DocumentAdded, when set, is given each statement, receipt or scan the
+	// owner adds, to check it and record the checks as they happen. It runs
+	// after the upload has answered.
+	DocumentAdded func(ctx context.Context, t ledger.AgentTarget, owner OwnerAct, doc AddedDocument)
+	// ProposeReading, when set, takes an agent's proposed reading of a
+	// document over MCP: Vult verifies it against the document and runs its
+	// checks. The agent never writes a check.
+	ProposeReading ProposeReading
+	// BookDeletion says how the owner hears about Book deletions and how
+	// long this Vult's backups last.
+	BookDeletion BookDeletionPolicy
+	// BookProver approves Book deletion for an owner who signs in without
+	// Vult's passkey. When nil, the owner's passkey does.
+	BookProver BookProver
 }
+
+// screenFor is the bank screen the browser may open: none unless banks are on.
+func screenFor(options Options) *BankScreen {
+	if options.Banks == nil {
+		return nil
+	}
+	return options.BankScreen
+}
+
+// OwnerAct runs one change as the signed-in owner of a Book.
+type OwnerAct func(call func(o ledger.TenantAdmin, actor string) error) error
 
 // New constructs the bounded HTTPS ingress. Zero options expose liveness only;
 // unconfigured financial, owner and login routes remain unavailable. Identity
@@ -91,6 +150,23 @@ func New(c Config, options Options) (*http.Server, error) {
 	var transfers *documentTransfers
 	var app *webApp
 	var api *webAPI
+	if options.Banks != nil && options.Web == nil || options.BankOperator != nil && options.Banks == nil {
+		return nil, ErrConfiguration
+	}
+	connectors := map[string]bool{}
+	if options.Banks != nil {
+		for key := range options.Banks.Connectors {
+			connectors[key] = true
+		}
+	}
+	if e := options.BankScreen.validate(connectors, options.Banks != nil); e != nil {
+		return nil, e
+	}
+	if options.BankOperator != nil {
+		// The sync timer ends the operator's provider access after the Book
+		// disconnects or pauses one of its logins.
+		options.Banks.Operator = options.BankOperator
+	}
 	if options.Access == nil {
 		if options.Database != nil || options.Admission != nil || options.Documents != nil || options.Web != nil || options.ReadDocument != nil || options.UploadDocument != nil || options.LocalBooks != nil {
 			return nil, ErrConfiguration
@@ -122,7 +198,7 @@ func New(c Config, options Options) (*http.Server, error) {
 			transfers = newDocumentTransfers(c.Origin, db, a.Sessions, options.Admission, options.Documents)
 		}
 		if !c.LocalBrowser {
-			mcp = remoteMCP(db, a.Sessions, options.Admission, transfers)
+			mcp = remoteMCP(db, a.Sessions, options.Admission, transfers, options.ProposeReading, c.SetAside)
 			owner = access.NewOwnerHTTP(a.Sessions, a.HTTP, ownerAdmission)
 		}
 		if options.Web != nil {
@@ -130,15 +206,34 @@ func New(c Config, options Options) (*http.Server, error) {
 			if e != nil {
 				return nil, e
 			}
-			if app, e = newWebApp(options.Web, artwork); e != nil {
+			if app, e = newWebApp(options.Web, artwork, screenFor(options)); e != nil {
 				return nil, e
+			}
+			var requests InstitutionRequests
+			if offerBankRequests {
+				if requests, e = chooseRequests(c.InstitutionRequests, options.InstitutionRequests, c.VultID); e != nil {
+					return nil, e
+				}
 			}
 			api = &webAPI{
 				sessions: a.Sessions, login: a.HTTP, admit: ownerAdmission,
 				admitDecision: operationDecisionAdmission(options.Admission, ownerAdmission),
 				documents:     options.Documents, readDocument: options.ReadDocument,
 				uploadDocument: options.UploadDocument, documentUploads: make(chan struct{}, 4),
-				localBooks: options.LocalBooks, updates: options.Updates, updater: options.Updater,
+				localBooks: options.LocalBooks, updates: options.Updates, updater: options.Updater, backups: backupsOf(options.Updater), bankRequests: requests, lookupHost: options.lookupHost, banks: options.Banks, bankScreen: screenFor(options), bankOperator: options.BankOperator, bankLimit: bankLimitOf(c, options), agent: options.Agent, chat: options.AgentChat,
+				arrived:    options.ActivityArrived,
+				added:      options.DocumentAdded,
+				bookEvents: newBookEvents(db),
+				deletion:   options.BookDeletion,
+				prover:     options.BookProver,
+			}
+			if api.added != nil {
+				api.checkQueue = newDocumentCheckQueue()
+			}
+			if api.prover == nil {
+				if passkeys := a.HTTP.BookProofs(); passkeys != nil {
+					api.prover = passkeys
+				}
 			}
 		}
 	}
@@ -154,6 +249,11 @@ func New(c Config, options Options) (*http.Server, error) {
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 		// Keep form origins intact without sending sign-in URLs to other origins.
 		w.Header().Set("Referrer-Policy", "same-origin")
+		// What this release sets aside isn't there, whoever asks.
+		if c.SetAside && setaside.Path(r.URL.Path) {
+			failure(w, http.StatusNotFound)
+			return
+		}
 		defer func() {
 			if recover() != nil {
 				failure(w, http.StatusInternalServerError)
@@ -193,6 +293,11 @@ func New(c Config, options Options) (*http.Server, error) {
 			failure(w, http.StatusTooManyRequests)
 			return
 		}
+		if api != nil && r.Method == http.MethodGet && r.URL.Path == eventsPath {
+			// A live stream stays open; its own limit bounds how many.
+			api.ServeHTTP(w, r)
+			return
+		}
 		select {
 		case slots <- struct{}{}:
 			defer func() { <-slots }()
@@ -208,8 +313,16 @@ func New(c Config, options Options) (*http.Server, error) {
 		if ownerUpload {
 			timeout = ownerDocumentUploadTimeout
 		}
+		if strings.HasPrefix(r.URL.Path, "/api/v1/bank/link/") {
+			// A link calls the provider a few times in a row.
+			timeout = 14 * time.Second
+		}
 		if api != nil && r.Method == http.MethodGet && bookExportType(r.URL.Path) != "" {
 			timeout = bookExportTimeout
+		}
+		if api != nil && r.Method == http.MethodPost && r.URL.Path == agentChatPath {
+			// An answer is several model calls, streamed as it goes.
+			timeout = agentChatTimeout
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), timeout)
 		defer cancel()
@@ -272,9 +385,16 @@ func New(c Config, options Options) (*http.Server, error) {
 		}
 		failure(w, http.StatusServiceUnavailable)
 	})
-	return &http.Server{Addr: c.Listen, Handler: handler, TLSConfig: localTLS, ErrorLog: log.New(io.Discard, "", 0),
+	server := &http.Server{Addr: c.Listen, Handler: handler, TLSConfig: localTLS, ErrorLog: log.New(io.Discard, "", 0),
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second,
-		WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}, nil
+		WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
+	if api != nil && api.bookEvents != nil {
+		server.RegisterOnShutdown(api.bookEvents.close)
+		if api.checkQueue != nil {
+			server.RegisterOnShutdown(api.checkQueue.cancel)
+		}
+	}
+	return server, nil
 }
 
 func failure(w http.ResponseWriter, status int) {
@@ -323,4 +443,16 @@ func Serve(ctx context.Context, s *http.Server, listener net.Listener) error {
 	case <-done:
 		return ErrUnavailable
 	}
+}
+
+// bankLimitOf is the limit on each Vult's bank logins: the caller's, or the
+// configuration's.
+func bankLimitOf(c Config, options Options) *BankLimitSetting {
+	if options.BankLimit != nil {
+		return options.BankLimit
+	}
+	if c.Banks != nil {
+		return c.Banks.Limit
+	}
+	return nil
 }

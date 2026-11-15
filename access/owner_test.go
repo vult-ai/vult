@@ -2,6 +2,7 @@ package access_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -233,5 +234,44 @@ func TestOwnerAdmissionChargesOnlyCommittedNewRequests(t *testing.T) {
 	var used int
 	if e := f.db.Admin.QueryRow(ctx, "SELECT used FROM extension.usage WHERE tenant_id=$1", tenant).Scan(&used); e != nil || used != 1 {
 		t.Fatal("owner retry or failed change retained a quota charge", e, used)
+	}
+}
+
+// limitedAdmission refuses every new Book with a plan limit, as a server with
+// plans does once the workspace's Books are all in use.
+type limitedAdmission struct{ countingAdmission }
+
+func (limitedAdmission) CheckOwnerTransaction(context.Context, pgx.Tx, string, string, json.RawMessage) error {
+	return &ledger.PlanLimitError{Kind: "books", Used: 3, Max: 3, Offer: "example_plus", OfferHref: "/plus",
+		Message: "Your workspace has room for 3 Books, and all 3 are in use."}
+}
+
+func TestAPlanLimitIsSaidInWordsNotAsASignInProblem(t *testing.T) {
+	f := fresh(t)
+	ctx := f.db.Context
+	tenant, session, _ := f.owner(t, "alpha")
+	h := f.network(t, limitedAdmission{})
+	response := networkRequest(ctx, h, "GET", "/auth/session", "", &http.Cookie{Name: access.SessionCookie, Value: session})
+	var info struct {
+		CSRF string `json:"csrf"`
+	}
+	if json.Unmarshal(response.Body.Bytes(), &info) != nil || info.CSRF == "" {
+		t.Fatal("CSRF missing")
+	}
+	w := ownerHTTP(h, "POST", "/owner/tenants/"+tenant+"/books", `{"request_key":"over","name":"Example","currency":"USD","scale":2}`, session, info.CSRF)
+	var body struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+		Offer   string `json:"offer"`
+		Href    string `json:"offer_href"`
+		Limit   struct {
+			Kind      string
+			Used, Max int64
+		} `json:"limit"`
+	}
+	if w.Code != http.StatusPaymentRequired || json.Unmarshal(w.Body.Bytes(), &body) != nil || body.Error != "plan_limit_reached" ||
+		body.Message != "Your workspace has room for 3 Books, and all 3 are in use." || body.Offer != "example_plus" || body.Href != "/plus" ||
+		body.Limit.Kind != "books" || body.Limit.Used != 3 || body.Limit.Max != 3 {
+		t.Fatalf("plan limit answered %d %s", w.Code, w.Body.String())
 	}
 }

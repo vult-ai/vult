@@ -61,3 +61,22 @@ func TestNestedFieldsUseExactContractSpelling(t *testing.T) {
 		t.Fatal("case alias replaced a nested amount")
 	}
 }
+
+// An embedded struct's fields are read as the object's own, as
+// encoding/json reads them; a key neither has is still refused.
+func TestEmbeddedFieldsAreTheObjectsOwn(t *testing.T) {
+	type inner struct {
+		Kind string `json:"kind"`
+	}
+	type outer struct {
+		ID string `json:"id"`
+		inner
+	}
+	var v outer
+	if err := Decode([]byte(`{"id":"a","kind":"receipt"}`), &v); err != nil || v.Kind != "receipt" || v.ID != "a" {
+		t.Fatal(v, err)
+	}
+	if err := Decode([]byte(`{"id":"a","other":1}`), &v); err == nil {
+		t.Fatal("an unknown key was read")
+	}
+}

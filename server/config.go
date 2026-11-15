@@ -38,9 +38,28 @@ type Config struct {
 	// browser origin then serves none of those routes; owners still sign in and
 	// consent there. Empty keeps MCP at Origin/mcp.
 	MCPOrigin string `json:"mcp_origin,omitempty"`
+	// SetAside keeps out of reach the features this release sets aside, by
+	// address and as agent tools. Programs that ship turn it on; a server
+	// built without it has everything, as tests do.
+	SetAside bool `json:"-"`
 	// SignInPath, when set, is the same-origin page where agent consent sends a
 	// signed-out owner, for deployments with their own sign-in. Default /auth/login.
 	SignInPath string `json:"sign_in_path,omitempty"`
+	// Banks enables keeping connected banks in sync. Absent means Vult never
+	// connects to a bank.
+	Banks *BankConnections `json:"banks,omitempty"`
+	// BackupRetentionDays is how long the operator keeps backups of this
+	// server's database and documents, 0 when it keeps none. An erased Book's
+	// copies are gone from backups after it; the owner is told when.
+	BackupRetentionDays int `json:"backup_retention_days,omitempty"`
+	// InstitutionRequests is where the owner's requests for a bank Vult
+	// can't find are sent: an HTTPS URL, or empty or "off" for nowhere.
+	// "off" also turns off a receiver the host supplies.
+	InstitutionRequests string `json:"institution_requests,omitempty"`
+	// VultID names this installation to the receiver of bank requests, so
+	// it counts one request per Vult: random, from nothing personal, and
+	// the same on every start. Empty means a random one for each run.
+	VultID string `json:"vult_id,omitempty"`
 }
 
 // mcpResource is the MCP resource this configuration publishes.
@@ -84,6 +103,12 @@ type ingress struct {
 }
 
 func (c Config) validate() (ingress, error) {
+	if c.BackupRetentionDays < 0 || c.BackupRetentionDays > 3650 {
+		return ingress{}, ErrConfiguration
+	}
+	if c.Banks.validate() != nil {
+		return ingress{}, ErrConfiguration
+	}
 	u, e := url.Parse(c.Origin)
 	if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Opaque != "" || u.Path != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Host != strings.ToLower(u.Host) || strings.HasSuffix(u.Hostname(), ".") || strings.ContainsAny(u.Host, "\\ \t\r\n") {
 		return ingress{}, ErrConfiguration

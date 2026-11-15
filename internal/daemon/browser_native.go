@@ -3,8 +3,11 @@ package daemon
 import (
 	"context"
 	"errors"
+	"github.com/vult-ai/vult/agentconfig"
+	"github.com/vult-ai/vult/agentservice"
 	"github.com/vult-ai/vult/internal/update"
 	"io/fs"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -16,6 +19,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/vult-ai/vult/doccheck"
 	"github.com/vult-ai/vult/internal/fssecurity"
 	"github.com/vult-ai/vult/internal/local"
 	"github.com/vult-ai/vult/internal/strictjson"
@@ -104,6 +109,9 @@ func InstallNativeBrowser(ctx context.Context) error {
 		return errors.New("protected browser directory required")
 	}
 	if err = prepareBrowserLog(filepath.Join(filepath.Dir(local.BrowserPath), "browser.log"), browserUID, browserGID); err != nil {
+		return err
+	}
+	if err = prepareBrowserKeys(local.BrowserPath, browserUID, browserGID); err != nil {
 		return err
 	}
 	c, err := readBrowserConfiguration(filepath.Join(local.DataPath, browserConfigurationName), uid)
@@ -200,6 +208,14 @@ func ServeNativeBrowser(ctx context.Context) error {
 	if err = protected(local.BrowserPath, 0, true); err != nil {
 		return err
 	}
+	// The installer makes the keys folder; one that exists but isn't this
+	// account's alone is never used. A missing one only stops keys from being
+	// saved, with a message saying so, until Vult is installed again.
+	if err = checkBrowserKeys(local.BrowserPath, uid); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	} else if err != nil {
+		log.Printf("bank: %v; reinstalling Vult sets it up", err)
+	}
 	data, err := server.ReadPrivateFile(filepath.Join(local.BrowserPath, "server.json"), 8192)
 	if err != nil {
 		return server.ErrConfiguration
@@ -208,6 +224,8 @@ func ServeNativeBrowser(ctx context.Context) error {
 	if strictjson.Decode(data, &c) != nil || !c.LocalBrowser {
 		return server.ErrConfiguration
 	}
+	// What this release sets aside stays out of reach.
+	c.SetAside = true
 	if _, err = server.New(c, server.Options{}); err != nil {
 		return err
 	}
@@ -220,21 +238,69 @@ func ServeNativeBrowser(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	return serveBrowser(ctx, c, db, client, app, updateChecker(runtime.GOOS), installer(runtime.GOOS))
+}
+
+// serveBrowser is the browser service an owner signs in to: the same
+// composition for an installed Vult and a development one. client reaches the
+// native service, which holds the documents and checks the owner's session.
+func serveBrowser(ctx context.Context, c server.Config, db *pgxpool.Pool, client local.Client, app fs.FS, updates *update.Checker, updater server.Updater) error {
 	a, err := server.OpenAccess(ctx, c, db, nil, localAgents{client})
 	if err != nil {
 		return err
 	}
 	defer a.Close()
-	s, err := server.New(c, server.Options{
-		Database: db, Access: a, Web: app,
-		ReadDocument: client.DownloadForOwner, UploadDocument: client.UploadForOwner,
-		LocalBooks: localBooks{client},
-		Updates:    updateChecker(runtime.GOOS),
-		// Set only when this build has an update installer.
-		Updater: installer(runtime.GOOS),
+	if c.Banks == nil && runtime.GOOS == "darwin" {
+		// Vult on a Mac keeps the key that seals bank access in the browser
+		// service's own keys folder, sealed by the Mac's Secure Enclave.
+		c.Banks = &server.BankConnections{KeyFolder: browserKeyFolder(local.BrowserPath)}
+	}
+	// New bank activity is sorted as it arrives, once an agent is there.
+	var keepUp func(tenant, book string)
+	banks, err := server.OpenBanks(c, ledger.Store{Runtime: db}, func(tenant, book string) {
+		if keepUp != nil {
+			keepUp(tenant, book)
+		}
 	})
 	if err != nil {
 		return err
+	}
+	agent := server.OpenAgent(ledger.Store{Runtime: db})
+	// An agent service, when one is set, answers what the owner writes.
+	var chat server.AgentChat
+	if agent != nil {
+		// With an agent service set, the owner's messages go to it and it is
+		// offered as this Vult's agent, on or off in each Book.
+		agent.SignInURL = accountSignInFromEnvironment()
+		if service := agentservice.FromEnvironment(); service != nil {
+			agent.Provided = &agentconfig.Provided{Name: "Vult", About: "Vult does your bookkeeping. It prepares changes; you approve them."}
+			talk := agentservice.NewClient(agentservice.Config{Service: service, Agents: agent, Store: ledger.Store{Runtime: db}, Conversations: keptConversations()})
+			chat, keepUp = talk, talk.KeepUp
+		}
+	}
+	var arrived func(context.Context, ledger.AgentTarget, server.OwnerAct)
+	if keepUp != nil {
+		arrived = func(_ context.Context, t ledger.AgentTarget, _ server.OwnerAct) { keepUp(t.TenantID, t.BookID) }
+	}
+	s, err := server.New(c, server.Options{
+		ActivityArrived: arrived,
+		// This program has no assistant of its own to help read documents.
+		DocumentAdded: doccheck.Hook(nil),
+		Database:      db, Access: a, Web: app,
+		ReadDocument: client.DownloadForOwner, UploadDocument: client.UploadForOwner,
+		LocalBooks: localBooks{client},
+		Updates:    updates,
+		// Set only when this build has an update installer.
+		Updater:   updater,
+		Banks:     banks,
+		Agent:     agent,
+		AgentChat: chat,
+	})
+	if err != nil {
+		return err
+	}
+	if banks != nil {
+		go banks.Run(ctx)
 	}
 	l, err := net.Listen("tcp", s.Addr)
 	if err != nil {

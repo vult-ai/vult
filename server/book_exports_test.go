@@ -119,7 +119,8 @@ func TestOwnerBookDownloadsShareScopeAndCLIFormats(t *testing.T) {
 		ownerAPIStatus(t, ownerAPICall(f.server, f.session, http.MethodGet, path+"?book_id="+f.book.ID+"&book_id="+foreign.ID, "", false), 400)
 		w := ownerAPICall(f.server, f.session, http.MethodGet, path+"?book_id="+f.book.ID, "", false)
 		ownerAPIStatus(t, w, 200)
-		if w.Header().Get("Content-Disposition") != `attachment; filename="`+name+`"` ||
+		file := f.book.Name + map[bool]string{true: ".tar", false: " - " + name}[name == "book.tar"]
+		if !strings.HasPrefix(w.Header().Get("Content-Disposition"), `attachment; filename="`+file+`"`) ||
 			w.Header().Get("Content-Type") != bookExportType(path) ||
 			w.Header().Get("Content-Length") != strconv.Itoa(w.Body.Len()) ||
 			w.Header().Get("X-Vult-State-Revision") == "" ||

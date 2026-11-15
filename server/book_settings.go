@@ -104,7 +104,8 @@ func (a *webAPI) settingsOutcome(w http.ResponseWriter, r *http.Request, session
 
 func browserBook(b ledger.Book, now time.Time) webBook {
 	out := webBook{ID: b.ID, Name: b.Name, Currency: b.Currency, Scale: b.Scale, Logo: b.Logo, Founder: b.Founder, Profile: b.Profile, StartDate: b.StartDate,
-		FiscalYearStartMonth: b.FiscalYearStartMonth, FiscalYearStartDay: b.FiscalYearStartDay, AccountingTimezone: b.AccountingTimezone}
+		FiscalYearStartMonth: b.FiscalYearStartMonth, FiscalYearStartDay: b.FiscalYearStartDay, AccountingTimezone: b.AccountingTimezone,
+		TaxedAs: b.TaxedAs, TaxedAsSet: b.TaxedAsSet, Projects: true, ExpenseReports: b.ExpenseReports}
 	if b.MetadataRevision != nil {
 		out.MetadataRevision = *b.MetadataRevision
 	}

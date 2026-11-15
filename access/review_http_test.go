@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -90,5 +92,32 @@ func TestPasskeySignInReturnsToExactReviewWithoutApproving(t *testing.T) {
 	var rows int
 	if err := f.db.Admin.QueryRow(f.db.Context, "SELECT (SELECT count(*) FROM public.entries)+(SELECT count(*) FROM public.operation_decisions)+(SELECT count(*) FROM public.operation_consumptions)").Scan(&rows); err != nil || rows != 0 {
 		t.Fatal("sign-in decided or executed the operation", rows, err)
+	}
+}
+
+func TestTheSignInPageAsksSomeoneSignedInOnlyToConfirm(t *testing.T) {
+	f := fresh(t)
+	p, _, _, session, _ := enrollPasskey(t, f)
+	h, err := access.NewHTTP(f.service, nil, nil, nil, access.HTTPOptions{Passkeys: p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := func(cookies ...*http.Cookie) string {
+		r := httptest.NewRequest(http.MethodGet, "https://ledger.example.com/auth/login", nil).WithContext(f.db.Context)
+		for _, c := range cookies {
+			r.AddCookie(c)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatal("sign-in page unavailable", w.Code)
+		}
+		return w.Body.String()
+	}
+	if body := page(&http.Cookie{Name: access.SessionCookie, Value: session}); !strings.Contains(body, "Confirm it’s you.") || !strings.Contains(body, "Confirm with passkey") || strings.Contains(body, "Sign in with passkey") {
+		t.Fatal("someone signed in was asked to sign in rather than confirm")
+	}
+	if body := page(); !strings.Contains(body, "Good to see you.") || !strings.Contains(body, "Sign in with passkey") {
+		t.Fatal("someone signed out wasn't asked to sign in")
 	}
 }

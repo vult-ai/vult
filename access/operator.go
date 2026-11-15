@@ -112,6 +112,12 @@ func (o Operator) ConfigureRoles(ctx context.Context, runtimeRole, authRole, own
 		"GRANT EXECUTE ON FUNCTION access.book_conflicting_aliases(uuid,uuid,text[]) TO " + r,
 		"GRANT EXECUTE ON FUNCTION access.delegation_allowed(uuid,boolean) TO " + r,
 		"GRANT EXECUTE ON FUNCTION access.consent_books(text,text),access.consent_connections(text,text) TO " + a,
+		// Archiving and deleting a Book: passkey proofs for the sign-in role,
+		// the owner's steps for the owner's role.
+		"GRANT EXECUTE ON FUNCTION access.begin_book_proof(text,text,bigint,text,text,uuid,uuid,text,jsonb),access.take_book_proof(text,text,text),access.finish_book_proof(text,text,text,text,jsonb,jsonb,text) TO " + a,
+		"GRANT EXECUTE ON FUNCTION access.begin_report_proof(text,text,bigint,text,text,uuid,uuid,text,text,jsonb) TO " + a,
+		"GRANT EXECUTE ON FUNCTION public.archive_book(uuid,uuid,boolean,text,text),public.book_deletion_summary(uuid,uuid),public.request_book_deletion(uuid,uuid,text,text,text,text),public.confirm_book_deletion(uuid,uuid,text,text,text),public.cancel_book_deletion(uuid,uuid,text,text),public.book_lifecycle(uuid),public.book_deletion_history(uuid,integer) TO " + r,
+		"GRANT SELECT ON public.archived_books,public.book_deletions TO " + r,
 		"GRANT SELECT,INSERT ON access.owner_requests,public.book_revisions TO " + r,
 		"GRANT EXECUTE ON FUNCTION access.owner_identity(uuid) TO " + r,
 		"GRANT EXECUTE ON FUNCTION access.owner_write_allowed(uuid),access.owner_document_allowed(uuid,uuid) TO " + r,
@@ -141,7 +147,52 @@ func (o Operator) ConfigureRoles(ctx context.Context, runtimeRole, authRole, own
 		"GRANT EXECUTE ON FUNCTION public.ledger_restoring(uuid,uuid),public.ledger_role_fits(text,text),public.ledger_period_closed(uuid,uuid,date),public.statement_line_amount(uuid,uuid,uuid,text,integer),public.statement_row_check(uuid,uuid,uuid),public.statement_line_check(uuid,uuid,uuid,text,integer),public.ledger_owner_decision(uuid,uuid),public.period_open_items(uuid,uuid,date,date),public.statement_entry_reversed(uuid,uuid,uuid),public.ledger_written_here(xid) TO " + r,
 		"GRANT EXECUTE ON FUNCTION access.owner_decision_allowed(uuid,uuid) TO " + r,
 		"GRANT EXECUTE ON FUNCTION public.accounting_period_preview(uuid,uuid,text,jsonb) TO " + r,
-		"GRANT EXECUTE ON FUNCTION public.statement_row_coverages(uuid,uuid,uuid,timestamptz),public.statement_explained(uuid,uuid,uuid,timestamptz),public.statement_current_reconciled(uuid,uuid,uuid),public.statement_line_allocated(uuid,uuid,uuid,text,integer,date,uuid[]),public.statement_line_allocations(uuid,uuid,uuid[],text,integer,date,uuid[]) TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.statement_row_coverages(uuid,uuid,uuid,timestamptz),public.statement_explained(uuid,uuid,uuid,timestamptz),public.statement_current_reconciled(uuid,uuid,uuid),public.statement_line_allocated(uuid,uuid,uuid,text,integer,date,uuid[]),public.statement_line_allocations(uuid,uuid,uuid[],text,integer,date,uuid[]),public.bank_entry_matches(uuid,uuid,uuid[],integer) TO " + r,
+		// Bank activity: the owner stores provider keys, links logins and
+		// accounts, records and links activity, and runs approved agent work.
+		"GRANT SELECT,INSERT,UPDATE ON public.bank_provider_settings,public.vult_bank_provider_settings,public.bank_connections,public.bank_accounts,public.bank_transaction_links TO " + r,
+		// Statement lines the owner imports, or approves an agent importing,
+		// become inbox items; row security limits the owner to those.
+		"GRANT SELECT,INSERT,UPDATE ON public.bank_transactions TO " + r,
+		"GRANT SELECT ON public.bank_account_aliases,public.bank_transaction_aliases TO " + r,
+		"GRANT SELECT,INSERT ON public.bank_transaction_duplicates,public.bank_transaction_moves TO " + r,
+		"GRANT SELECT,INSERT,UPDATE ON public.recording_rules,public.rule_recording_grants,public.recording_rule_parts TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.rule_owner_allowed(uuid,uuid),public.ledger_rule_recording(),public.rule_key(text),public.rule_owner_narrowing(uuid,uuid),public.agent_change_narrows(text,text,jsonb,jsonb),public.agent_owner_change_allowed(uuid,uuid,text,text,jsonb,jsonb) TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.bank_login_disconnected(uuid,uuid,uuid) TO " + r,
+		"GRANT SELECT,INSERT,UPDATE ON public.agent_settings TO " + r,
+		// The Vult's agent model and key: the owner's role alone, never an agent's.
+		"GRANT SELECT,INSERT,UPDATE ON public.vult_agent_settings TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.vult_agent_owner_allowed(uuid),public.vult_agent_remove_key(uuid,uuid) TO " + r,
+		// Linked Books: the owner links a business and a personal Book; pairs
+		// are joined and read through the ledger's own functions.
+		"GRANT SELECT,INSERT,UPDATE,DELETE ON public.book_links TO " + r,
+		"GRANT SELECT,INSERT,UPDATE,DELETE ON public.book_link_terms TO " + r,
+		"GRANT SELECT ON public.proposal_pairs TO " + r,
+		"GRANT SELECT ON public.allocations TO " + r,
+		// Expense reports: the owner's role writes them; agents only propose.
+		"GRANT SELECT,INSERT,UPDATE ON public.people,public.report_policies,public.expense_reports,public.claims,public.claim_evidence,public.report_revisions,public.report_lines,public.report_approvals,public.report_events,public.recoverables,public.recoverable_events,public.settlement_statements,public.retired_report_references,public.report_notes,public.recoverable_reviews,public.payment_residuals TO " + r,
+		"GRANT SELECT ON public.person_revisions TO " + r,
+		"GRANT SELECT ON public.claim_obligations,public.claim_obligation_adjustments TO " + r,
+		"GRANT DELETE ON public.report_lines,public.claims TO " + r,
+		// Reports read what is open of each cost and what was paid on it.
+		"GRANT EXECUTE ON FUNCTION public.open_costs(uuid,uuid,uuid,uuid,uuid),public.cost_amount(uuid,uuid,uuid),public.cost_repaid_amount(uuid,uuid,uuid,uuid),public.allocation_live(uuid,public.allocations),public.entry_reversed(uuid,uuid,uuid) TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.expense_writer(uuid,uuid),public.report_spend_proof(uuid,uuid,text,text,text),public.report_settle(uuid,uuid,uuid,uuid,jsonb,boolean),public.remove_allocation(uuid,uuid,uuid,text),public.unapplied_amount(uuid,uuid,uuid,uuid),public.accept_claim(uuid,uuid,uuid,uuid),public.record_person_side(uuid,uuid,uuid,text,uuid,uuid),public.adjust_claim_obligation(uuid,uuid,uuid,integer,integer,bigint,uuid,uuid),public.record_person_adjustment(uuid,uuid,uuid,uuid),public.delete_draft_report(uuid,uuid,uuid),public.person_capacity_on(uuid,uuid,date),public.policy_version_on(uuid,uuid,date) TO " + r,
+		"GRANT SELECT,INSERT,DELETE ON public.assignment_rules TO " + r,
+		"GRANT SELECT,INSERT,UPDATE ON public.document_groups TO " + r,
+		"GRANT SELECT,INSERT,UPDATE,DELETE ON public.projects,public.project_labels,public.project_rules,public.project_promotions,public.project_carried TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.carry_cost(uuid,text,uuid,uuid,uuid,uuid) TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.document_group_writer(uuid,uuid) TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.project_writer(uuid,uuid) TO " + r,
+		"GRANT SELECT,INSERT ON public.document_checks,public.document_readings TO " + r,
+		"GRANT SELECT,INSERT ON public.entry_pairs TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.book_link_owner(uuid),public.book_profile(uuid,uuid),public.book_taxed_as(uuid,uuid),public.book_links_for(uuid,uuid),public.active_link_terms(uuid,uuid,uuid),public.pair_proposal(uuid,uuid,uuid),public.proposal_pair_of(uuid,uuid,uuid),public.entry_pair_of(uuid,uuid,uuid),public.keeps_expense_reports(uuid,uuid),public.suggested_beneficiaries(uuid,uuid,uuid),public.settle_pair(uuid,text,uuid,uuid,uuid,uuid,jsonb),public.settlement_preview(uuid,uuid,uuid,jsonb),public.linked_balances(uuid,uuid),public.book_amount(uuid,uuid,bigint),public.opening_equity_account(uuid,uuid),public.open_link_balance(uuid,text,uuid,uuid,uuid,uuid),public.link_owner_narrowing(uuid) TO " + r,
+		"GRANT SELECT,INSERT,UPDATE ON public.agent_policy TO " + r,
+		"GRANT SELECT,INSERT,DELETE ON public.agent_tax_sensitive_accounts TO " + r,
+		"GRANT SELECT ON public.agent_kinds,public.agent_kind_events TO " + r,
+		"GRANT SELECT,INSERT,UPDATE ON public.agent_questions,public.agent_loops,public.agent_profile,public.agent_seen TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.agent_note_allowed(uuid,uuid),public.agent_note_owner(uuid,uuid) TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.ledger_confident_recording(),public.agent_amount_cap(uuid,uuid),public.agent_default_trust(uuid,uuid),public.agent_kind_rule(uuid,uuid,uuid,text,text,uuid) TO " + r,
+		"GRANT EXECUTE ON FUNCTION public.bank_sync_allowed(uuid,uuid,uuid),public.bank_read_allowed(uuid,uuid),public.bank_owner_allowed(uuid,uuid),public.vult_bank_owner_allowed(uuid),public.bank_request_sync(uuid),public.operation_dependencies_journal(uuid,uuid,text,jsonb,uuid) TO " + r,
 	}
 	for _, sql := range statements {
 		if _, e = tx.Exec(ctx, sql); e != nil {

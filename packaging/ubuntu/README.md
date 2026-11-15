@@ -57,7 +57,7 @@ There is no purge operation. Modified and unknown software files are retained.
 
 ## Build offline
 
-Use Ubuntu 24.04 x86-64 with Go 1.27.3, a C compiler, GNU make, Binutils, Bison and
+Use Ubuntu 24.04 x86-64 with Go 1.27.4, a C compiler, GNU make, Binutils, Bison and
 Flex. Populate the ordinary Go module cache beforehand. Prepare the interface
 from the same source and retain its file-manifest checksum. Supply the existing
 PostgreSQL 18.6 source archive; its pinned SHA-256 is checked before extraction.

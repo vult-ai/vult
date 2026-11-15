@@ -3,6 +3,8 @@ package ledger_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -44,6 +46,8 @@ func TestStarterChartsMatchTheirReviewedContents(t *testing.T) {
 	}{
 		{"business-v1", 32, []string{"1000", "1100", "2000", "3000", "4000", "6000"}},
 		{"personal-v1", 30, []string{"1000", "2000", "3000", "4000", "5000", "5100"}},
+		{"business-v2", 47, []string{"1000", "1100", "2000", "3000", "4000", "6000"}},
+		{"personal-v2", 46, []string{"1000", "2000", "3000", "4000", "5000", "5100"}},
 	} {
 		chart, ok := ledger.StarterChart(tc.id)
 		if !ok || len(chart.Accounts) != tc.accounts {
@@ -57,6 +61,63 @@ func TestStarterChartsMatchTheirReviewedContents(t *testing.T) {
 		}
 		if value(headings) == nil || string(value(headings)) != string(value(tc.headings)) {
 			t.Fatal("unexpected headings", tc.id, headings)
+		}
+	}
+}
+
+// Version 2 keeps every version 1 account under the same code, class, role
+// and parent, and adds the reviewed accounts below. Interest moves below
+// operating profit through its role.
+func TestStarterChartsV2AddTheReviewedAccounts(t *testing.T) {
+	for _, tc := range []struct {
+		from, to string
+		changed  map[string]string
+		added    map[string]string
+	}{
+		{"business-v1", "business-v2",
+			map[string]string{"7000": "Interest expense expense other_expense "},
+			map[string]string{
+				"1130": "Payment app balances asset cash 1100", "1300": "Inventory asset  1000",
+				"2500": "Payroll taxes payable liability  2000", "2600": "Money received in advance liability  2000",
+				"4800": "Interest income income other_income 4000",
+				"6150": "Utilities expense  6000", "6160": "Phone and internet expense  6000",
+				"6250": "Hosting and infrastructure expense  6000", "6350": "Contractors expense  6000",
+				"6550": "Office supplies expense  6000", "6560": "Shipping and delivery expense  6000",
+				"6570": "Repairs and maintenance expense  6000", "6580": "Vehicle expense  6000",
+				"6650": "Payment processing fees expense  6000", "6750": "Payroll taxes expense  6000",
+			}},
+		{"personal-v1", "personal-v2", map[string]string{},
+			map[string]string{
+				"1150": "Cash asset cash 1000", "1250": "Payment app balances asset cash 1000",
+				"1350": "Retirement accounts asset investment 1000", "1450": "Vehicles asset fixed_asset 1000",
+				"2300": "Mortgage liability loan 2000",
+				"4150": "Side income income  4000", "4300": "Dividends income  4000",
+				"5140": "Phone and internet expense  5100", "5150": "Household expense  5100", "5160": "Home repairs expense  5100",
+				"5550": "Personal care expense  5000", "5650": "Entertainment expense  5000", "5720": "Clothing expense  5000",
+				"5760": "Childcare expense  5000", "5770": "Education expense  5000", "5780": "Pets expense  5000",
+			}},
+	} {
+		from, _ := ledger.StarterChart(tc.from)
+		to, _ := ledger.StarterChart(tc.to)
+		row := func(a ledger.StarterChartAccount) string {
+			return a.Name + " " + a.Class + " " + a.Role + " " + a.Parent
+		}
+		next := map[string]string{}
+		for _, a := range to.Accounts {
+			next[a.Code] = row(a)
+		}
+		for _, a := range from.Accounts {
+			want := row(a)
+			if c, ok := tc.changed[a.Code]; ok {
+				want = c
+			}
+			if next[a.Code] != want {
+				t.Fatal("an earlier account changed", tc.to, a.Code, next[a.Code])
+			}
+			delete(next, a.Code)
+		}
+		if string(value(next)) != string(value(tc.added)) {
+			t.Fatal("unexpected added accounts", tc.to, next)
 		}
 	}
 }
@@ -81,6 +142,9 @@ func TestStarterChartsApplyOnceWhenStartedConcurrently(t *testing.T) {
 		case err == nil:
 			applied++
 		case errors.Is(err, ledger.ErrConflict):
+			refused++
+		case strings.Contains(fmt.Sprint(err), "already has accounts"):
+			// The second start says why, rather than that its key was used.
 			refused++
 		default:
 			t.Fatal("unexpected concurrent outcome", err)

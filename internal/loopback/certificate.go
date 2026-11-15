@@ -26,7 +26,9 @@ var ErrCertificate = errors.New("local browser certificate unavailable")
 const Host = "vult.localhost"
 
 // ValidHostname reports whether host is Vult's local browser address.
-func ValidHostname(host string) bool { return host == Host }
+func ValidHostname(host string) bool {
+	return host == Host || developmentHost != "" && host == developmentHost
+}
 
 // InstallationID returns a new random identity for one installation. It names
 // the installation's private database logins; it is not part of the address.

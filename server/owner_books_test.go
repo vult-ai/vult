@@ -43,6 +43,24 @@ func TestBrowserCreatesABookInTheOwnersWorkspace(t *testing.T) {
 	if w := serve(ownerPost(booksPath, f.session, strings.Replace(body, "EUR", "PLN", 1))); w.Code != http.StatusConflict {
 		t.Fatalf("changed request under the same key returned %d", w.Code)
 	}
+	// Another Book of the same name, from another tab, at the same moment:
+	// one is made, and the other is told the name is taken.
+	codes := make(chan *httptest.ResponseRecorder, 2)
+	for _, key := range []string{"tab-one", "tab-two"} {
+		go func() {
+			codes <- serve(ownerPost(booksPath, f.session, `{"request_key":"`+key+`","name":"Example Studio","currency":"EUR","scale":2}`))
+		}()
+	}
+	first, second := <-codes, <-codes
+	if first.Code == http.StatusOK && second.Code == http.StatusOK || first.Code != http.StatusOK && second.Code != http.StatusOK {
+		t.Fatalf("two tabs: %d %s / %d %s", first.Code, first.Body.String(), second.Code, second.Body.String())
+	}
+	if refused := map[bool]*httptest.ResponseRecorder{true: second, false: first}[first.Code == http.StatusOK]; !strings.Contains(refused.Body.String(), "already has a Book named Example Studio") {
+		t.Fatalf("the second tab: %d %s", refused.Code, refused.Body.String())
+	}
+	if w := serve(ownerPost(booksPath, f.session, `{"request_key":"later","name":" example personal ","currency":"EUR","scale":2}`)); w.Code == http.StatusOK {
+		t.Fatal("a Book took a name in use", w.Body.String())
+	}
 	list := serve(browserRequest(http.MethodGet, booksPath, f.session))
 	var listed struct {
 		Books []webBook `json:"books"`
@@ -56,7 +74,7 @@ func TestBrowserCreatesABookInTheOwnersWorkspace(t *testing.T) {
 			count++
 		}
 	}
-	if count != 1 || len(listed.Books) != 2 {
+	if count != 1 || len(listed.Books) != 3 {
 		t.Fatalf("listed %d Books, new Book %d times", len(listed.Books), count)
 	}
 	for name, bad := range map[string]string{

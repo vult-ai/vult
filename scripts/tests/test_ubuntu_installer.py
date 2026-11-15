@@ -24,6 +24,7 @@ def payload(updater=False):
     files = {"vult": b"synthetic command", "LICENSE": b"license", "NOTICE": b"notice",
              "THIRD_PARTY_NOTICES.md": b"notices", "postgres/bin/postgres": b"postgres",
              "postgres/bin/initdb": b"initdb", "postgres/bin/pg_ctl": b"pg_ctl",
+             "postgres/bin/pg_controldata": b"pg_controldata",
              "postgres/lib/plpgsql.so": b"module", "postgres/share/postgres.bki": b"catalog"}
     external = {install.UNITS[name]: (ROOT / f"packaging/ubuntu/ai.vult.{name}.service").read_bytes()
                 for name in ("ledger", "browser")}
@@ -115,6 +116,17 @@ class FixtureInstaller(install.Installer):
 
     def own(self, name, uid, gid):
         self.owners[name] = (uid, gid)
+
+
+class CleanShutdownProgramTests(unittest.TestCase):
+    def test_a_new_payload_needs_pg_controldata_and_an_earlier_one_may_lack_it(self):
+        value, _ = payload()
+        install.inventory(json.dumps(value).encode(), current=True)
+        earlier = deepcopy(value)
+        del earlier["files"]["postgres/bin/pg_controldata"]
+        install.inventory(json.dumps(earlier).encode())
+        with self.assertRaisesRegex(install.InstallError, "Incomplete native runtime"):
+            install.inventory(json.dumps(earlier).encode(), current=True)
 
 
 class UbuntuInstallerTests(unittest.TestCase):
@@ -741,7 +753,7 @@ class UbuntuInstallerTests(unittest.TestCase):
         (source / "bin").mkdir(parents=True)
         (source / "lib").mkdir()
         (source / "share").mkdir()
-        for name in ("postgres", "initdb", "pg_ctl"):
+        for name in ("postgres", "initdb", "pg_ctl", "pg_controldata"):
             (source / "bin" / name).write_bytes(b"synthetic executable")
         outside = self.root / "outside.so"
         outside.write_bytes(b"must not ship")
@@ -752,7 +764,7 @@ class UbuntuInstallerTests(unittest.TestCase):
 
     def test_elf_dependency_and_search_path_are_checked_without_execution(self):
         product = self.root / "product"
-        names = ("vult", "postgres/bin/postgres", "postgres/bin/initdb", "postgres/bin/pg_ctl", "postgres/lib/libpq.so.5")
+        names = ("vult", "postgres/bin/postgres", "postgres/bin/initdb", "postgres/bin/pg_ctl", "postgres/bin/pg_controldata", "postgres/lib/libpq.so.5")
         for name in names:
             path = product / name
             path.parent.mkdir(parents=True, exist_ok=True)

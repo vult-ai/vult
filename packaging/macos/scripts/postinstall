@@ -108,10 +108,22 @@ for path in "$data" "$base/socket"; do
 done
 /bin/chmod 0700 "$data"
 /bin/chmod 0755 "$base/socket"
+# Before updating an existing Vult, a checked copy of its stopped data, so the
+# update can be undone. A new install has nothing to copy and prints nothing.
+point=$("$binary" _installer_point take) || fail "Vult couldn't back up your Books before updating them, so it stopped. Your Books are unchanged; run the installer again."
 "$binary" _install
 # Create or update the database here, while the service is stopped. The
 # service itself only checks the schema when it starts.
-/usr/bin/sudo -u _vultledger "$binary" _maintenance migrate >/dev/null || fail "The database update did not complete. Stored Books were preserved and nothing was changed."
+if ! /usr/bin/sudo -u _vultledger "$binary" _maintenance migrate >/dev/null; then
+    [ -n "$point" ] || fail "The database update did not complete. Stored Books were preserved and nothing was changed."
+    "$binary" _installer_point restore "$point" || fail "The database update did not complete. To put your Vult back as it was before this install, run: sudo $binary _installer_point restore $point"
+    fail "The database update did not complete, so your Vult was put back as it was before this install. Install the earlier version of Vult to keep using it."
+fi
+if [ -n "$point" ]; then
+    # Keep the newest backups only; a failure here never undoes the update.
+    "$binary" _installer_point finish "$point" || echo "Vult: the backup taken before updating was kept, but older ones weren't removed." >&2
+fi
+# End of the database update.
 
 # Install a shell shortcut only into protected directories, never over a command.
 safe_shortcut=yes
@@ -146,9 +158,10 @@ if [ -f "$updater/vult-update-helper" ] && [ ! -L "$updater/vult-update-helper" 
         /bin/chmod -N "$path"
         /bin/chmod 0700 "$path"
     done
-    # The owner's request, written by the app (which runs as the browser
+    # The owner's requests (an update, a check, a restore) and the notice
+    # they dismissed, written by the app (which runs as the browser
     # account) and read by the installer as untrusted input.
-    for request in "$ustate/request.json" "$ustate/check.json"; do
+    for request in "$ustate/request.json" "$ustate/check.json" "$ustate/notice.json"; do
         [ ! -L "$request" ] || fail "The update request file is a symbolic link."
         [ -e "$request" ] || : > "$request"
         [ -f "$request" ] || fail "The update request file is not a plain file."
@@ -178,7 +191,11 @@ while [ "$attempt" -lt 30 ]; do
         /bin/launchctl bootstrap system /Library/LaunchDaemons/ai.vult.browser.plist
         /bin/launchctl kickstart system/ai.vult.browser
         "$binary" _browser_check || fail "The local browser did not become ready. Stored Books were preserved; inspect the browser service log."
-        echo "Vult installed. Next: $binary mcp install, then $binary setup."
+        if [ -n "$point" ]; then
+            echo "Vult updated to $("$binary" --version | /usr/bin/awk '{print $2}'). Your Vult was backed up first."
+        else
+            echo "Vult installed. Next: $binary mcp install, then $binary setup."
+        fi
         exit 0
     fi
     attempt=$((attempt + 1))

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vult-ai/vult/agentconfig"
+	"github.com/vult-ai/vult/bankconnect"
 	"github.com/vult-ai/vult/internal/update"
 	"io"
 	"net/http"
@@ -32,6 +34,23 @@ type webAPI struct {
 	localBooks      LocalBooks
 	updates         *update.Checker
 	updater         Updater
+	backups         BackupStore
+	bankRequests    InstitutionRequests
+	requestsSent    sentRequests
+	lookupHost      func(context.Context, string) error // tests stand in for DNS
+	banks           *bankconnect.Service
+	bankScreen      *BankScreen
+	bankOperator    BankOperator
+	bankLimit       *BankLimitSetting
+	agent           *agentconfig.Service
+	chat            AgentChat
+	arrived         func(context.Context, ledger.AgentTarget, OwnerAct)
+	added           func(context.Context, ledger.AgentTarget, OwnerAct, AddedDocument)
+	checkQueue      *documentCheckQueue
+	bookEvents      *bookEvents
+	prover          BookProver
+	deletion        BookDeletionPolicy
+	deletionLimits  sessionLimits
 }
 
 const webBookLimit = 1000
@@ -53,8 +72,19 @@ type webBook struct {
 	FiscalYearStartMonth *int             `json:"fiscal_year_start_month,omitempty"`
 	FiscalYearStartDay   *int             `json:"fiscal_year_start_day,omitempty"`
 	AccountingTimezone   string           `json:"accounting_timezone,omitempty"`
-	AccountingToday      string           `json:"accounting_today,omitempty"`
-	CalendarConfigured   bool             `json:"calendar_configured"`
+	// TaxedAs is how the Book is taxed; TaxedAsSet says the owner chose it.
+	TaxedAs    string `json:"taxed_as,omitempty"`
+	TaxedAsSet bool   `json:"taxed_as_set,omitempty"`
+	// Projects says the Book can label its spending by project.
+	Projects bool `json:"projects,omitempty"`
+	// ExpenseReports says the Book is a business paying back a person
+	// through an owed link, so it keeps expense reports.
+	ExpenseReports     bool   `json:"expense_reports,omitempty"`
+	AccountingToday    string `json:"accounting_today,omitempty"`
+	CalendarConfigured bool   `json:"calendar_configured"`
+	// Archived Books stay out of menus; a Book being deleted is locked.
+	Archived bool                 `json:"archived,omitempty"`
+	Deletion *ledger.BookDeletion `json:"deletion,omitempty"`
 }
 
 func (a *webAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -86,6 +116,48 @@ func (a *webAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
+	case bookDeletionRoute(r.URL.Path):
+		a.bookDeletion(w, r, session.Value)
+	case backupsRoute(r.URL.Path):
+		a.backupsAPI(w, r, session.Value)
+	case expenseReportsRoute(r.URL.Path):
+		a.expenseReports(w, r, session.Value)
+	case bankRoute(r.URL.Path):
+		a.bank(w, r, session.Value)
+	case projectsRoute(r.URL.Path):
+		a.projects(w, r, session.Value)
+	case r.URL.Path == remindersPath || r.URL.Path == remindersDonePath:
+		a.reminders(w, r, session.Value)
+	case r.URL.Path == agentSettingsPath:
+		a.agentSettings(w, r, session.Value)
+	case recordingRulesRoute(r.URL.Path):
+		a.recordingRules(w, r, session.Value)
+	case r.URL.Path == bookLinksPath:
+		a.bookLinks(w, r, session.Value)
+	case r.URL.Path == assignmentRulesPath:
+		a.assignmentRules(w, r, session.Value)
+	case r.Method == http.MethodPost && r.URL.Path == pairsPath:
+		a.pairs(w, r, session.Value)
+	case r.Method == http.MethodPost && r.URL.Path == openingBalancePath:
+		a.openingBalance(w, r, session.Value)
+	case r.Method == http.MethodPost && r.URL.Path == settlementPreview:
+		a.previewSettlement(w, r, session.Value)
+	case r.Method == http.MethodPost && r.URL.Path == settlementsPath:
+		a.settlements(w, r, session.Value)
+	case r.Method == http.MethodGet && r.URL.Path == linkedBalancesPath:
+		a.linkedBalances(w, r, session.Value)
+	case r.URL.Path == statementFilesPath:
+		a.statementFiles(w, r, session.Value)
+	case r.Method == http.MethodPost && r.URL.Path == agentChatPath:
+		a.agentChat(w, r, session.Value)
+	case (r.Method == http.MethodGet || r.Method == http.MethodDelete) && r.URL.Path == agentChatPath:
+		a.agentConversation(w, r, session.Value)
+	case r.URL.Path == agentNotesPath || len(r.URL.Path) > len(agentNotesPath) && r.URL.Path[:len(agentNotesPath)+1] == agentNotesPath+"/":
+		a.agentNotes(w, r, session.Value)
+	case r.Method == http.MethodGet && r.URL.Path == entryOriginPath:
+		a.entryOrigin(w, r, session.Value)
+	case r.Method == http.MethodGet && r.URL.Path == eventsPath:
+		a.events(w, r, session.Value)
 	case bookLogoWrite(r):
 		a.writeBookLogo(w, r, session.Value)
 	case r.Method == http.MethodGet && (r.URL.Path == bookLogoPath || strings.HasPrefix(r.URL.Path, bookLogoPath+"/")):
@@ -104,12 +176,20 @@ func (a *webAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.userAvatar(w, r, session.Value)
 	case r.Method == http.MethodPost && r.URL.Path == ownerDocumentUploadPath:
 		a.documentUpload(w, r, session.Value)
+	case r.Method == http.MethodPost && r.URL.Path == documentGroupPath:
+		a.documentGroup(w, r, session.Value)
+	case r.Method == http.MethodGet && r.URL.Path == documentChecksPath:
+		a.documentChecks(w, r, session.Value)
+	case r.Method == http.MethodPost && r.URL.Path == documentReadingPath:
+		a.documentReading(w, r, session.Value)
 	case r.Method == http.MethodGet && (r.URL.Path == "/api/v1/documents" || strings.HasPrefix(r.URL.Path, "/api/v1/documents/")):
 		a.documentRead(w, r, session.Value)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/agent-owner/review":
 		a.proposalReview(w, r, session.Value)
 	case r.Method == http.MethodGet && (r.URL.Path == "/api/v1/agent-owner/plans" || strings.HasPrefix(r.URL.Path, "/api/v1/agent-owner/plans/")):
 		a.proposalRead(w, r, session.Value)
+	case r.Method == http.MethodPost && r.URL.Path == approveBatchPath:
+		a.approveBatch(w, r, session.Value)
 	case r.Method == http.MethodPost && (r.URL.Path == "/api/v1/agent-owner/approve" || r.URL.Path == "/api/v1/agent-owner/reject"):
 		a.proposalDecision(w, r, session.Value)
 	case (r.URL.Path == localBookDraftPath && r.Method == http.MethodGet) || (r.URL.Path == localBooksPath && r.Method == http.MethodPost):
@@ -191,8 +271,19 @@ func (a *webAPI) books(w http.ResponseWriter, r *http.Request, session string) {
 			if err != nil {
 				return err
 			}
+			states, err := o.BookLifecycles(r.Context())
+			if err != nil {
+				return err
+			}
+			lifecycle := map[string]ledger.BookLifecycle{}
+			for _, s := range states {
+				lifecycle[s.BookID] = s
+			}
 			for _, b := range list {
-				out = append(out, browserBook(b, time.Now()))
+				book := browserBook(b, time.Now())
+				book.Archived = lifecycle[b.ID].ArchivedAt != nil
+				book.Deletion = lifecycle[b.ID].Deletion
+				out = append(out, book)
 			}
 			tenantAddresses, err := o.BookAddressesBounded(r.Context(), limit)
 			addresses = append(addresses, tenantAddresses...)
@@ -224,7 +315,24 @@ func (a *webAPI) books(w http.ResponseWriter, r *http.Request, session string) {
 }
 
 func apiFailure(w http.ResponseWriter, e error) {
+	var limit *ledger.PlanLimitError
+	var refused *ledger.RefusedError
 	switch {
+	case errors.As(e, &refused):
+		// A refusal with a reason says it, as bank changes do.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_ = json.NewEncoder(w).Encode(map[string]any{"schema_version": 1, "error": "refused", "message": refused.Reason})
+	case errors.Is(e, ledger.ErrFreshOwnerProof):
+		// Only this code sends the person to sign in again.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "fresh_authentication_required", "message": "Confirm it’s you, then make this change."})
+	case errors.As(e, &limit):
+		// A plan limit is not a sign-in problem: say what the limit is.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusPaymentRequired)
+		_ = json.NewEncoder(w).Encode(ledger.PlanLimitResponse(limit))
 	case errors.Is(e, access.ErrDenied) || errors.Is(e, ledger.ErrDenied):
 		failure(w, http.StatusForbidden)
 	case errors.Is(e, ledger.ErrInvalid):

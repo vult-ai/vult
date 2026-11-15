@@ -333,14 +333,6 @@ func validStatementChange(method string, input []byte) (any, string, error) {
 	return nil, "", ErrInvalid
 }
 
-func statementMethod(method string) bool {
-	switch method {
-	case "import_statement", "mark_statement_duplicate", "match_statement", "revoke_statement_match", "record_statement_adjustment", "review_statement":
-		return true
-	}
-	return false
-}
-
 func statementWrite(ctx context.Context, tx pgx.Tx, s Scope, method string, input []byte, admit func(context.Context, pgx.Tx, Scope, string, json.RawMessage) error) (json.RawMessage, error) {
 	q, key, err := validStatementChange(method, input)
 	if err != nil {
@@ -513,9 +505,24 @@ func importStatement(ctx context.Context, tx pgx.Tx, s Scope, q ImportStatement,
 			return nil, statementError(err)
 		}
 	}
+	// Its lines join the bank activity inbox, unrecorded.
+	if err := addStatementItems(ctx, tx, s, id, receipt); err != nil {
+		return nil, err
+	}
 	st, err := readStatement(ctx, tx, s, id)
 	if err != nil {
 		return nil, err
+	}
+	// Vult checks what it read itself, from a statement file; an agent's
+	// import records no checks.
+	var fromFile string
+	if err := tx.QueryRow(ctx, "SELECT coalesce(current_setting('vult.statement_file',true),'')").Scan(&fromFile); err != nil {
+		return nil, dbError(err)
+	}
+	if fromFile == "on" {
+		if err := recordStatementChecks(ctx, tx, s, q, st); err != nil {
+			return nil, err
+		}
 	}
 	return raw(st), nil
 }

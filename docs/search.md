@@ -43,3 +43,12 @@ The search tables are derived indexes. Posting, reversal and restore maintain
 them automatically, and upgrades backfill existing entries. Backups retain the
 authoritative records and rebuild these indexes on restore. No PostgreSQL
 extension is required.
+
+## Totals
+
+`search_book` also adds up every matching entry, not only the ones it lists,
+as `transaction_totals`: how many entries matched, what they spent
+(`expenses_minor`: debits to expense accounts less credits back), what they
+brought in (`income_minor`), and the first and last dates. The sums go by
+account type and are exact, so "how much did I spend at this shop?" is
+answered by reading a figure, never by adding a list.

@@ -1,0 +1,9 @@
+/* Restore: the backup, one button, and its progress. */
+.restore-progress, .restore-confirm { display: grid; gap: 14px; }
+.restore-confirm p { margin: 0; }
+.restore-bar { display: block; height: 6px; overflow: hidden; border-radius: var(--radius-full); background: var(--color-border-secondary); }
+.restore-bar > span { display: block; width: 40%; height: 100%; border-radius: inherit; background: var(--color-text-primary); animation: restore-slide 1.4s ease-in-out infinite; }
+@keyframes restore-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .restore-bar > span { animation: none; width: 100%; opacity: 0.4; } }
+.restore-passkey { display: flex; align-items: center; gap: 6px; color: var(--color-text-secondary); }
+.restore-passkey svg { width: 16px; height: 16px; flex: none; }

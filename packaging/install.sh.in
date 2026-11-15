@@ -27,8 +27,20 @@ vult_install() {
         echo 'Vult: Run this command as yourself. macOS will ask for administrator approval.' >&2
         return 1
     fi
-    /usr/bin/printf '%s\n' 'Installing Vult @VERSION@. macOS will ask for administrator approval.'
-    /usr/bin/printf '%s\n' 'Next, run /Library/PrivilegedHelperTools/ai.vult.ledger/vult mcp install, then /Library/PrivilegedHelperTools/ai.vult.ledger/vult setup. Setup opens a page in your browser to create your passkey.'
+    vult=/Library/PrivilegedHelperTools/ai.vult.ledger/vult
+    # A Vult already here is upgraded: its books, sign-in and agents stay.
+    previous=''
+    if [ -x "$vult" ]; then
+        previous=$("$vult" --version 2>/dev/null | /usr/bin/sed -n 's/^Vult //p' | /usr/bin/head -n 1) || previous=''
+        case "$previous" in
+            ''|*[!0-9A-Za-z.+-]*) previous='an earlier version' ;;
+        esac
+    fi
+    if [ -n "$previous" ]; then
+        /usr/bin/printf '%s\n' "Upgrading Vult from $previous to @VERSION@. macOS will ask for administrator approval."
+    else
+        /usr/bin/printf '%s\n' 'Installing Vult @VERSION@. macOS will ask for administrator approval.'
+    fi
     /usr/bin/osascript <<'VULT_ADMIN'
 @ROOT_LINES@
 set previousDelimiters to AppleScript's text item delimiters
@@ -38,6 +50,11 @@ set AppleScript's text item delimiters to previousDelimiters
 set installCommand to "/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin LANG=C LC_ALL=C /bin/sh -c " & quoted form of installScript
 do shell script installCommand with administrator privileges with prompt "Install Vult @VERSION@ on this Mac, with its own private database. Next, Vult opens in your browser to finish setting up."
 VULT_ADMIN
+    if [ -n "$previous" ]; then
+        /usr/bin/printf '%s\n' "Vult upgraded from $previous to @VERSION@. Your books and sign-in are unchanged." "If an agent app can't reach Vult now, run $vult doctor: it says what to reconnect."
+    else
+        /usr/bin/printf '%s\n' "Next, run $vult mcp install, then $vult setup. Setup opens a page in your browser to create your passkey."
+    fi
 }
 
 # Keep the entry point last: an incomplete download must not start installation.

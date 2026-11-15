@@ -145,7 +145,7 @@ func OwnerPrompt(action string, payload any) (string, error) {
 }
 func OwnerAction(s string) bool {
 	switch s {
-	case "init", "book_create", "book_list", "connection_create", "connection_list", "connection_revoke", "period_close", "verify", "export", "backup", "restore", "open_session", "archive_backup", "archive_restore", "browser_setup", "browser_reset":
+	case "init", "book_create", "book_list", "book_delete", "connection_create", "connection_list", "connection_revoke", "period_close", "verify", "export", "backup", "restore", "open_session", "archive_backup", "archive_restore", "browser_setup", "browser_reset":
 		return true
 	}
 	return false

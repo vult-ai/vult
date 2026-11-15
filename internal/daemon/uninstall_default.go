@@ -30,8 +30,7 @@ func Uninstall(ctx context.Context, out, errout io.Writer) error {
 	}
 	fmt.Fprintf(out, "Uninstall removes Vult's software and startup entry.\nBooks, credentials and recovery key stay at %s\nThe _vultledger account is retained for reinstall. Backups stay wherever you saved them.\n", filepath.Dir(local.DataPath))
 	command := local.BinaryPath + " _uninstall"
-	script := fmt.Sprintf("do shell script %q with administrator privileges with prompt %q", command, "Remove Vult software and keep all Books and backups.")
-	cmd := exec.CommandContext(ctx, "/usr/bin/osascript", "-e", script)
+	cmd := exec.CommandContext(ctx, "/usr/bin/osascript", "-e", uninstallScript(command))
 	cmd.Env = []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin", "LANG=C"}
 	cmd.Stdout = out
 	cmd.Stderr = errout
@@ -46,6 +45,42 @@ func Uninstall(ctx context.Context, out, errout io.Writer) error {
 		} else if os.Remove(folder) == nil {
 			fmt.Fprintf(out, "Agents' document copies were removed from %s\n", folder)
 		}
+	}
+	return nil
+}
+
+// uninstallScript asks for an administrator's approval and runs command.
+// osascript turns line breaks in a command's output into carriage returns
+// unless told not to, which runs the removal's sentences together.
+func uninstallScript(command string) string {
+	return fmt.Sprintf("do shell script %q with administrator privileges with prompt %q without altering line endings", command, "Remove Vult software and keep all Books and backups.")
+}
+
+// stopUpdateHelper stops the update helper's launchd job when it is loaded
+// and its startup entry is the one the program inventory names.
+func stopUpdateHelper(ctx context.Context, p removalPaths, m removalManifest) error {
+	run := func(args ...string) error {
+		cmd := exec.CommandContext(ctx, "/bin/launchctl", args...)
+		cmd.Env = []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin", "LANG=C", "LC_ALL=C"}
+		return cmd.Run()
+	}
+	if run("print", "system/"+updaterLabel) != nil {
+		return nil
+	}
+	files, err := managedExternalFiles(p, m)
+	if err != nil {
+		return err
+	}
+	plist := updaterStartupPath(p)
+	sum, ok := files[plist]
+	if !ok {
+		return errors.New("unrecognized update helper startup entry; no program files were removed")
+	}
+	if match, err := matchesProgramFile(plist, sum, 0); err != nil || !match {
+		return errors.New("update helper startup entry changed; no program files were removed")
+	}
+	if run("bootout", "system/"+updaterLabel) != nil {
+		return errors.New("could not stop the update helper; no program files were removed")
 	}
 	return nil
 }
@@ -73,7 +108,10 @@ func NativeStop(ctx context.Context) error {
 	}
 	if run("/bin/launchctl", "print", "system/ai.vult.browser") == nil {
 		m, err := readRemovalManifest(nativeRemovalPaths())
-		if err != nil || m.BrowserDaemonSHA256 == "" {
+		if err != nil {
+			return fmt.Errorf("the installed program inventory was rejected (%v); no service was stopped", err)
+		}
+		if m.BrowserDaemonSHA256 == "" {
 			return errors.New("unrecognized browser startup entry; no service was stopped")
 		}
 		if err := protected(filepath.Dir(browserStartup), 0, true); err != nil {
@@ -172,6 +210,9 @@ func UninstallNative(ctx context.Context, out io.Writer) error {
 			}
 		}
 	}
+	if p.Updater != "" {
+		parents[p.Updater] = true
+	}
 	for parent := range parents {
 		if _, e := os.Lstat(parent); os.IsNotExist(e) {
 			continue
@@ -189,7 +230,12 @@ func UninstallNative(ctx context.Context, out io.Writer) error {
 	}
 	stopCtx, cancel := context.WithTimeout(ctx, 75*time.Second)
 	defer cancel()
-	r, e := removeProgram(p, 0, func() error { return NativeStop(stopCtx) })
+	r, e := removeProgram(p, 0, func() error {
+		if err := stopUpdateHelper(stopCtx, p, m); err != nil {
+			return err
+		}
+		return NativeStop(stopCtx)
+	})
 	if e != nil {
 		return e
 	}

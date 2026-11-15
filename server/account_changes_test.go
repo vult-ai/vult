@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vult-ai/vult/access"
 	"github.com/vult-ai/vult/ledger"
 )
 
@@ -201,5 +202,36 @@ func TestOwnerRecordsAnEntryPayee(t *testing.T) {
 	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &read) != nil || read.Payee == nil || read.Payee.Current == nil ||
 		read.Payee.Current.PayeeName != "Example Bistro" || read.Entry.Description != "CARD 1234 EXAMPLE BISTRO" {
 		t.Fatal("the entry read must show the payee and keep its original text", rec.Code, rec.Body.String())
+	}
+}
+
+// The owner creates an account in the app through the same operation an
+// agent's create_account proposal runs, with the same checks.
+func TestOwnerCreatesAnAccountLikeAnAgentWould(t *testing.T) {
+	f, s := browserServer(t)
+	body := `{"book_id":"` + f.book.ID + `","operation":"create_account","arguments":{"request_key":"owner-utilities","class":"expense","code":"6300","name":"Utilities"}}`
+	if _, err := f.db.Admin.Exec(f.db.Context, "UPDATE access.sessions SET authenticated_at=clock_timestamp()-interval '10 minutes' WHERE token_hash=$1", access.Hash(f.session)); err != nil {
+		t.Fatal(err)
+	}
+	if w := accountChange(t, s, f.session, body); w.Code != http.StatusForbidden {
+		t.Fatal("an account was created without a fresh sign-in", w.Code)
+	}
+	if _, err := f.db.Admin.Exec(f.db.Context, "UPDATE access.sessions SET authenticated_at=clock_timestamp() WHERE token_hash=$1", access.Hash(f.session)); err != nil {
+		t.Fatal(err)
+	}
+	w := accountChange(t, s, f.session, body)
+	var a ledger.Account
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &a) != nil || a.Class != "expense" || a.Name != "Utilities" {
+		t.Fatal("owner account", w.Code, w.Body.String())
+	}
+	// The same checks as an agent's: a class is required and fixed.
+	if w := accountChange(t, s, f.session, `{"book_id":"`+f.book.ID+`","operation":"create_account","arguments":{"request_key":"bad","class":"cash","name":"Wallet"}}`); w.Code == http.StatusOK {
+		t.Fatal("an account was created with no valid class")
+	}
+	var actor, owner string
+	f.db.Admin.QueryRow(f.db.Context, "SELECT actor_id::text FROM public.requests WHERE request_key='owner-utilities'").Scan(&actor)
+	f.db.Admin.QueryRow(f.db.Context, "SELECT id::text FROM access.identities WHERE subject=$1", f.identity.Subject).Scan(&owner)
+	if actor != owner {
+		t.Fatal("the owner isn't the account's actor")
 	}
 }

@@ -81,9 +81,12 @@ func documentPage(ctx context.Context, tx pgx.Tx, scope Scope, input []byte) (Do
 	if q.Limit == 0 {
 		q.Limit = 20
 	}
-	rows, err := tx.Query(ctx, "SELECT "+documentColumns+` FROM public.documents
+	if q.Group != "" && !validDocumentGroup(q.Group) {
+		return DocumentPage{}, ErrInvalid
+	}
+	rows, err := tx.Query(ctx, "SELECT * FROM (SELECT "+documentGroupedColumns+` FROM public.documents
             WHERE tenant_id=$1 AND book_id=$2 AND sequence>$3 AND `+liveReadyDocument+`
-            ORDER BY sequence LIMIT $4`, scope.TenantID, scope.BookID, q.After, q.Limit+1)
+            ) v WHERE $5='' OR v.filed_group=$5 ORDER BY v.sequence LIMIT $4`, scope.TenantID, scope.BookID, q.After, q.Limit+1, q.Group)
 	if err != nil {
 		return DocumentPage{}, dbError(err)
 	}
@@ -173,7 +176,7 @@ func (a TenantAdmin) SearchDocuments(ctx context.Context, book, query string, pa
 		if len(sequences) == 0 {
 			return nil
 		}
-		rows, err := tx.Query(ctx, "SELECT "+documentColumns+` FROM public.documents
+		rows, err := tx.Query(ctx, "SELECT "+documentGroupedColumns+` FROM public.documents
 			WHERE tenant_id=$1 AND book_id=$2 AND sequence=ANY($3) ORDER BY sequence`, scope.TenantID, scope.BookID, sequences)
 		if err != nil {
 			return dbError(err)

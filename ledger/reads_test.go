@@ -22,9 +22,13 @@ type queryCounts struct {
 	stateReads    atomic.Int64
 	locks         atomic.Int64
 	restoredBooks atomic.Int64
+	readingReads  atomic.Int64
 }
 
 func (q *queryCounts) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	if strings.Contains(data.SQL, "FROM public.document_readings") {
+		q.readingReads.Add(1)
+	}
 	if strings.HasPrefix(data.SQL, "WITH observed AS MATERIALIZED") {
 		q.stateReads.Add(1)
 		return ctx

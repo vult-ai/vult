@@ -14,9 +14,22 @@ import (
 // Request is the owner asking to install an update now. The app writes it;
 // the root helper starts when it changes, treats it as untrusted, and only
 // ever installs the newest release both signatures agree on.
+//
+// A request may instead ask to put a backup back (Restore names it, Job
+// names this attempt); the helper checks the backup itself.
 type Request struct {
-	Version   string    `json:"version"` // what the owner saw offered
+	Version   string    `json:"version,omitempty"` // what the owner saw offered
+	Restore   string    `json:"restore,omitempty"`
+	Job       string    `json:"job,omitempty"`
 	Requested time.Time `json:"requested"`
+}
+
+// Valid reports whether r is one well-formed request of either kind.
+func (r Request) Valid() bool {
+	if r.Restore != "" {
+		return r.Version == "" && BackupID.MatchString(r.Restore) && ValidJob(r.Job)
+	}
+	return r.Job == "" && versionPattern.MatchString(r.Version)
 }
 
 const requestFile = "request.json"
@@ -50,7 +63,7 @@ func ReadRequest(dir string) (Request, bool) {
 		return Request{}, false
 	}
 	var r Request
-	if strictjson.Decode(data[:n], &r) != nil || !versionPattern.MatchString(r.Version) {
+	if strictjson.Decode(data[:n], &r) != nil || !r.Valid() {
 		return Request{}, false
 	}
 	return r, true

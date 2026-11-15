@@ -222,6 +222,11 @@ func exportBook(ctx context.Context, tx pgx.Tx, s Scope) (Export, error) {
 	if out.Book, e = readBook(ctx, tx, s); e != nil {
 		return Export{}, dbError(e)
 	}
+	// A Book the owner hasn't said how it's taxed exports as it did before,
+	// so its journal checksum stays the same across releases.
+	if !out.Book.TaxedAsSet {
+		out.Book.TaxedAs = ""
+	}
 	if out.Accounts, e = readAccounts(ctx, tx, s); e != nil {
 		return Export{}, dbError(e)
 	}
@@ -327,6 +332,21 @@ func readSnapshotRows(ctx context.Context, tx pgx.Tx, table string, scope Scope,
 		}
 		projection = "(" + projection + ") - ARRAY(SELECT key FROM jsonb_each(to_jsonb(t)) WHERE key IN(" + strings.Join(names, ",") + ") AND value='null'::jsonb)"
 	}
+	if scope.BookID != "" {
+		// A Book's own copy never carries sealed keys or tokens: on its own
+		// they open nowhere, and banks and agents connect again.
+		switch table {
+		case "bank_connections":
+			// A login without its token is disconnected, its access ended
+			// here: the owner reconnects the bank after a restore.
+			projection = `(` + projection + ` || jsonb_build_object('token_sealed',NULL,'key_version',NULL)
+ || CASE WHEN t.access='book' AND t.status<>'disconnected' THEN jsonb_build_object('status','disconnected',
+ 'disconnected_at',to_jsonb(clock_timestamp()),'access_ended_at',to_jsonb(coalesce(t.access_ended_at,clock_timestamp())),
+ 'status_reason','Reconnect your bank: a Book''s own copy doesn''t carry its access.') ELSE '{}'::jsonb END)`
+		case "agent_settings":
+			projection = "(" + projection + " || jsonb_build_object('key_sealed',NULL,'key_version',NULL,'enabled',false))"
+		}
+	}
 	query := "SELECT (" + projection + ")::text AS rowdata FROM public." + pgx.Identifier{table}.Sanitize() + " t"
 	var args []any
 	if scope.BookID != "" {
@@ -341,8 +361,21 @@ func readSnapshotRows(ctx context.Context, tx pgx.Tx, table string, scope Scope,
 			}
 		case "books":
 			query += " WHERE t.tenant_id=$1 AND t.id=$2"
+		case "vult_bank_provider_settings", "bank_provider_settings", "vult_agent_settings":
+			// Provider keys and the agent's key stay with the Vult.
+			args = args[:1]
+			query += " WHERE false AND t.tenant_id=$1"
+		case "book_links", "book_link_terms", "proposal_pairs", "entry_pairs", "settlement_repays", "allocations":
+			// Rows between two Books belong to both Books' archives.
+			c := linkedBookColumns[table]
+			query += " WHERE t.tenant_id=$1 AND $2 IN (t." + pgx.Identifier{c[0]}.Sanitize() + ",t." + pgx.Identifier{c[1]}.Sanitize() + ")"
 		default:
-			query += " WHERE t.tenant_id=$1 AND t.book_id=$2"
+			if expenseReportTables[table] {
+				// A business's expense reports go with its Book.
+				query += " WHERE t.tenant_id=$1 AND t.business_book_id=$2"
+			} else {
+				query += " WHERE t.tenant_id=$1 AND t.book_id=$2"
+			}
 		}
 	}
 	queryCtx, cancel := context.WithCancel(ctx)
@@ -464,7 +497,7 @@ func (a Admin) Restore(ctx context.Context, s Snapshot) error {
 	return nil
 }
 
-func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder []string, archive bool) error {
+func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder []string, archive bool, operational ...string) error {
 	var e error
 	if _, e = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(769305014)"); e != nil {
 		return e
@@ -479,8 +512,50 @@ func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder 
 	if occupied {
 		return errors.New("restore requires an empty installation")
 	}
-	if _, e = tx.Exec(ctx, "DELETE FROM public.tenants"); e != nil {
+	// The installation's own empty Vult gives way to the restored one. What
+	// was kept for the person who set it up, outside the Books (their owner
+	// record and sign-in history), moves to the restored Vult; the empty
+	// Vult's own settings are left behind with it.
+	var earlier []string
+	if e = tx.QueryRow(ctx, "SELECT coalesce(array_agg(id::text ORDER BY id),'{}') FROM public.tenants").Scan(&earlier); e != nil {
 		return e
+	}
+	incoming := map[string]bool{}
+	tenantRows, e := documentRows(s.Tables["tenants"])
+	if e != nil {
+		return e
+	}
+	for _, row := range tenantRows {
+		var id string
+		if json.Unmarshal(row["id"], &id) != nil {
+			return ErrInvalid
+		}
+		incoming[id] = true
+	}
+	var replaced, same []string
+	for _, id := range earlier {
+		if incoming[id] {
+			same = append(same, id)
+		} else {
+			replaced = append(replaced, id)
+		}
+	}
+	references, e := tenantReferences(ctx, tx)
+	if e != nil {
+		return e
+	}
+	for _, r := range references {
+		if r.public {
+			if _, e = tx.Exec(ctx, "DELETE FROM "+r.table+" WHERE "+r.column+"::text = ANY($1)", earlier); e != nil {
+				return e
+			}
+		}
+	}
+	// The same Vult restored onto itself starts again from the backup.
+	if len(same) > 0 {
+		if _, e = tx.Exec(ctx, "DELETE FROM public.tenants WHERE id::text = ANY($1)", same); e != nil {
+			return e
+		}
 	}
 	columns := map[string][]string{
 		"tenants":                     {"id", "created_at"},
@@ -555,7 +630,7 @@ func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder 
 			for _, row := range rows {
 				for name, value := range map[string]any{"status": "active", "heading": false} {
 					if _, ok := row[name]; !ok {
-						if strings.HasSuffix(s.Format, "-v6") {
+						if strings.HasSuffix(s.Format, "-v6") || strings.HasSuffix(s.Format, "-v7") || strings.HasSuffix(s.Format, "-v8") || strings.HasSuffix(s.Format, "-v9") {
 							return ErrInvalid
 						}
 						row[name] = raw(value)
@@ -598,7 +673,7 @@ func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder 
 		_, err := tx.Exec(ctx, query, string(raw(row)))
 		return dbError(err)
 	}
-	retainAddresses := strings.HasSuffix(s.Format, "-v5") || strings.HasSuffix(s.Format, "-v6")
+	retainAddresses := strings.HasSuffix(s.Format, "-v5") || strings.HasSuffix(s.Format, "-v6") || strings.HasSuffix(s.Format, "-v7") || strings.HasSuffix(s.Format, "-v8") || strings.HasSuffix(s.Format, "-v9")
 	if slices.Contains(tableOrder, "accounting_periods") {
 		// Periods and their decisions are restored as retained; the original
 		// close records must not create them a second time.
@@ -693,6 +768,37 @@ func restoreSnapshotRows(ctx context.Context, tx pgx.Tx, s Snapshot, tableOrder 
  coalesce((SELECT max(p.sequence) FROM public.operation_proposals p WHERE p.tenant_id=b.tenant_id AND p.book_id=b.id),0))`); e != nil {
 		return e
 	}
+	if len(replaced) > 0 {
+		if len(incoming) != 1 {
+			return errors.New("restore requires an empty installation")
+		}
+		var target string
+		for id := range incoming {
+			target = id
+		}
+		for _, r := range references {
+			if !r.public {
+				if _, e = tx.Exec(ctx, "UPDATE "+r.table+" SET "+r.column+"=$1::uuid WHERE "+r.column+"::text = ANY($2)", target, replaced); e != nil {
+					return e
+				}
+			}
+		}
+		if _, e = tx.Exec(ctx, "DELETE FROM public.tenants WHERE id::text = ANY($1)", replaced); e != nil {
+			return e
+		}
+	}
+	// Everything else kept for the Books comes last: a Book waiting to be
+	// erased is locked once its deletion is restored, and comes back still
+	// waiting, with its own erase date, and still cancellable.
+	if len(operational) > 0 {
+		restored := map[string]bool{}
+		for _, key := range order {
+			restored[key.book] = true
+		}
+		if e = restoreOperationalRows(ctx, tx, s, operational, restored); e != nil {
+			return e
+		}
+	}
 	// Compare every retained row before commit; reject any coercion or omission.
 	compare := "SELECT $1::jsonb=$2::jsonb"
 	if archive {
@@ -781,4 +887,285 @@ func parseSnapshotTime(value json.RawMessage) (time.Time, error) {
 		return time.Time{}, ErrInvalid
 	}
 	return instant.UTC(), nil
+}
+
+// restoreOperationalRows restores everything else a Vult kept for the
+// restored Books exactly as it was recorded: the rows are written with
+// triggers paused, so no guard or side effect (a trust count, a closed
+// loop) rewrites history, and then every foreign key is checked and every
+// row compared, column by column, with the archive. Rows between a restored
+// Book and a Book not in the archive are left out.
+func restoreOperationalRows(ctx context.Context, tx pgx.Tx, s Snapshot, tables []string, restored map[string]bool) error {
+	// A v8 archive kept what settlements repaid in settlement_repays; those
+	// rows become allocations once the pairs are back.
+	legacyRepays := ""
+	if i := slices.Index(tables, "settlement_repays"); i >= 0 {
+		var err error
+		if legacyRepays, err = legacyRepayRows(s, restored); err != nil {
+			return err
+		}
+		tables = slices.Delete(slices.Clone(tables), i, i+1)
+	}
+	kept := map[string]string{}
+	for _, table := range tables {
+		data, ok := s.Tables[table]
+		if !ok || len(data) > 64<<20 {
+			return ErrInvalid
+		}
+		var rows []map[string]json.RawMessage
+		if json.Unmarshal(data, &rows) != nil || rows == nil {
+			return ErrInvalid
+		}
+		var columns []string
+		if err := tx.QueryRow(ctx, `SELECT coalesce(array_agg(column_name::text ORDER BY ordinal_position),'{}') FROM information_schema.columns
+ WHERE table_schema='public' AND table_name=$1`, table).Scan(&columns); err != nil || len(columns) == 0 {
+			return ErrInvalid
+		}
+		out := rows[:0]
+		for _, row := range rows {
+			if len(row) != len(columns) {
+				return ErrInvalid
+			}
+			for _, c := range columns {
+				if _, ok := row[c]; !ok {
+					return ErrInvalid
+				}
+			}
+			if c, between := linkedBookColumns[table]; between {
+				var x, y string
+				if json.Unmarshal(row[c[0]], &x) != nil || json.Unmarshal(row[c[1]], &y) != nil {
+					return ErrInvalid
+				}
+				if !restored[x] && !restored[y] {
+					return ErrInvalid
+				}
+				// A pair or settlement keeps this Book's own half when the
+				// other Book isn't here; what can't stand without it is left
+				// out below.
+				if (!restored[x] || !restored[y]) && table != "entry_pairs" && table != "settlement_repays" && table != "allocations" {
+					continue
+				}
+			} else if book, ok := row["book_id"]; ok {
+				var id string
+				if json.Unmarshal(book, &id) != nil || !restored[id] {
+					return ErrInvalid
+				}
+			} else if expenseReportTables[table] {
+				var id string
+				if json.Unmarshal(row["business_book_id"], &id) != nil || !restored[id] {
+					return ErrInvalid
+				}
+			}
+			out = append(out, row)
+		}
+		kept[table] = string(raw(out))
+	}
+	if _, err := tx.Exec(ctx, "SET LOCAL session_replication_role = replica"); err != nil {
+		return dbError(err)
+	}
+	for _, table := range tables {
+		name := "public." + pgx.Identifier{table}.Sanitize()
+		// The installation was empty: rows here came from restoring the
+		// Books' own records, and the archive's rows replace them.
+		if _, err := tx.Exec(ctx, "DELETE FROM "+name); err != nil {
+			return dbError(err)
+		}
+		if _, err := tx.Exec(ctx, "INSERT INTO "+name+" SELECT * FROM jsonb_populate_recordset(NULL::"+name+",$1::jsonb)", kept[table]); err != nil {
+			return dbError(err)
+		}
+	}
+	if _, err := tx.Exec(ctx, "SET LOCAL session_replication_role = origin"); err != nil {
+		return dbError(err)
+	}
+	// Every reference from these rows must hold, as the paused checks would
+	// have required. Rows between two Books whose other Book isn't here are
+	// left out when they need it; any other broken reference refuses.
+	rows, err := tx.Query(ctx, `SELECT c.conrelid::regclass::text,c.confrelid::regclass::text,
+   (SELECT array_agg(a.attname::text ORDER BY k.n) FROM unnest(c.conkey) WITH ORDINALITY k(attnum,n) JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum),
+   (SELECT array_agg(a.attname::text ORDER BY k.n) FROM unnest(c.confkey) WITH ORDINALITY k(attnum,n) JOIN pg_attribute a ON a.attrelid=c.confrelid AND a.attnum=k.attnum)
+ FROM pg_constraint c WHERE c.contype='f' AND c.conrelid=ANY(SELECT ('public.'||quote_ident(x))::regclass FROM unnest($1::text[]) x)`, tables)
+	if err != nil {
+		return dbError(err)
+	}
+	type reference struct {
+		child, parent string
+		from, to      []string
+	}
+	var references []reference
+	for rows.Next() {
+		var r reference
+		if err := rows.Scan(&r.child, &r.parent, &r.from, &r.to); err != nil {
+			rows.Close()
+			return dbError(err)
+		}
+		references = append(references, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return dbError(err)
+	}
+	brokenWhere := func(r reference) string {
+		present, match := []string{}, []string{}
+		for i := range r.from {
+			present = append(present, "c."+pgx.Identifier{r.from[i]}.Sanitize()+" IS NOT NULL")
+			match = append(match, "p."+pgx.Identifier{r.to[i]}.Sanitize()+"=c."+pgx.Identifier{r.from[i]}.Sanitize())
+		}
+		return strings.Join(present, " AND ") + " AND NOT EXISTS(SELECT 1 FROM " + r.parent + " p WHERE " + strings.Join(match, " AND ") + ")"
+	}
+	pruned := map[string]bool{}
+	if _, err := tx.Exec(ctx, "SET LOCAL session_replication_role = replica"); err != nil {
+		return dbError(err)
+	}
+	for changed := true; changed; {
+		changed = false
+		for _, r := range references {
+			if _, between := linkedBookColumns[strings.TrimPrefix(r.child, "public.")]; !between {
+				continue
+			}
+			tag, err := tx.Exec(ctx, "DELETE FROM "+r.child+" c WHERE "+brokenWhere(r))
+			if err != nil {
+				return dbError(err)
+			}
+			if tag.RowsAffected() > 0 {
+				changed, pruned[strings.TrimPrefix(r.child, "public.")] = true, true
+			}
+		}
+	}
+	if _, err := tx.Exec(ctx, "SET LOCAL session_replication_role = origin"); err != nil {
+		return dbError(err)
+	}
+	for _, r := range references {
+		var broken bool
+		if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM "+r.child+" c WHERE "+brokenWhere(r)+")").Scan(&broken); err != nil {
+			return dbError(err)
+		}
+		if broken {
+			return errors.New("restored rows refer to rows the archive doesn't hold")
+		}
+	}
+	for _, table := range tables {
+		name := "public." + pgx.Identifier{table}.Sanitize()
+		// A table that lost rows to an absent Book holds only rows of the
+		// backup; every other table holds exactly the backup's rows.
+		missing := `(SELECT * FROM jsonb_populate_recordset(NULL::` + name + `,$1::jsonb) EXCEPT ALL SELECT * FROM ` + name + `) UNION ALL `
+		if pruned[table] {
+			missing = ""
+		}
+		var same bool
+		if err := tx.QueryRow(ctx, `SELECT NOT EXISTS (`+missing+`(SELECT * FROM `+name+` EXCEPT ALL SELECT * FROM jsonb_populate_recordset(NULL::`+name+`,$1::jsonb)))`, kept[table]).Scan(&same); err != nil || !same {
+			return errors.New("restored rows differ from the backup")
+		}
+	}
+	if legacyRepays != "" {
+		if err := restoreLegacyRepays(ctx, tx, legacyRepays); err != nil {
+			return err
+		}
+	}
+	// A restore never brings back an agent's access: its connections and
+	// recording grants are kept, for the history, but revoked, and the Vult's
+	// own agent waits to be turned on again. Agents connect again.
+	if _, err := tx.Exec(ctx, "SET LOCAL session_replication_role = replica"); err != nil {
+		return dbError(err)
+	}
+	for _, q := range []string{"UPDATE public.connections SET revoked_at=clock_timestamp() WHERE revoked_at IS NULL",
+		// A deletion whose erase date passed before the restore is held: the
+		// owner confirms it or cancels it, rather than the Book being erased
+		// straight after it comes back.
+		`UPDATE public.book_deletions SET state='held',erase_after=NULL,confirm_after=coalesce(confirm_after,clock_timestamp())
+ WHERE state IN ('waiting','erasing') AND erase_after<=clock_timestamp()`,
+		"UPDATE public.rule_recording_grants SET revoked_at=clock_timestamp() WHERE revoked_at IS NULL",
+		"UPDATE public.agent_settings SET enabled=false WHERE enabled",
+		// A report with money still to pay waits for its owner to reconcile
+		// it before any payment is matched or statement issued.
+		`UPDATE public.expense_reports r SET reconciled_after_restore=false WHERE r.workflow IN ('submitted','approved')
+ AND (SELECT coalesce(sum(coalesce(l.approved_minor,l.portion_minor)),0) FROM public.report_lines l WHERE l.tenant_id=r.tenant_id AND l.report_id=r.id AND l.revision=r.revision)
+   > (SELECT coalesce(sum(a.amount_minor),0) FROM public.allocations a JOIN public.report_lines l ON l.tenant_id=a.tenant_id AND l.claim_id=a.claim_id
+       AND l.report_id=r.id AND l.revision=r.revision WHERE a.tenant_id=r.tenant_id AND a.source='report_payment' AND a.removed_at IS NULL)`} {
+		if _, err := tx.Exec(ctx, q); err != nil {
+			return dbError(err)
+		}
+	}
+	_, err = tx.Exec(ctx, "SET LOCAL session_replication_role = origin")
+	return dbError(err)
+}
+
+type tenantReference struct {
+	table, column string
+	// public tables hold the Vult's own records and settings; the others
+	// hold who may sign in to it.
+	public bool
+}
+
+// tenantReferences lists every column that names a Vult, outside the Vult
+// list itself.
+func tenantReferences(ctx context.Context, tx pgx.Tx) ([]tenantReference, error) {
+	rows, err := tx.Query(ctx, `SELECT n.nspname, c.relname, a.attname FROM pg_constraint k
+ JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+ JOIN pg_attribute a ON a.attrelid=k.conrelid AND a.attnum=k.conkey[1]
+ WHERE k.contype='f' AND k.confrelid='public.tenants'::regclass AND cardinality(k.conkey)=1
+ ORDER BY n.nspname, c.relname, a.attname`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []tenantReference
+	for rows.Next() {
+		var schema, table, column string
+		if err := rows.Scan(&schema, &table, &column); err != nil {
+			return nil, err
+		}
+		out = append(out, tenantReference{table: pgx.Identifier{schema, table}.Sanitize(), column: pgx.Identifier{column}.Sanitize(), public: schema == "public"})
+	}
+	return out, rows.Err()
+}
+
+// legacyRepayRows reads a v8 archive's settlement_repays rows that touch a
+// restored Book.
+func legacyRepayRows(s Snapshot, restored map[string]bool) (string, error) {
+	data, ok := s.Tables["settlement_repays"]
+	if !ok || len(data) > 64<<20 {
+		return "", ErrInvalid
+	}
+	var rows []map[string]json.RawMessage
+	if json.Unmarshal(data, &rows) != nil || rows == nil {
+		return "", ErrInvalid
+	}
+	out := rows[:0]
+	for _, row := range rows {
+		if len(row) != 6 {
+			return "", ErrInvalid
+		}
+		var x, y string
+		if json.Unmarshal(row["settlement_book_id"], &x) != nil || json.Unmarshal(row["cost_book_id"], &y) != nil {
+			return "", ErrInvalid
+		}
+		if !restored[x] && !restored[y] {
+			return "", ErrInvalid
+		}
+		out = append(out, row)
+	}
+	return string(raw(out)), nil
+}
+
+// restoreLegacyRepays turns a v8 archive's settlement rows into
+// allocations with the same amounts, then freezes what payments that
+// weren't settlements repaid, exactly as the upgrade does, so the restored
+// Vult shows what the archived one showed.
+func restoreLegacyRepays(ctx context.Context, tx pgx.Tx, rows string) error {
+	tag, err := tx.Exec(ctx, `INSERT INTO public.allocations(tenant_id,id,debtor_book_id,creditor_book_id,source_book_id,source_entry_id,
+ obligation_book_id,obligation_entry_id,amount_minor,source,provenance)
+SELECT r.tenant_id,gen_random_uuid(),r.settlement_book_id,p.beneficiary_book_id,r.settlement_book_id,r.settlement_entry_id,r.cost_book_id,r.cost_entry_id,
+ coalesce(r.amount_minor,public.cost_amount(r.tenant_id,r.cost_book_id,r.cost_entry_id)),'settlement','migrated_settlement'
+FROM jsonb_to_recordset($1::jsonb) AS r(tenant_id uuid,settlement_book_id uuid,settlement_entry_id uuid,cost_book_id uuid,cost_entry_id uuid,amount_minor bigint)
+JOIN public.entry_pairs p ON p.tenant_id=r.tenant_id AND p.payer_book_id=r.settlement_book_id AND p.payer_entry_id=r.settlement_entry_id
+JOIN public.entry_pairs c ON c.tenant_id=r.tenant_id AND c.beneficiary_book_id=r.cost_book_id AND c.beneficiary_entry_id=r.cost_entry_id
+WHERE coalesce(r.amount_minor,public.cost_amount(r.tenant_id,r.cost_book_id,r.cost_entry_id))>0`, rows)
+	if err != nil {
+		return dbError(err)
+	}
+	_ = tag
+	if _, err := tx.Exec(ctx, "SELECT public.freeze_vult_allocations(t.id) FROM public.tenants t"); err != nil {
+		return dbError(err)
+	}
+	return nil
 }

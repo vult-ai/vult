@@ -267,7 +267,7 @@ export function Settings({
         {
           id: "data",
           label: "Data",
-          content: <BookDataSettings book={book} />,
+          content: (tabActive) => <BookDataSettings book={book} active={tabActive} onChanged={saved} />,
         },
         {
           id: "account",

@@ -13,7 +13,8 @@ func TestLocalSetupPageOpensOnThePasskeyDial(t *testing.T) {
 		CSRF          string
 		Local         bool
 		Authenticator bool
-	}{"example", true, true}); err != nil {
+		Development   bool
+	}{"example", true, true, false}); err != nil {
 		t.Fatal(err)
 	}
 	html := page.String()

@@ -10,13 +10,16 @@ import (
 	"fmt"
 	"github.com/vult-ai/vult/internal/update"
 	"github.com/vult-ai/vult/internal/updatestatus"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -45,6 +48,8 @@ func TestBrowserPreview(t *testing.T) {
 
 	if fresh {
 		seedPreview(t, f)
+		seedPreviewBank(t, f)
+		seedPersonalCardBank(t, f)
 	}
 
 	web := os.Getenv("VULT_PREVIEW_WEB")
@@ -81,6 +86,13 @@ func TestBrowserPreview(t *testing.T) {
 		options.Updates = &update.Checker{Current: "0.7.0", URL: manifest.URL, Client: manifest.Client(), Every: time.Second}
 		options.Updater = previewInstaller{dir: updates, away: &awayUntil, installed: &installed}
 	}
+	bankDir := os.Getenv("VULT_PREVIEW_STATE")
+	if bankDir == "" {
+		bankDir = t.TempDir()
+	}
+	options.Banks = previewBanks(t, f, bankDir)
+	options.Agent = OpenAgent(ledger.Store{Runtime: f.db.Runtime})
+	go options.Banks.Run(f.db.Context)
 	s, err := New(configuration(), options)
 	if err != nil {
 		t.Fatal(err)
@@ -95,6 +107,7 @@ func TestBrowserPreview(t *testing.T) {
 		addr = value
 	}
 	local := "http://" + addr
+	started := time.Now()
 	proxy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if time.Now().UnixNano() < awayUntil.Load() {
 			// Vult is stopped while an update installs: nothing answers.
@@ -105,6 +118,11 @@ func TestBrowserPreview(t *testing.T) {
 				}
 			}
 			http.Error(w, "away", http.StatusBadGateway)
+			return
+		}
+		if r.URL.Path == "/__preview/stamp.css" {
+			w.Header().Set("Content-Type", "text/css; charset=utf-8")
+			_, _ = w.Write(buildStampCSS)
 			return
 		}
 		if r.URL.Path == "/__preview/sign-in" {
@@ -145,7 +163,7 @@ func TestBrowserPreview(t *testing.T) {
 			}
 			if page.Code == http.StatusOK && strings.HasPrefix(page.Header().Get("Content-Type"), "text/html") && err == nil && r.URL.Path != "/auth/approve" {
 				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write(bytes.ReplaceAll(fresh, sharedAssetPlaceholder, []byte(artwork)))
+				_, _ = w.Write(withBuildStamp(bytes.ReplaceAll(fresh, sharedAssetPlaceholder, []byte(artwork)), web, started))
 				return
 			}
 			w.WriteHeader(page.Code)
@@ -174,24 +192,30 @@ func TestBrowserPreview(t *testing.T) {
 	}
 }
 
-// seedPreview adds the synthetic Books, agents and history the preview shows.
+// seedPreview adds the synthetic Books, agents and history the preview shows:
+// an empty Book; Eightball Inc., a small company its founder Kit Blanche runs;
+// and Kit Blanche's own Book, whose cards carry some of the company's costs.
+// Every name, bank and amount is made up.
 func seedPreview(t *testing.T, f *documentServerFixture) {
 	ctx := f.db.Context
-	// The empty Book keeps the fixture's name and has no timezone.
-	if _, err := f.sessions.ReviseBookSettings(ctx, f.session, f.tenant, ledger.ReviseBookSettings{BookID: f.book.ID, RequestKey: "empty-name", Revision: 0, Name: "New Book (synthetic)", Founder: ""}, nil); err != nil {
-		t.Fatal(err)
+	// The empty Book keeps the fixture's name and has no timezone. A Vult
+	// seeded after its owner's own first run has no such Book.
+	if f.book.ID != "" {
+		if _, err := f.sessions.ReviseBookSettings(ctx, f.session, f.tenant, ledger.ReviseBookSettings{BookID: f.book.ID, RequestKey: "empty-name", Revision: 0, Name: "New Book (empty)", Founder: ""}, nil); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	var studio ledger.Book
 	if err := f.sessions.WithOwner(ctx, f.session, f.tenant, true, func(o ledger.TenantAdmin) error {
 		var err error
-		studio, err = o.CreateBook(ctx, "Northstar Studio (synthetic)", "USD", 2)
+		studio, err = o.CreateBook(ctx, "Eightball Inc.", "USD", 2)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	business, zone := "business", "Europe/Warsaw"
-	if _, err := f.sessions.ReviseBookSettings(ctx, f.session, f.tenant, ledger.ReviseBookSettings{BookID: studio.ID, RequestKey: "studio-setup", Revision: 0, Name: "Northstar Studio (synthetic)", Founder: "Alex Morgan", Profile: &business, AccountingTimezone: &zone}, nil); err != nil {
+	business, zone := "business", "America/Los_Angeles"
+	if _, err := f.sessions.ReviseBookSettings(ctx, f.session, f.tenant, ledger.ReviseBookSettings{BookID: studio.ID, RequestKey: "studio-setup", Revision: 0, Name: "Eightball Inc.", Founder: "Kit Blanche", Profile: &business, AccountingTimezone: &zone}, nil); err != nil {
 		t.Fatal(err)
 	}
 	var c ledger.Connection
@@ -219,14 +243,16 @@ func seedPreview(t *testing.T, f *documentServerFixture) {
 		return out
 	}
 	// Roles drive the cash-flow statement: cash, a loan and equipment.
-	cash = role(cash, "cash-role", "Example Bank checking", "cash")
-	loan := role(f.db.Account(t, scope, "2300", "liability"), "loan-role", "Example Bank loan", "loan")
+	cash = role(cash, "cash-role", "Business checking", "cash")
+	loan := role(f.db.Account(t, scope, "2300", "liability"), "loan-role", "Equipment loan", "loan")
 	equipment := role(f.db.Account(t, scope, "1500", "asset"), "equipment-role", "Equipment", "fixed_asset")
+	domains := f.db.Account(t, scope, "6500", "expense")
+	coworking := f.db.Account(t, scope, "6600", "expense")
 
-	data := []byte("%PDF-1.4\n% Synthetic statement for interface review\n")
+	data := []byte("%PDF-1.4\n% Synthetic Eightball Inc. statement for interface review\n")
 	hash := sha256.Sum256(data)
 	var intake ledger.DocumentIntake
-	if err := json.Unmarshal(f.db.Call(t, scope, "add_document", ledger.AddDocument{RequestKey: "statement", Name: "synthetic-card-statement.pdf", MediaType: "application/pdf", Size: int64(len(data)), SHA256: hex.EncodeToString(hash[:])}), &intake); err != nil {
+	if err := json.Unmarshal(f.db.Call(t, scope, "add_document", ledger.AddDocument{RequestKey: "statement", Name: "eightball-checking-statement.pdf", MediaType: "application/pdf", Size: int64(len(data)), SHA256: hex.EncodeToString(hash[:])}), &intake); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.db.Store.Upload(ctx, scope, intake.UploadID, strings.NewReader(string(data))); err != nil {
@@ -241,18 +267,20 @@ func seedPreview(t *testing.T, f *documentServerFixture) {
 		}
 		f.db.Call(t, scope, "post_journal", q)
 	}
-	post("funding", "2026-01-02", "Founder funding", cash, equity, "1500000", false)
+	post("funding", "2026-01-02", "Kit Blanche, founder investment", cash, equity, "1500000", false)
 	months := []string{"01", "02", "03", "04", "05", "06", "07", "08", "09", "10"}
 	for i, m := range months {
-		post("sale-"+m, "2026-"+m+"-12", fmt.Sprintf("Client project %d (synthetic)", i+1), cash, sales, fmt.Sprint(420000+i*35000), false)
-		post("hosting-"+m, "2026-"+m+"-03", "Example Hosting Co, monthly plan", hosting, cash, "4900", m >= "07")
-		post("software-"+m, "2026-"+m+"-15", "Example Design Tools subscription", software, cash, fmt.Sprint(2900+i*100), m >= "08")
+		post("sale-"+m, "2026-"+m+"-12", fmt.Sprintf("Client project %d", i+1), cash, sales, fmt.Sprint(420000+i*35000), false)
+		post("hosting-"+m, "2026-"+m+"-03", "Northwind Cloud, monthly plan", hosting, cash, "4900", m >= "07")
+		post("software-"+m, "2026-"+m+"-15", "Linewise Software subscription", software, cash, fmt.Sprint(2900+i*100), m >= "08")
+		post("coworking-"+m, "2026-"+m+"-01", "Common Desk coworking, monthly desk", coworking, cash, "32500", false)
 	}
-	post("travel", "2026-09-21", "Example Rail, client visit", travel, cash, "18640", true)
-	post("loan", "2026-03-02", "Example Bank loan drawdown", cash, loan, "2000000", false)
-	post("equipment", "2026-04-10", "Studio workstations (synthetic)", equipment, cash, "650000", false)
+	post("travel", "2026-09-21", "Coastline Rail, client visit", travel, cash, "18640", true)
+	post("domain", "2026-02-14", "Domainly, eightball.example renewal", domains, cash, "2400", false)
+	post("loan", "2026-03-02", "Equipment loan drawdown", cash, loan, "2000000", false)
+	post("equipment", "2026-04-10", "Workstations", equipment, cash, "650000", false)
 	for _, m := range months {
-		post("contractors-"+m, "2026-"+m+"-25", "Example Contractors, monthly retainer", contractors, cash, "750000", false)
+		post("contractors-"+m, "2026-"+m+"-25", "Harbor Contractors, monthly retainer", contractors, cash, "750000", false)
 	}
 
 	seedPayees(t, f, scope)
@@ -262,7 +290,7 @@ func seedPreview(t *testing.T, f *documentServerFixture) {
 	// More agents: one that only reads and has recorded nothing, and one the
 	// owner disconnected.
 	if err := f.sessions.WithOwner(ctx, f.session, f.tenant, true, func(o ledger.TenantAdmin) error {
-		if _, err := o.CreateConnection(ctx, studio.ID, "Example reviewing agent", "propose"); err != nil {
+		if _, err := o.CreateConnection(ctx, studio.ID, "Claude", "propose"); err != nil {
 			return err
 		}
 		gone, err := o.CreateConnection(ctx, studio.ID, "Example Assistant", "write")
@@ -286,13 +314,13 @@ func seedCardCurrencies(t *testing.T, f *documentServerFixture) {
 	var book ledger.Book
 	if err := f.sessions.WithOwner(ctx, f.session, f.tenant, true, func(o ledger.TenantAdmin) error {
 		var err error
-		book, err = o.CreateBook(ctx, "Synthetic Personal Cards", "USD", 2)
+		book, err = o.CreateBook(ctx, "Kit Blanche", "USD", 2)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
 	personal, zone := "personal", "Europe/Warsaw"
-	if _, err := f.sessions.ReviseBookSettings(ctx, f.session, f.tenant, ledger.ReviseBookSettings{BookID: book.ID, RequestKey: "cards-setup", Revision: 0, Name: "Synthetic Personal Cards", Founder: "", Profile: &personal, AccountingTimezone: &zone}, nil); err != nil {
+	if _, err := f.sessions.ReviseBookSettings(ctx, f.session, f.tenant, ledger.ReviseBookSettings{BookID: book.ID, RequestKey: "cards-setup", Revision: 0, Name: "Kit Blanche", Founder: "Kit Blanche", Profile: &personal, AccountingTimezone: &zone}, nil); err != nil {
 		t.Fatal(err)
 	}
 	var c ledger.Connection
@@ -455,17 +483,17 @@ func seedStatements(t *testing.T, f *documentServerFixture, scope ledger.Scope, 
 		}
 	}
 	september := statement("statement-sep", "2026-09-01", "2026-09-30", [][3]string{
-		{"2026-09-03", "-4900", "EXAMPLE HOSTING CO"}, {"2026-09-12", "700000", "CLIENT PROJECT 9"}, {"2026-09-15", "-3700", "EXAMPLE DESIGN TOOLS"},
-		{"2026-09-22", "-18640", "EXAMPLE RAIL"}, {"2026-09-25", "-750000", "EXAMPLE CONTRACTORS"}})
+		{"2026-09-01", "-32500", "COMMON DESK COWORKING"}, {"2026-09-03", "-4900", "NORTHWIND CLOUD"}, {"2026-09-12", "700000", "CLIENT PROJECT 9"}, {"2026-09-15", "-3700", "LINEWISE SOFTWARE"},
+		{"2026-09-21", "-18640", "COASTLINE RAIL"}, {"2026-09-25", "-750000", "HARBOR CONTRACTORS"}})
 	match(september, "")
 	f.db.Call(t, scope, "review_statement", ledger.ReviewStatement{RequestKey: "statement-sep-review", StatementID: september.ID, Outcome: "reconciled"})
 	october := statement("statement-oct", "2026-10-01", "2026-10-31", [][3]string{
-		{"2026-10-03", "-4900", "EXAMPLE HOSTING CO"}, {"2026-10-12", "735000", "CLIENT PROJECT 10"}, {"2026-10-15", "-3800", "EXAMPLE DESIGN TOOLS"},
-		{"2026-10-26", "-750000", "EXAMPLE CONTRACTORS"}, {"2026-10-31", "-1200", "MONTHLY ACCOUNT FEE"}})
+		{"2026-10-01", "-32500", "COMMON DESK COWORKING"}, {"2026-10-03", "-4900", "NORTHWIND CLOUD"}, {"2026-10-12", "735000", "CLIENT PROJECT 10"}, {"2026-10-15", "-3800", "LINEWISE SOFTWARE"},
+		{"2026-10-26", "-750000", "HARBOR CONTRACTORS"}, {"2026-10-31", "-1200", "MONTHLY ACCOUNT FEE"}})
 	match(october, "-750000")
 }
 
-// seedPayees names who the studio's regular charges were with, so recurring
+// seedPayees names who Eightball's regular charges were with, so recurring
 // charges and spending by payee have something to show.
 func seedPayees(t *testing.T, f *documentServerFixture, scope ledger.Scope) {
 	var page struct {
@@ -475,7 +503,7 @@ func seedPayees(t *testing.T, f *documentServerFixture, scope ledger.Scope) {
 		t.Fatal(err)
 	}
 	payees := map[string]string{}
-	for _, name := range []string{"Example Hosting Co", "Example Design Tools", "Example Contractors"} {
+	for _, name := range []string{"Northwind Cloud", "Linewise Software", "Harbor Contractors", "Common Desk"} {
 		var p ledger.Payee
 		if err := json.Unmarshal(f.db.Call(t, scope, "create_payee", ledger.CreatePayee{RequestKey: "payee-" + name, DisplayName: name, Kind: "organization"}), &p); err != nil {
 			t.Fatal(err)
@@ -513,4 +541,48 @@ func (p previewInstaller) Request(version string) error {
 		p.installed.Store(true)
 	}()
 	return nil
+}
+
+// The development build stamp: which branch and commit the preview runs, when
+// the interface was built and when the server started, so a reviewer knows
+// they're looking at the latest. Only the preview adds it; a release build
+// has nothing extra.
+var buildStampCSS = []byte(`#vult-build-stamp{position:fixed;right:8px;bottom:6px;z-index:2147483000;padding:2px 8px;border-radius:999px;
+background:rgb(10 10 10 / .72);color:#fafafa;font:500 11px/16px ui-monospace,SFMono-Regular,Menlo,monospace;pointer-events:none;opacity:.8}`)
+
+var stampGit struct {
+	sync.Mutex
+	at   time.Time
+	text string
+}
+
+func buildStampText(web string, started time.Time) string {
+	stampGit.Lock()
+	defer stampGit.Unlock()
+	if time.Since(stampGit.at) > 5*time.Second {
+		git := func(args ...string) string {
+			out, err := exec.Command("git", append([]string{"-C", filepath.Dir(web)}, args...)...).Output()
+			if err != nil {
+				return "?"
+			}
+			return strings.TrimSpace(string(out))
+		}
+		dirty := ""
+		if git("status", "--porcelain", "--untracked-files=no") != "" {
+			dirty = " + changes"
+		}
+		stampGit.text = git("rev-parse", "--abbrev-ref", "HEAD") + " · " + git("rev-parse", "--short", "HEAD") + dirty
+		stampGit.at = time.Now()
+	}
+	built := "?"
+	if info, err := os.Stat(filepath.Join(web, "index.html")); err == nil {
+		built = info.ModTime().Local().Format("Jan 2 15:04")
+	}
+	return stampGit.text + " · web built " + built + " · server " + started.Local().Format("Jan 2 15:04")
+}
+
+func withBuildStamp(page []byte, web string, started time.Time) []byte {
+	stamp := `<link rel="stylesheet" href="/__preview/stamp.css"><div id="vult-build-stamp" aria-hidden="true">` +
+		html.EscapeString(buildStampText(web, started)) + `</div></body>`
+	return bytes.Replace(page, []byte("</body>"), []byte(stamp), 1)
 }

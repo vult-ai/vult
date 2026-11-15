@@ -42,8 +42,9 @@ func (a *webAPI) accountChange(w http.ResponseWriter, r *http.Request, session s
 		return
 	}
 	switch q.Operation {
-	case "revise_account", "retire_account", "reactivate_account", "apply_starter_chart", "create_payee", "revise_payee", "set_entry_payee":
+	case "create_account", "revise_account", "retire_account", "reactivate_account", "apply_starter_chart", "create_payee", "revise_payee", "set_entry_payee":
 	case "mark_statement_duplicate", "match_statement", "revoke_statement_match", "record_statement_adjustment", "review_statement":
+	case "link_bank_activity", "unlink_bank_activity", "record_bank_transfer", "mark_bank_duplicate", "reverse_journal", "record_by_rule":
 	default:
 		apiFailure(w, ledger.ErrInvalid)
 		return
@@ -74,7 +75,7 @@ func (a *webAPI) accountChange(w http.ResponseWriter, r *http.Request, session s
 	}
 	if errors.Is(err, ledger.ErrFreshOwnerProof) {
 		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "fresh_authentication_required", "message": "Sign in again, then make this change."})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "fresh_authentication_required", "message": "Confirm it’s you, then make this change."})
 		return
 	}
 	if err != nil {

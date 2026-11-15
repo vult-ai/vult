@@ -17,7 +17,7 @@ import tarfile
 import tempfile
 
 from go_notices import check as check_go_notices
-from package_macos import (ENV as COMMON_ENV, GO_VERSION, PG_SHA256, PG_VERSION,
+from package_macos import (ENV as COMMON_ENV, GO_VERSION, PG_SHA256, PG_VERSION, RUNTIME_BINARIES,
                            VERSION, digest, interface_files, materialize, run,
                            selected_files, stage_interface)
 
@@ -97,7 +97,7 @@ def runtime_payload(pg, destination):
         raise ValueError("unexpected PostgreSQL runtime version")
     for part in ("bin", "lib", "share"):
         (destination / part).mkdir(parents=True)
-    for name in ("postgres", "initdb", "pg_ctl"):
+    for name in RUNTIME_BINARIES:
         copy_regular(pg / "bin" / name, destination / "bin" / name, 0o755)
     libraries = 0
     for source in sorted((pg / "lib").rglob("*")):
@@ -149,7 +149,7 @@ def elf_dependencies(product):
                        (product / Path(directory).relative_to(PREFIX) / library).is_file() for directory in directories):
                 raise ValueError("bundled runtime dependency is outside the library search path")
         result[path.relative_to(product).as_posix()] = needed
-    if "vult" not in result or not {"postgres/bin/postgres", "postgres/bin/initdb", "postgres/bin/pg_ctl"}.issubset(result):
+    if "vult" not in result or not {"postgres/bin/" + name for name in RUNTIME_BINARIES}.issubset(result):
         raise ValueError("runtime executable is not an x86-64 ELF file")
     return result
 
@@ -202,7 +202,7 @@ def main():
     parser.add_argument("--web-dist", type=Path, required=True, help="built interface from the same source")
     parser.add_argument("--web-sha256", required=True, help="expected interface file-manifest checksum")
     parser.add_argument("--postgres-archive", type=Path, required=True, help="existing pinned PostgreSQL source archive; no download")
-    parser.add_argument("--go", default="go", help="Go 1.27.3 executable with a populated module cache")
+    parser.add_argument("--go", default="go", help="Go 1.27.4 executable with a populated module cache")
     parser.add_argument("--updates", type=Path, help="include the update installer behind the app's Update button, trusting the update repository described in this directory (root.json and repository.json)")
     args = parser.parse_args()
     if args.updates:

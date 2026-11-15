@@ -328,6 +328,18 @@ func readPeriodReview(ctx context.Context, tx pgx.Tx, s Scope, from, through str
 	if json.Unmarshal(items, &out.OpenItems) != nil {
 		return out, ErrInvalid
 	}
+	// Bank activity in the period that isn't recorded yet is open too: the
+	// close would leave it out of the period's balances.
+	var unrecorded int64
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM (SELECT `+bankStatusSQL+` AS status`+bankActivityFrom+`
+ WHERE t.tenant_id=$1 AND t.book_id=$2 AND t.occurred_on BETWEEN $3::date AND $4::date) v WHERE v.status IN ('unrecorded','needs_account')`,
+		s.TenantID, s.BookID, from, through).Scan(&unrecorded); err != nil {
+		return out, dbError(err)
+	}
+	if out.OpenItems == nil {
+		out.OpenItems = map[string]int64{}
+	}
+	out.OpenItems["unrecorded_bank_items"] = unrecorded
 	out.Clean = true
 	for _, n := range out.OpenItems {
 		if n > 0 {

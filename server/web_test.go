@@ -15,7 +15,7 @@ func TestWebAppServesInterfaceAddressesAndImmutableAssets(t *testing.T) {
 		"assets/settings.js":      {Data: []byte("console.log(2)")},
 		"brand/vult-logo.svg":     {Data: []byte("<svg/>")},
 	}
-	app, e := newWebApp(files, "")
+	app, e := newWebApp(files, "", nil)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -45,7 +45,7 @@ func TestWebAppServesInterfaceAddressesAndImmutableAssets(t *testing.T) {
 	if w.Code != 200 || w.Body.Len() != 0 {
 		t.Fatal("HEAD returned a body")
 	}
-	if _, e = newWebApp(fstest.MapFS{}, ""); e == nil {
+	if _, e = newWebApp(fstest.MapFS{}, "", nil); e == nil {
 		t.Fatal("an interface without index.html was accepted")
 	}
 }
@@ -91,7 +91,7 @@ func TestWebAppReadsArtworkOnlyFromTheSharedOrigin(t *testing.T) {
 		if e != nil || origin != c.origin {
 			t.Fatalf("%q: %q %v", c.raw, origin, e)
 		}
-		app, e := newWebApp(files, origin)
+		app, e := newWebApp(files, origin, nil)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -112,5 +112,38 @@ func TestWebAppReadsArtworkOnlyFromTheSharedOrigin(t *testing.T) {
 		if _, e := sharedAssetOrigin(raw); e == nil {
 			t.Fatalf("%q accepted as an artwork origin", raw)
 		}
+	}
+}
+
+// Without a bank screen the page allows no third-party origin at all; with
+// one, exactly the origins it names, each where it asked for it.
+func TestABankScreensOriginsAreAllowedExactly(t *testing.T) {
+	off := webPolicy("", nil)
+	if off != "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" {
+		t.Fatal("a Vult without a bank screen allows another origin", off)
+	}
+	on := webPolicy("", &BankScreen{Provider: "example", Script: "/bank-screen.js", ScriptSources: []string{"https://cdn.example.com"},
+		FrameSources: []string{"https://cdn.example.com", "https://frame.example.com"}, ConnectSources: []string{"https://api.example.com"}})
+	for _, want := range []string{"script-src 'self' https://cdn.example.com;", "frame-src https://cdn.example.com https://frame.example.com;", "connect-src 'self' https://api.example.com;", "default-src 'self';"} {
+		if !strings.Contains(on, want) {
+			t.Fatalf("missing %q in %q", want, on)
+		}
+	}
+	if strings.Contains(on, "*") || strings.Count(on, "example.com") != 4 {
+		t.Fatal("the screen's origins aren't allowed exactly", on)
+	}
+	// A screen that needs no frame adds no frame-src.
+	if p := webPolicy("", &BankScreen{Provider: "example", Script: "/bank-screen.js"}); p != off {
+		t.Fatal("a screen with no origins changed the policy", p)
+	}
+}
+
+// The server's pages carry the screen's origins only when banks are on.
+func TestPagesCarryTheBankScreensPolicy(t *testing.T) {
+	_, s, _ := bankServer(t)
+	w := httptest.NewRecorder()
+	s.Handler.ServeHTTP(w, browserRequest(http.MethodGet, "/", ""))
+	if policy := w.Header().Get("Content-Security-Policy"); !strings.Contains(policy, "script-src 'self' https://cdn.example.com;") || !strings.Contains(policy, "frame-src https://cdn.example.com;") {
+		t.Fatal(w.Code, policy)
 	}
 }

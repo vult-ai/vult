@@ -50,11 +50,15 @@ func (s *Service) OwnerRequestAs(ctx context.Context, session, tenant, key, oper
 		}
 		var live string
 		if e = tx.QueryRow(ctx, "SELECT access.require_owner($1,true)::text", tenant).Scan(&live); e != nil || live != who {
+			// The owner signed in above; only the recent sign-in is missing.
+			if e != nil {
+				return errFreshProof
+			}
 			return ErrDenied
 		}
 		if admit != nil {
 			if e = admit(ctx, tx, tenant, operation, input); e != nil {
-				return ErrDenied
+				return ledger.AdmissionRefusal(e, ErrDenied)
 			}
 		}
 		result, e = call(owner, who)

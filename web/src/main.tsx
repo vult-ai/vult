@@ -92,6 +92,8 @@ import { FailureState } from "./components/ui/failure-state";
 import { EmptyState } from "./components/ui/empty-state";
 import { LoadingState } from "./components/ui/loading-state";
 import { Toaster, toast } from "./components/ui/toaster";
+import { UpgradeNotice } from "./components/backups/upgrade-notice";
+import { booksChanged } from "./components/book/book-data-settings";
 
 const loadTransactionsTable = () =>
   import("./components/book/transactions-table");
@@ -612,6 +614,7 @@ function BookWorkspace({
   }
   return (
     <>
+      <UpgradeNotice book={book} />
       <div className="workspace-app-frame">
         <AppShell {...shellProps}>
           <ColumnLayoutScope bookId={book.id}>
@@ -988,6 +991,13 @@ function App({
     return () => {
       generation.current += 1;
     };
+  }, []);
+
+  // A Book archived or brought back changes the Book list.
+  useEffect(() => {
+    const changed = () => void loadBooks();
+    window.addEventListener(booksChanged, changed);
+    return () => window.removeEventListener(booksChanged, changed);
   }, []);
 
   useLayoutEffect(() => {

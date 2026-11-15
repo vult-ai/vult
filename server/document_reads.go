@@ -47,6 +47,10 @@ func documentReadQuery(r *http.Request, paged, entries bool) (documentReadReques
 			request.search = strings.TrimSpace(values[0])
 			continue
 		}
+		if paged && !entries && key == "group" && values[0] != "" {
+			request.page.Group = values[0]
+			continue
+		}
 		if !paged || key != "after" && key != "limit" {
 			return request, ledger.ErrInvalid
 		}

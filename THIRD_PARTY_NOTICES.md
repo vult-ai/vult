@@ -120,7 +120,7 @@ Subsequent modifications to the code by the PostgreSQL project follow
 the same license terms as the rest of PostgreSQL.
 ```
 
-## Go runtime and standard library 1.27.3
+## Go runtime and standard library 1.27.4
 
 ```text
 Copyright 2009 The Go Authors.

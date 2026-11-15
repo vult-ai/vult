@@ -108,6 +108,8 @@ type ActivityAccount struct {
 	Kind     string `json:"kind"`
 	Role     string `json:"role,omitempty"`
 	Revision int64  `json:"revision"`
+	// Heading marks an account that groups others and takes no postings.
+	Heading bool `json:"heading,omitempty"`
 }
 
 type ActivityPage struct {
@@ -143,13 +145,13 @@ type ActivityCoverage struct {
 	Basis      string `json:"basis"`
 }
 
-const activitySelectionSQL = `WITH matched AS MATERIALIZED (
- SELECT e.id,e.sequence,e.accounting_date,r.id reversed_by FROM public.entries e
+const activitySelectionSQL = `WITH population AS MATERIALIZED (
+ SELECT e.id,e.sequence,e.accounting_date,r.id reversed_by,e.reversal_of FROM public.entries e
  LEFT JOIN public.entries r ON r.tenant_id=e.tenant_id AND r.book_id=e.book_id AND r.reversal_of=e.id AND r.recorded_at<=$8::timestamptz
  WHERE e.tenant_id=$1 AND e.book_id=$2 AND e.recorded_at<=$8::timestamptz
  AND ($5='' OR e.accounting_date>=nullif($5,'')::date)
  AND ($6='' OR e.accounting_date<=nullif($6,'')::date)
- AND ($4='' OR ($4='journal' AND e.reversal_of IS NULL) OR ($4='reversal' AND e.reversal_of IS NOT NULL)
+ AND (NOT $11 OR $4='' OR ($4='journal' AND e.reversal_of IS NULL) OR ($4='reversal' AND e.reversal_of IS NOT NULL)
    OR ($4 IN('income','expense') AND EXISTS(SELECT 1 FROM public.lines l JOIN public.accounts a
      ON a.tenant_id=l.tenant_id AND a.book_id=l.book_id AND a.id=l.account_id
      WHERE l.tenant_id=$1 AND l.book_id=$2 AND l.entry_id=e.id AND a.class=$4)))
@@ -157,11 +159,20 @@ const activitySelectionSQL = `WITH matched AS MATERIALIZED (
    AND l.entry_id=e.id AND l.account_id=nullif($7,'')::uuid))
  AND ($3='' OR e.id IN (` + activitySearchMatches + `))
  ORDER BY e.sequence LIMIT 100001
- ), selected_lines AS MATERIALIZED (
+ ), population_lines AS MATERIALIZED (
  SELECT e.id entry_id,e.accounting_date,l.id,l.account_id,l.side,l.amount_minor,a.class,a.name
- FROM matched e JOIN public.lines l ON l.tenant_id=$1 AND l.book_id=$2 AND l.entry_id=e.id
+ FROM population e JOIN public.lines l ON l.tenant_id=$1 AND l.book_id=$2 AND l.entry_id=e.id
  LEFT JOIN public.accounts a ON a.tenant_id=l.tenant_id AND a.book_id=l.book_id AND a.id=l.account_id
  LIMIT 100001
+ ), entry_kinds AS MATERIALIZED (
+ SELECT entry_id,bool_or(class='income') income,bool_or(class='expense') expense FROM population_lines GROUP BY entry_id
+ ), matched AS MATERIALIZED (
+ SELECT e.* FROM population e WHERE $11 OR $4='' OR ($4='journal' AND e.reversal_of IS NULL) OR ($4='reversal' AND e.reversal_of IS NOT NULL)
+ OR EXISTS(SELECT 1 FROM entry_kinds k WHERE k.entry_id=e.id AND ($4='income' AND k.income OR $4='expense' AND k.expense))
+ ), selected_lines AS MATERIALIZED (
+ SELECT l.* FROM population_lines l JOIN matched e ON e.id=l.entry_id
+ ), population_health AS (
+ SELECT count(*) line_count,count(*) FILTER(WHERE class IS NULL) missing FROM population_lines WHERE NOT $11 AND $4<>''
  ) `
 
 // activitySearchMatches stands in for the Book search's matching entries
@@ -180,6 +191,7 @@ type activitySelection struct {
 	unit                  string
 	population            string
 	series, categories    []ActivityBucket
+	counts                map[string]int
 }
 
 func activitySelect(ctx context.Context, tx pgx.Tx, scope Scope, book Book, q ActivityFilters, limit, offset int, summary bool) (activitySelection, error) {
@@ -217,6 +229,7 @@ func activitySelect(ctx context.Context, tx pgx.Tx, scope Scope, book Book, q Ac
 	}
 	args := append([]any{scope.TenantID, scope.BookID, search, q.Kind, q.From, q.To, q.Account, out.cutoff, limit, offset, summary}, searchArgs...)
 	var series, categories []byte
+	var allCount, incomeCount, expenseCount, populationLines, populationMissing int
 	err = tx.QueryRow(ctx, selection+`, stats AS (
  SELECT count(*) count,min(accounting_date) first_date,max(accounting_date) last_date,
  encode(sha256(convert_to(coalesce(string_agg(id::text||':'||coalesce(reversed_by::text,''),',' ORDER BY sequence),''),'UTF8')),'hex') population FROM matched
@@ -246,17 +259,21 @@ func activitySelect(ctx context.Context, tx pgx.Tx, scope Scope, book Book, q Ac
  amounts.income::text,amounts.expenses::text,stats.population,
  ARRAY(SELECT id::text FROM matched ORDER BY accounting_date DESC,sequence DESC LIMIT $9 OFFSET $10),grain.unit,
  coalesce((SELECT jsonb_agg(jsonb_build_object('key',key,'label',key,'income_minor',income_minor,'expenses_minor',expenses_minor,'count',count) ORDER BY key) FROM series),'[]'::jsonb),
- coalesce((SELECT jsonb_agg(to_jsonb(ranked) ORDER BY greatest(abs(income_minor::numeric),abs(expenses_minor::numeric)) DESC,key) FROM ranked),'[]'::jsonb)
- FROM stats CROSS JOIN amounts CROSS JOIN grain`, args...).Scan(&out.count, &out.first, &out.last, &out.lines, &out.missing, &out.income, &out.expenses, &out.population, &out.ids, &out.unit, &series, &categories)
+ coalesce((SELECT jsonb_agg(to_jsonb(ranked) ORDER BY greatest(abs(income_minor::numeric),abs(expenses_minor::numeric)) DESC,key) FROM ranked),'[]'::jsonb),
+ CASE WHEN $11 OR $4='' THEN stats.count ELSE (SELECT count(*) FROM population) END,
+ CASE WHEN $11 THEN 0 ELSE (SELECT count(*) FROM entry_kinds WHERE income) END,
+ CASE WHEN $11 THEN 0 ELSE (SELECT count(*) FROM entry_kinds WHERE expense) END,population_health.line_count,population_health.missing
+ FROM stats CROSS JOIN amounts CROSS JOIN grain CROSS JOIN population_health`, args...).Scan(&out.count, &out.first, &out.last, &out.lines, &out.missing, &out.income, &out.expenses, &out.population, &out.ids, &out.unit, &series, &categories, &allCount, &incomeCount, &expenseCount, &populationLines, &populationMissing)
 	if err != nil {
 		return out, dbError(err)
 	}
-	if out.count > 100000 || out.lines > 100000 {
+	if out.count > 100000 || out.lines > 100000 || allCount > 100000 || populationLines > 100000 {
 		return out, ErrLimit
 	}
-	if out.missing != 0 {
+	if out.missing != 0 || populationMissing != 0 {
 		return out, ErrDenied
 	}
+	out.counts = map[string]int{"": allCount, "income": incomeCount, "expense": expenseCount}
 	if json.Unmarshal(series, &out.series) != nil || json.Unmarshal(categories, &out.categories) != nil {
 		return out, ErrDenied
 	}
@@ -288,20 +305,11 @@ func (a TenantAdmin) Activity(ctx context.Context, book string, q ActivityPageQu
 		}
 		out = ActivityPage{RecordedState: selected.state.RecordedState, Version: 1, ReadView: "transactions", Book: header, Currencies: Currencies(), Accounts: []ActivityAccount{}, Transactions: []ActivityEntry{}, Summary: ActivityTotals{Income: selected.income, Expenses: selected.expenses, Net: net}, Revision: selected.revision, SourceCoverage: "unknown",
 			Coverage: ActivityCoverage{Count: selected.count, Offset: q.Offset, Limit: q.Limit, HasMore: q.Offset+len(selected.ids) < selected.count, NextOffset: q.Offset + len(selected.ids), Complete: q.Offset == 0 && len(selected.ids) == selected.count, Basis: "filtered_recorded_journal_entries"}}
-		out.Counts = map[string]int{}
-		for _, kind := range []string{"", "income", "expense"} {
-			if kind == q.Kind {
-				out.Counts[kind] = selected.count
-				continue
-			}
-			other := q.ActivityFilters
-			other.Kind = kind
-			tab, err := activitySelect(ctx, tx, scope, header, other, 1, 0, false)
-			if err != nil {
-				return err
-			}
-			out.Counts[kind] = tab.count
+		out.Counts = selected.counts
+		if q.Kind != "" {
+			out.Counts[q.Kind] = selected.count
 		}
+
 		accounts, err := readScopedCatalog(ctx, tx, scope)
 		if err != nil {
 			return err

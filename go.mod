@@ -1,6 +1,6 @@
 module github.com/vult-ai/vult
 
-go 1.27.3
+go 1.27.4
 
 require (
 	filippo.io/age v1.3.2
@@ -20,6 +20,7 @@ require (
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.47.0
+	golang.org/x/text v0.42.0
 	golang.org/x/time v0.15.0
 )
 
@@ -45,7 +46,6 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250825161204-c5933d9347a5 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )

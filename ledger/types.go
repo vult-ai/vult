@@ -81,7 +81,49 @@ type Book struct {
 	FiscalYearStartMonth *int      `json:"fiscal_year_start_month,omitempty"`
 	FiscalYearStartDay   *int      `json:"fiscal_year_start_day,omitempty"`
 	AccountingTimezone   string    `json:"accounting_timezone,omitempty"`
+	// TaxedAs is how the Book is taxed: sole_owner, partnership,
+	// s_corporation, c_corporation or personal. TaxedAsSet says the owner
+	// chose it; otherwise it is the default from the profile.
+	TaxedAs    string `json:"taxed_as,omitempty"`
+	TaxedAsSet bool   `json:"taxed_as_set,omitempty"`
+	// ExpenseReports says the Book is a business that pays back a person
+	// whose costs are owed to it through an active link. It comes from the
+	// links, not the Book's settings, so a settings outcome never holds it.
+	ExpenseReports bool `json:"-"`
+	// taxedAs is the owner's choice as kept, or nil.
+	taxedAs *string
 }
+
+// Ways a Book is taxed.
+const (
+	TaxedSoleOwner    = "sole_owner"
+	TaxedPartnership  = "partnership"
+	TaxedSCorporation = "s_corporation"
+	TaxedCCorporation = "c_corporation"
+	TaxedPersonal     = "personal"
+)
+
+// taxedAsDefault is how a Book with this profile is taxed until the owner
+// says otherwise.
+func taxedAsDefault(profile string) string {
+	switch profile {
+	case "personal":
+		return TaxedPersonal
+	case "business":
+		return TaxedSoleOwner
+	}
+	return ""
+}
+
+// setTaxedAs keeps the owner's choice, or none, and what follows from it.
+func (b *Book) setTaxedAs(choice *string) {
+	b.taxedAs = choice
+	b.TaxedAs, b.TaxedAsSet = taxedAsDefault(b.Profile), choice != nil
+	if choice != nil {
+		b.TaxedAs = *choice
+	}
+}
+
 type Account struct {
 	ID                   string `json:"id"`
 	Class                string `json:"class"`
@@ -161,6 +203,21 @@ type PostJournal struct {
 	Lines             []PostLine         `json:"lines"`
 	Sources           []SourceInput      `json:"sources,omitempty"`
 	MeasurementPolicy *MeasurementPolicy `json:"measurement_policy,omitempty"`
+	// PairKey makes this the beneficiary's half of a pair: a cost a linked
+	// Book paid for this one, recorded in both and decided once.
+	// PairedTransactionID is the bank item in the Book that paid (PayerBookID,
+	// optional), and Reason says why the cost is this Book's. Pairs are
+	// prepared, never posted directly.
+	PairKey             string `json:"pair_key,omitempty"`
+	PairedTransactionID string `json:"paired_transaction_id,omitempty"`
+	PayerBookID         string `json:"payer_book_id,omitempty"`
+	Reason              string `json:"reason,omitempty"`
+	AssignedBy          string `json:"assigned_by,omitempty"`
+	// Opening makes this a half of an opening balance between linked Books:
+	// what one owed the other before their first bank line, entered once in
+	// both. OtherBookID is the other linked Book; there is no bank item.
+	Opening     bool   `json:"opening,omitempty"`
+	OtherBookID string `json:"other_book_id,omitempty"`
 }
 type PostLine struct {
 	AccountID   string               `json:"account_id"`
@@ -187,6 +244,8 @@ type AccountQuery struct {
 type ListQuery struct {
 	After int64 `json:"after,omitempty"`
 	Limit int   `json:"limit,omitempty"`
+	// Group lists only documents filed in that group, for document lists.
+	Group string `json:"group,omitempty"`
 }
 type TrialQuery struct {
 	Through string `json:"through,omitempty"`

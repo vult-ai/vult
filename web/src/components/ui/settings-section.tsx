@@ -3,12 +3,15 @@ import { ChevronDown } from "../../design-system/icons";
 import "./settings-section.css";
 
 export function SettingsSection({
+  id,
   title,
   icon: Icon,
   description,
   actions,
   children,
 }: {
+  /** Lets a link land on this section. */
+  id?: string;
   title: string;
   /** The section's icon, in the same tile as the Agents panel. */
   icon?: ComponentType<{ "aria-hidden"?: boolean }>;
@@ -18,7 +21,7 @@ export function SettingsSection({
 }) {
   const headingId = useId();
   return (
-    <section className="vult-settings-section" aria-labelledby={headingId}>
+    <section id={id} className="vult-settings-section" aria-labelledby={headingId}>
       <header className="vult-settings-section-header">
         {Icon && (
           <span className="vult-settings-section-icon" aria-hidden="true">

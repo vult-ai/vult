@@ -191,6 +191,17 @@ func TestSearchGroupsAndAmounts(t *testing.T) {
 	if r.Accounts.Total != 1 || r.Accounts.Items[0].Name != "Office Expense" || r.Accounts.Items[0].Code != "6000" {
 		t.Fatalf("accounts group: %+v", r.Accounts)
 	}
+	// Every match is added up, by the types of the accounts it posts to.
+	if got := b.search(t, "office expense").TransactionTotals; got == nil || got.Entries != 3 || got.ExpensesMinor != "34636" || got.IncomeMinor != "0" ||
+		got.FirstDate != "2019-10-24" || got.LastDate != "2026-10-24" {
+		t.Fatalf("spending totals: %+v", got)
+	}
+	if got := b.search(t, "stripe 880.09").TransactionTotals; got == nil || got.Entries != 1 || got.IncomeMinor != "88009" || got.ExpensesMinor != "0" {
+		t.Fatalf("income totals: %+v", got)
+	}
+	if got := b.search(t, "amazonamazon").TransactionTotals; got != nil {
+		t.Fatalf("no matches, no totals: %+v", got)
+	}
 	if r.Counterparties.Items == nil || r.Sources.Items == nil || r.Counterparties.Total != 0 || r.Counterparties.Status != "not_recorded" {
 		t.Fatal("every group is present; counterparties are not recorded")
 	}

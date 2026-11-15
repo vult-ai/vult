@@ -51,3 +51,24 @@ func TestConsentPageStatesVerification(t *testing.T) {
 		t.Fatal("local app not stated")
 	}
 }
+
+func TestChatGPTCallbacksAreVerifiedOnlyWhereOpenAIDocumentsThem(t *testing.T) {
+	for _, c := range []struct {
+		redirect string
+		verified bool
+	}{
+		{"https://chatgpt.com/connector_platform_oauth_redirect", true},
+		{"https://chatgpt.com/connector/oauth/abc123", true},
+		{"https://chatgpt.com/connector/oauth/", false},
+		{"https://chatgpt.com/connector/oauth/abc/../x", false},
+		{"https://chatgpt.com/connector/oauth/abc?next=x", false},
+		{"https://chatgpt.com.example.com/connector/oauth/abc", false},
+		{"http://chatgpt.com/connector/oauth/abc", false},
+		{"http://127.0.0.1:8765/callback", false},
+	} {
+		got := identifyApp("Self-named app", c.redirect)
+		if got.Verified != c.verified || c.verified && got.Name != "ChatGPT" || !c.verified && got.Name != "Self-named app" {
+			t.Fatalf("%s: %+v", c.redirect, got)
+		}
+	}
+}

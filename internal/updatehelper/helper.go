@@ -101,6 +101,8 @@ func (h *Helper) Run(ctx context.Context) (Status, error) {
 		return Status{}, err
 	}
 	defer unlock()
+	// The app always sees the newest backup, whatever this run did.
+	defer RefreshBackups(h.Layout)
 	history := &updatehistory.Log{Path: h.Layout.History(), Now: h.now}
 	installed, err := Installed(h.Layout)
 	if err != nil {
@@ -122,6 +124,9 @@ func (h *Helper) Run(ctx context.Context) (Status, error) {
 	if installed, err = Installed(h.Layout); err != nil {
 		return Status{}, err
 	}
+	if err := h.recoverRestore(ctx, history, installed.Version); err != nil {
+		return h.status(journal, installed.Version, err.Error()), err
+	}
 	request, asked := updatestatus.ReadRequest(h.Request)
 	check := updatestatus.CheckRequested(h.Request)
 	if check {
@@ -134,6 +139,10 @@ func (h *Helper) Run(ctx context.Context) (Status, error) {
 	if asked {
 		if err := updatestatus.ClearRequest(h.Request); err != nil {
 			return h.status(journal, installed.Version, err.Error()), err
+		}
+		if request.Restore != "" {
+			err := h.restore(ctx, history, installed.Version, request)
+			return h.status(journal, installed.Version, ""), err
 		}
 	}
 	client, release, lookupErr := h.latest(installed)
@@ -149,6 +158,10 @@ func (h *Helper) Run(ctx context.Context) (Status, error) {
 		}
 		if err := updatestatus.ClearRequest(h.Request); err != nil {
 			return h.status(journal, installed.Version, err.Error()), err
+		}
+		if request.Restore != "" {
+			err := h.restore(ctx, history, installed.Version, request)
+			return h.status(journal, installed.Version, ""), err
 		}
 	}
 	defer0 := func(code, reason string) (Status, error) {

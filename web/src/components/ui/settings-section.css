@@ -27,6 +27,11 @@
   min-width: 0;
 }
 
+/* A link that lands on a section stops below the page bar, not under it. */
+.vult-settings-section {
+  scroll-margin-top: calc(var(--vult-shell-header-height) + 16px);
+}
+
 .vult-settings-section-header {
   display: flex;
   align-items: flex-start;

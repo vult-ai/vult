@@ -9,6 +9,8 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/vult-ai/vult/internal/daemon"
 )
 
 func TestArchiveCommandsKeepBrokenPipesSeparateFromMCPLifecycle(t *testing.T) {
@@ -58,7 +60,7 @@ func TestPublicHelpAndVersionNeedNoInstallation(t *testing.T) {
 		if e := run(args, &out, &errout); e != nil {
 			t.Fatal(e)
 		}
-		if !strings.Contains(out.String(), "0.7.0") || errout.Len() != 0 {
+		if !strings.Contains(out.String(), daemon.Version) || errout.Len() != 0 {
 			t.Fatal("invalid help or version output")
 		}
 	}

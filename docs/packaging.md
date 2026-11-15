@@ -4,10 +4,14 @@ The [Ubuntu package](../packaging/ubuntu/README.md#build-offline) has a separate
 offline builder and installer. It bundles native PostgreSQL and keeps retained
 data separate from program files, as the macOS package does.
 
+Before building any release package, run `scripts/check-changes.sh --release`
+on the release commit (see [CONTRIBUTING.md](../CONTRIBUTING.md)). It includes
+the dependency vulnerability scans, and a finding blocks the release.
+
 ## macOS
 
 Build on Apple Silicon macOS 26 with Xcode command-line tools, Python 3.12 or
-later, and Go 1.27.3:
+later, and Go 1.27.4:
 
 ```sh
 cd web

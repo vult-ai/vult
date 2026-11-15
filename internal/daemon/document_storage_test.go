@@ -129,11 +129,14 @@ func TestServiceDocumentKeysPersistAndMissingKeysRequireRecovery(t *testing.T) {
 	storage.Close()
 	keyPath := filepath.Join(dataRoot, "document-keys")
 	entries, err := os.ReadDir(keyPath)
-	if err != nil || len(entries) != 1 {
-		t.Fatal("missing fixture key", err)
+	// The Vult's key and the Book's own key, which sealed this original.
+	if err != nil || len(entries) != 2 {
+		t.Fatal("missing fixture keys", err)
 	}
-	if err = os.Remove(filepath.Join(keyPath, entries[0].Name())); err != nil {
-		t.Fatal(err)
+	for _, entry := range entries {
+		if err = os.Remove(filepath.Join(keyPath, entry.Name())); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if replacement, err := prepareDocumentStorage(db.Context, db.Owner, dataRoot); err == nil {
 		replacement.Close()

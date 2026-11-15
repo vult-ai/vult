@@ -22,6 +22,8 @@ export function BookSwitcher({
   const [open, setOpen] = useState(false);
   const current = books.find((book) => book.id === selected);
   const name = current?.name || "Select Book";
+  // An archived Book stays out of the menu, unless it's the one open.
+  const listed = books.filter((book) => book.id === selected || !book.archived);
   return (
     <div className="book-switcher" aria-label="Book selection">
       <Dropdown.Root
@@ -71,7 +73,7 @@ export function BookSwitcher({
                   onSelect(id);
               }}
             >
-              {books.map((book) => (
+              {listed.map((book) => (
                 <Dropdown.Item key={book.id} id={book.id} label={book.name} icon={() => <BookMark book={book} />}>
                   {book.name}
                 </Dropdown.Item>

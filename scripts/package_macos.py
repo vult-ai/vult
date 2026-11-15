@@ -17,9 +17,10 @@ import tempfile
 import urllib.request
 from go_notices import check as check_go_notices
 from make_installer import render
+from strip_appledouble import strip_package
 
-VERSION = "0.7.0"
-GO_VERSION = "go1.27.3"
+VERSION = "0.8.0"
+GO_VERSION = "go1.27.4"
 # Native code records the compiler and SDK it was built with, so a rebuild
 # reproduces the same bytes only with exactly these.
 CLANG_VERSION = "Apple clang version 21.0.0 (clang-2100.4.1.1)"
@@ -27,6 +28,10 @@ MACOS_SDK = "27.2"
 PG_VERSION = "18.6"
 PG_SHA256 = "555610c24d53e4316da5b7d3fc25c279d96856d5e0e23ee308c328c5fa881d9f"
 PREFIX = Path("/Library/PrivilegedHelperTools/ai.vult.ledger")
+# The PostgreSQL programs Vult runs: the server, its setup and control, and
+# pg_controldata, which checks a database was shut down cleanly before a
+# recovery point or an update copies it.
+RUNTIME_BINARIES = ("postgres", "initdb", "pg_ctl", "pg_controldata")
 ENV = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "C", "LC_ALL": "C", "SOURCE_DATE_EPOCH": "0", "ZERO_AR_DATE": "1", "COPYFILE_DISABLE": "1"}
 
 
@@ -169,7 +174,7 @@ def runtime_payload(pg, dest):
         raise ValueError("unexpected PostgreSQL runtime version")
     for part in ("bin", "lib", "share"):
         (dest / part).mkdir(parents=True)
-    for name in ("postgres", "initdb", "pg_ctl"):
+    for name in RUNTIME_BINARIES:
         path = pg / "bin" / name
         if path.is_symlink() or not path.is_file():
             raise ValueError("runtime binary must be a regular file")
@@ -264,7 +269,7 @@ def main():
     p.add_argument("--web-dist", type=Path, help="built interface from the same source")
     p.add_argument("--web-sha256", help="expected interface file-manifest checksum")
     p.add_argument("--print-web-sha256", type=Path, help="print an interface file-manifest checksum and exit")
-    p.add_argument("--go", default="go", help="Go 1.27.3 executable")
+    p.add_argument("--go", default="go", help="Go 1.27.4 executable")
     p.add_argument("--postgres-archive", type=Path, help="use an existing checksum-verified source archive; native code is always rebuilt cleanly")
     p.add_argument("--sign-application", help="Developer ID Application signing identity")
     p.add_argument("--sign-installer", help="Developer ID Installer signing identity")
@@ -287,7 +292,7 @@ def main():
         p.error("build on Apple Silicon macOS")
     go = shutil.which(args.go)
     if not go:
-        p.error("Go 1.27.3 is required")
+        p.error("Go 1.27.4 is required")
     # Preserve only the ordinary Go module/build caches, never task-specific ones.
     env = dict(ENV, HOME=str(Path.home()), CGO_ENABLED="0", GOTOOLCHAIN="local", GOPROXY="https://proxy.golang.org,direct", GOSUMDB="sum.golang.org")
     version = subprocess.check_output([go, "version"], env=env, timeout=10).decode().split()[2]
@@ -314,11 +319,19 @@ def main():
         tags = "webui,vult_updates" if args.updates else "webui"
         run([go, "build", "-tags=" + tags, "-trimpath", "-buildvcs=false", "-ldflags=-s -w", "-o", product / "vult", "./cmd/vult"], clean, env)
         (product / "vult").chmod(0o755)
+        # The Secure Enclave helper that seals the bank keyring ships beside vult.
+        run(["/usr/bin/xcrun", "swiftc", "-O", "-target", "arm64-apple-macos26.0", "-o", product / "vult-enclave",
+             "packaging/macos/vult_enclave.swift"], clean, env)
+        (product / "vult-enclave").chmod(0o755)
+        # The text recognition helper that reads scans on this Mac ships beside vult.
+        run(["/usr/bin/xcrun", "swiftc", "-O", "-target", "arm64-apple-macos26.0", "-o", product / "vult-ocr",
+             "packaging/macos/vult_ocr.swift"], clean, env)
+        (product / "vult-ocr").chmod(0o755)
         for path in sorted(product.rglob("*")):
-            if path.is_file() and (path.suffix == ".dylib" or path.parent.name == "bin" or path.name == "vult"):
+            if path.is_file() and (path.suffix == ".dylib" or path.parent.name == "bin" or path.name in ("vult", "vult-enclave", "vult-ocr")):
                 run(["/usr/bin/strip", "-S", path])
                 command = ["/usr/bin/codesign", "--force", "--sign", args.sign_application or "-"]
-                if args.sign_application or path.name == "vult":
+                if args.sign_application or path.name in ("vult", "vult-enclave", "vult-ocr"):
                     command.extend(["--options", "runtime"])
                 run(command + [path])
         for name in ("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"):
@@ -336,7 +349,17 @@ def main():
                                for path in sorted(product.rglob("*")) if path.is_file()},
                      "launch_daemon_sha256": digest(launch / "ai.vult.ledger.plist"),
                      "browser_daemon_sha256": digest(launch / "ai.vult.browser.plist")}
+        if args.updates:
+            # The update helper sits outside the program folder; naming it
+            # here lets uninstalling remove it too.
+            inventory["external_files"] = {
+                "/Library/LaunchDaemons/ai.vult.update-helper.plist": digest(launch / "ai.vult.update-helper.plist"),
+                "/Library/PrivilegedHelperTools/ai.vult.updater/vult-update-helper":
+                    digest(payload / "Library/PrivilegedHelperTools/ai.vult.updater/vult-update-helper")}
         (product / "program-files.json").write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n")
+        # The program just built must recognize every file it will manage, or
+        # it couldn't stop itself to upgrade or uninstall.
+        run([product / "vult", "_check_inventory", product / "program-files.json"])
         for directory in payload.rglob("*"):
             if directory.is_dir():
                 directory.chmod(0o755)
@@ -346,9 +369,14 @@ def main():
         package = output / f"vult-{VERSION}-macos-arm64.pkg"
         run(["/usr/bin/xattr", "-cr", payload])
         cmd = ["/usr/bin/pkgbuild", "--root", payload, "--scripts", clean / "packaging/macos/scripts", "--identifier", "ai.vult.ledger", "--version", VERSION, "--install-location", "/", "--ownership", "recommended", "--min-os-version", "26.0", "--compression", "latest", "--filter", r"(^|/)([.]DS_Store|[.][_]([^/]*))$"]
-        if args.sign_installer:
-            cmd.extend(["--sign", args.sign_installer])
         run(cmd + [package])
+        # Extended attributes the build can't clear, such as provenance, would
+        # ship as ._name members; the package is rewritten without them.
+        strip_package(package, run)
+        if args.sign_installer:
+            signed = output / (package.name + ".signed")
+            run(["/usr/bin/productsign", "--sign", args.sign_installer, package, signed])
+            signed.replace(package)
         # Generate the standalone installer only after the package is final.
         # Generated release files are not part of the source archive.
         installer = render(VERSION, "macos-arm64", "26.0", digest(package)).encode()

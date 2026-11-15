@@ -143,8 +143,13 @@ func TestOfflineArchiveCommandsRestoreOriginalsUnderFreshKeys(t *testing.T) {
 	}
 	defer targetCloser.Close()
 	connections, err := target.Owner.Connections(target.Context)
-	if err != nil || len(connections) != 0 {
-		t.Fatal("offline restore revived grants", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range connections {
+		if c.RevokedAt == nil {
+			t.Fatal("offline restore revived grants", c.ID)
+		}
 	}
 	connection, err := target.Owner.CreateConnection(target.Context, book.ID, "Example restored agent", "read")
 	if err != nil {

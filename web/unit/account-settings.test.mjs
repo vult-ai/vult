@@ -231,3 +231,26 @@ test("private photo references resolve only to the current-origin User route", (
   const ambiguous=payload();ambiguous.profile.photo="https://private-provider.test/image";
   assert.throws(() => parseAccountSettings(ambiguous,id));
 });
+
+test("a refused save keeps the chosen theme on screen; only a 401 signs the settings out", async () => {
+  const previous = globalThis.fetch;
+  let status = 403, signedOut = 0;
+  try {
+    globalThis.fetch = async () => ({ ok: false, status, json: async () => ({ code: "REFUSED", error: "not allowed" }) });
+    const api = accountSettingsAPI("token");
+    const store = createAccountSettingsStore(id, { load: async () => ({ ...defaults(), revision: "1" }), save: api.save }, () => signedOut++, 0);
+    await store.load();
+    store.update({ appearance: "light" });
+    await settled(store);
+    assert.equal(store.getSnapshot().status, "error");
+    assert.equal(store.getSnapshot().value.appearance, "light");
+    assert.equal(signedOut, 0);
+    status = 401;
+    await store.retry();
+    assert.equal(store.getSnapshot().status, "signed-out");
+    assert.equal(signedOut, 1);
+    store.dispose();
+  } finally {
+    globalThis.fetch = previous;
+  }
+});

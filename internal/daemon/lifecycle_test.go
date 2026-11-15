@@ -7,8 +7,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -636,5 +638,101 @@ func TestNativeUpgradeRejectsUnrecognizedReceipts(t *testing.T) {
 				t.Fatal("rejected upgrade changed the receipts")
 			}
 		})
+	}
+}
+
+// updaterFixture adds the update helper's startup entry and program, named in
+// the inventory by their installed paths, and returns where they are.
+func updaterFixture(t *testing.T, p *removalPaths) (plist, helper string) {
+	t.Helper()
+	p.Updater = filepath.Join(filepath.Dir(p.Code), "updater")
+	plist, helper = filepath.Join(filepath.Dir(p.Startup), "ai.vult.update-helper.plist"), filepath.Join(p.Updater, "vult-update-helper")
+	writeFixture(t, plist, []byte("synthetic update helper startup"), 0644)
+	writeFixture(t, helper, []byte("synthetic update helper"), 0755)
+	var m removalManifest
+	if err := json.Unmarshal(fixtureBytes(t, filepath.Join(p.Code, programManifest)), &m); err != nil {
+		t.Fatal(err)
+	}
+	m.ExternalFiles = map[string]string{updaterStartup: checksum(fixtureBytes(t, plist)), updaterProgram: checksum(fixtureBytes(t, helper))}
+	data, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(p.Code, programManifest), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	return plist, helper
+}
+
+func TestSoftwareRemovalRemovesTheUpdateHelper(t *testing.T) {
+	p := programFixture(t)
+	plist, helper := updaterFixture(t, &p)
+	before := retainedBytes(t, p)
+	r, err := removeProgram(p, uint32(os.Geteuid()), func() error { return nil })
+	if err != nil || len(r.Kept) != 0 {
+		t.Fatal(r, err)
+	}
+	for _, path := range []string{plist, helper, p.Updater} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatal("update helper remains", filepath.Base(path), err)
+		}
+	}
+	assertRetained(t, p, before)
+}
+
+func TestSoftwareRemovalKeepsAChangedUpdateHelper(t *testing.T) {
+	p := programFixture(t)
+	plist, helper := updaterFixture(t, &p)
+	if err := os.WriteFile(helper, []byte("another update helper"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	r, err := removeProgram(p, uint32(os.Geteuid()), func() error { return nil })
+	if err != nil || !slices.Contains(r.Kept, helper) || !slices.Contains(r.Kept, p.Updater) {
+		t.Fatal(r, err)
+	}
+	if string(fixtureBytes(t, helper)) != "another update helper" {
+		t.Fatal("a changed update helper was touched")
+	}
+	if _, err := os.Lstat(plist); !os.IsNotExist(err) {
+		t.Fatal("the unchanged startup entry remains", err)
+	}
+}
+
+func TestProgramInventoryNamesOnlyTheUpdateHelper(t *testing.T) {
+	p := programFixture(t)
+	updaterFixture(t, &p)
+	m, err := readRemovalManifest(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, change := range map[string]func(*removalManifest, *removalPaths){
+		"another file": func(m *removalManifest, _ *removalPaths) {
+			m.ExternalFiles["/etc/other"] = m.ExternalFiles[updaterStartup]
+		},
+		"one missing": func(m *removalManifest, _ *removalPaths) { delete(m.ExternalFiles, updaterProgram) },
+		"no folder":   func(_ *removalManifest, p *removalPaths) { p.Updater = "" },
+	} {
+		mm, pp := m, p
+		mm.ExternalFiles = maps.Clone(m.ExternalFiles)
+		change(&mm, &pp)
+		if _, err := managedExternalFiles(pp, mm); err == nil {
+			t.Fatal(name, "was accepted")
+		}
+	}
+}
+
+// The installation's vult_id is the same on every start, random-looking,
+// and gives nothing of the secret it comes from.
+func TestVultIDIsStableAndRevealsNothing(t *testing.T) {
+	c := browserConfiguration{OwnerPassword: "synthetic-owner-password-one"}
+	id := c.vultID()
+	if id != c.vultID() || len(id) != 32 || strings.Trim(id, "0123456789abcdef") != "" || strings.Contains(id, c.OwnerPassword) {
+		t.Fatal(id)
+	}
+	if (browserConfiguration{OwnerPassword: "synthetic-owner-password-two"}).vultID() == id {
+		t.Fatal("two installations share an id")
+	}
+	if c.serverConfig().VultID != id {
+		t.Fatal("the browser service isn't told its id")
 	}
 }

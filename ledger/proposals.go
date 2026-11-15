@@ -63,6 +63,12 @@ type OperationPreview struct {
 	StatementChange *OperationStatementChange `json:"statement_change,omitempty"`
 	// PeriodChange is the close or reopening a period operation records.
 	PeriodChange *OperationPeriodChange `json:"period_change,omitempty"`
+	// BankChange is the bank activity a bank operation records or links.
+	BankChange *OperationBankChange `json:"bank_change,omitempty"`
+	// Warnings say, in plain words, when the entry moves accounts against
+	// their usual direction, judged by account types only. They never block
+	// a proposal; the owner sees them before deciding.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // OperationStatementChange is one statement decision: an import, a match,
@@ -244,6 +250,17 @@ func proposalEffect(ctx context.Context, tx pgx.Tx, s Scope, book Book, operatio
 			return OperationPreview{}, "", ErrInvalid
 		}
 		return operationPreview(book, entry, sources, deps), entry.ReceiptID, nil
+	}
+	if bankWriting(operation) {
+		p, err := bankPreview(book, operation, effect, sources, deps)
+		if err != nil {
+			return p, "", err
+		}
+		var receipt string
+		if err := tx.QueryRow(ctx, "SELECT id::text FROM public.requests WHERE tenant_id=$1 AND book_id=$2 AND actor_id=$3 AND request_key=$4", s.TenantID, s.BookID, s.ActorID, key).Scan(&receipt); err != nil {
+			return p, "", dbError(err)
+		}
+		return p, receipt, nil
 	}
 	p := emptyOperationPreview(book, sources)
 	existing := func(change string, a Account) OperationAccountChange {
@@ -517,6 +534,13 @@ func canonicalOperation(operation string, input []byte) (json.RawMessage, string
 			return nil, "", err
 		}
 		return raw(q), key, nil
+	case "link_bank_activity", "unlink_bank_activity", "record_bank_activity", "record_bank_transfer",
+		"link_bank_account", "disconnect_bank", "pause_bank_connection", "resume_bank_connection", "mark_bank_duplicate":
+		q, key, err := validBankChange(operation, input)
+		if err != nil {
+			return nil, "", err
+		}
+		return raw(q), key, nil
 	}
 	return nil, "", ErrInvalid
 }
@@ -544,6 +568,12 @@ func operationSources(operation string, args []byte) ([]SourceInput, error) {
 		sources = append(sources, q.Sources...)
 	case "retire_account":
 		var q RetireAccount
+		if strictjson.Decode(args, &q) != nil {
+			return nil, ErrInvalid
+		}
+		sources = append(sources, q.Sources...)
+	case "record_bank_activity":
+		var q RecordBankActivity
 		if strictjson.Decode(args, &q) != nil {
 			return nil, ErrInvalid
 		}
@@ -593,6 +623,11 @@ func operationPreview(book Book, entry Entry, sources []SourceInput, deps operat
 			amount.Neg(amount)
 		}
 		classes[class] = totals
+		if deltas[line.AccountID] == nil {
+			// Every line's account should be among the dependencies; a
+			// missing one is previewed without its balance, never a crash.
+			deltas[line.AccountID] = new(big.Int)
+		}
 		deltas[line.AccountID].Add(deltas[line.AccountID], amount)
 	}
 	for _, a := range deps.Accounts {
@@ -604,7 +639,34 @@ func operationPreview(book Book, entry Entry, sources []SourceInput, deps operat
 			p.Classes = append(p.Classes, OperationClassEffect{class, totals[0].String(), totals[1].String(), new(big.Int).Sub(totals[0], totals[1]).String()})
 		}
 	}
+	if entry.ReversalOf == "" {
+		p.Warnings = typeWarnings(classes)
+	}
 	return p
+}
+
+// typeWarnings flags income that goes down and expenses that go down, by
+// account class alone. Both can be right (a refund, a correction), so they
+// are shown, never refused.
+func typeWarnings(classes map[string][2]*big.Int) []string {
+	moved := func(class string, side int) bool {
+		t, ok := classes[class]
+		return ok && t[side].Sign() > 0
+	}
+	var out []string
+	switch {
+	case moved("income", 0) && (moved("asset", 1) || moved("liability", 1)):
+		out = append(out, "Money out recorded as income. This is unusual: it's right only for a refund to a customer.")
+	case moved("income", 0):
+		out = append(out, "This reduces income. That's unusual: it's right only for a refund or a correction.")
+	}
+	switch {
+	case moved("expense", 1) && (moved("asset", 0) || moved("liability", 0)):
+		out = append(out, "Money in recorded as an expense. This is unusual: it's right only for a refund from a supplier.")
+	case moved("expense", 1):
+		out = append(out, "This reduces an expense. That's unusual: it's right only for a refund or a correction.")
+	}
+	return out
 }
 
 var errOperationPreview = errors.New("operation preview complete")
@@ -679,6 +741,12 @@ func (s Store) prepareOperation(ctx context.Context, scope Scope, input []byte) 
 		if err = checkNewPreparation(ctx, tx, scope, key); err != nil {
 			return nil, err
 		}
+		if err = accountsInBook(ctx, tx, scope, q.Operation, args); err != nil {
+			return nil, err
+		}
+		if err = newProjectNameFree(ctx, tx, scope, q.Operation, args); err != nil {
+			return nil, err
+		}
 		if s.Authorize != nil {
 			if err = s.Authorize(ctx, tx, scope, q.Operation, args); err != nil {
 				return nil, err
@@ -692,6 +760,18 @@ func (s Store) prepareOperation(ctx context.Context, scope Scope, input []byte) 
 		if err != nil {
 			return nil, err
 		}
+		if BankOwnerDecision(q.Operation) {
+			book, err := readBook(ctx, tx, scope)
+			if err != nil {
+				return nil, dbError(err)
+			}
+			preview, err := previewBankManagement(ctx, tx, scope, book, q.Operation, args)
+			if err != nil {
+				return nil, err
+			}
+			payload = operationPayload{1, q.Operation, args, q.Assumptions, q.OpenQuestions, dependencies, preview}
+			return nil, errOperationPreview
+		}
 		if q.Operation == "close_period" || q.Operation == "reopen_period" {
 			book, err := readBook(ctx, tx, scope)
 			if err != nil {
@@ -704,7 +784,7 @@ func (s Store) prepareOperation(ctx context.Context, scope Scope, input []byte) 
 			payload = operationPayload{1, q.Operation, args, q.Assumptions, q.OpenQuestions, dependencies, preview}
 			return nil, errOperationPreview
 		}
-		effect, err := dispatch(ctx, tx, scope, q.Operation, args, nil)
+		effect, err := dispatch(withOwnerApproval(ctx), tx, scope, q.Operation, args, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -756,7 +836,17 @@ func (s Store) prepareOperation(ctx context.Context, scope Scope, input []byte) 
 		}
 		proposal, err := scanProposal(tx.QueryRow(ctx, `INSERT INTO public.operation_proposals(tenant_id,book_id,id,sequence,actor_id,connection_id,request_key,operation,operation_key,payload_bytes)
             VALUES($1,$2,$3,1,$4,$5,$6,$7,$8,$9) RETURNING `+proposalColumns, scope.TenantID, scope.BookID, ID(), scope.ActorID, scope.ConnectionID, q.RequestKey, q.Operation, key, []byte(data)))
-		return raw(proposal), dbError(err)
+		if err != nil {
+			return nil, dbError(err)
+		}
+		// Half of a pair: checked against the link, and the business half
+		// joined to its waiting personal half, or refused with the reason.
+		if pairedArguments(args) {
+			if _, err = tx.Exec(ctx, "SELECT public.pair_proposal($1,$2,$3)", scope.TenantID, scope.BookID, proposal.ID); err != nil {
+				return nil, pairError(err)
+			}
+		}
+		return raw(proposal), nil
 	})
 }
 
@@ -792,6 +882,21 @@ func (s Store) proposalCall(ctx context.Context, tx pgx.Tx, scope Scope, method 
 	return nil, ErrInvalid
 }
 
+type ownerApprovalKey struct{}
+
+// withOwnerApproval marks work that is recorded only with the owner's
+// approval: a proposal's preview, and an approved proposal as it runs. What
+// an agent may not do on its own, such as naming a new project, is allowed
+// there.
+func withOwnerApproval(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ownerApprovalKey{}, true)
+}
+
+func ownerApproves(ctx context.Context) bool {
+	approved, _ := ctx.Value(ownerApprovalKey{}).(bool)
+	return approved
+}
+
 type proposingKey struct{}
 
 // withProposingPhase marks the two transactions that prepare a proposal: the
@@ -803,4 +908,41 @@ func withProposingPhase(ctx context.Context, phase string) context.Context {
 func proposingPhase(ctx context.Context) string {
 	phase, _ := ctx.Value(proposingKey{}).(string)
 	return phase
+}
+
+// accountsInBook refuses, in words, an entry naming accounts that aren't in
+// this Book: another Book's half of a pair is prepared through the agent's
+// connection to that Book.
+func accountsInBook(ctx context.Context, tx pgx.Tx, s Scope, operation string, args json.RawMessage) error {
+	if operation != "post_journal" && operation != "record_bank_activity" {
+		return nil
+	}
+	var v struct {
+		OtherAccountID string     `json:"other_account_id"`
+		Lines          []PostLine `json:"lines"`
+	}
+	if json.Unmarshal(args, &v) != nil {
+		return nil
+	}
+	ids := []string{}
+	if ValidID(v.OtherAccountID) {
+		ids = append(ids, v.OtherAccountID)
+	}
+	for _, l := range v.Lines {
+		if ValidID(l.AccountID) {
+			ids = append(ids, l.AccountID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	var missing int
+	if err := tx.QueryRow(ctx, "SELECT count(*) FROM unnest($3::uuid[]) i WHERE NOT EXISTS(SELECT 1 FROM public.accounts a WHERE a.tenant_id=$1 AND a.book_id=$2 AND a.id=i)",
+		s.TenantID, s.BookID, ids).Scan(&missing); err != nil {
+		return dbError(err)
+	}
+	if missing > 0 {
+		return &RefusedError{Reason: "This entry names accounts that aren't in this Book. Prepare another Book's half of a pair through your connection to that Book."}
+	}
+	return nil
 }

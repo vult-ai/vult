@@ -136,8 +136,13 @@ func TestPortableArchiveRekeysAndKeepsEveryPostingAndRelationship(t *testing.T) 
 		}
 	}
 	connections, err := target.Owner.Connections(target.Context)
-	if err != nil || len(connections) != 0 {
-		t.Fatal("restore revived grants", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range connections {
+		if c.RevokedAt == nil {
+			t.Fatal("restore revived grants", c.ID)
+		}
 	}
 	connection, err := target.Owner.CreateConnection(target.Context, scope.BookID, "Example restored agent", "write")
 	if err != nil {
@@ -529,5 +534,41 @@ func TestSparseArchiveAndOverBudgetManifestFailBeforeObjectWrites(t *testing.T) 
 	provisioned = 0
 	if err = target.Owner.RestoreArchive(target.Context, vault, bytes.NewReader(oversized), provision); !errors.Is(err, ledger.ErrLimit) || control.creates != 0 || provisioned != 0 {
 		t.Fatal("logical budget was not rejected before effects", err, control.creates, provisioned)
+	}
+}
+
+// A Vult set up on a new computer, with its owner and no Books yet, takes a
+// backup: the owner stays the owner, of the restored Vult, and the empty
+// Vult it started with is gone.
+func TestABackupRestoresIntoAVultAlreadySetUp(t *testing.T) {
+	db, scope, _ := documentFixture(t)
+	postCitedJournal(t, db, scope, "opening", []ledger.SourceInput{{DocumentID: readyOriginal(t, db, scope, "statement").ID}})
+	var archive bytes.Buffer
+	if err := db.Owner.WriteArchive(db.Context, db.Store.Documents, &archive, ""); err != nil {
+		t.Fatal(err)
+	}
+	target := testutil.New(t)
+	empty, identity := ledger.ID(), ledger.ID()
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{"INSERT INTO public.tenants(id) VALUES($1)", []any{empty}},
+		{"INSERT INTO access.identities(id,issuer,subject) VALUES($1,'https://example.invalid','owner')", []any{identity}},
+		{"INSERT INTO access.owners(tenant_id,identity_id) VALUES($1,$2)", []any{empty, identity}},
+	} {
+		if _, err := target.Admin.Exec(target.Context, q.sql, q.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	vault, _ := restoreVault(t)
+	if err := target.Owner.RestoreArchive(target.Context, vault, bytes.NewReader(archive.Bytes()), nil); err != nil {
+		t.Fatal("restore into a Vult already set up", err)
+	}
+	var owned, tenants, books int
+	if err := target.Admin.QueryRow(target.Context, `SELECT (SELECT count(*) FROM access.owners WHERE tenant_id=$1 AND identity_id=$2),
+ (SELECT count(*) FROM public.tenants),(SELECT count(*) FROM public.books WHERE tenant_id=$1)`, scope.TenantID, identity).Scan(&owned, &tenants, &books); err != nil ||
+		owned != 1 || tenants != 1 || books != 1 {
+		t.Fatal("after restoring", owned, tenants, books, err)
 	}
 }

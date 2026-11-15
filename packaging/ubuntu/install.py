@@ -89,13 +89,18 @@ def inventory(data, current=False):
         raise InstallError("Incomplete program inventory.")
     required = {"vult", "LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md",
                 "postgres/bin/postgres", "postgres/bin/initdb", "postgres/bin/pg_ctl"}
+    # pg_controldata checks a clean shutdown before a copy is taken. A payload
+    # being installed must have it; an earlier installation may not.
+    known = required | {"postgres/bin/pg_controldata"}
+    if current:
+        required = known
     if not required.issubset(files) or not any(name.startswith("postgres/lib/") for name in files) or not any(name.startswith("postgres/share/") for name in files):
         raise InstallError("Incomplete native runtime inventory.")
     for name, digest in files.items():
         parts = PurePosixPath(name).parts if isinstance(name, str) else ()
         if not parts or name != PurePosixPath(name).as_posix() or name.startswith("/") or any(part in (".", "..") or part.startswith(".") for part in parts) or "\\" in name:
             raise InstallError("Invalid managed program path.")
-        if name not in required and not name.startswith("postgres/lib/") and not name.startswith("postgres/share/"):
+        if name not in known and not name.startswith("postgres/lib/") and not name.startswith("postgres/share/"):
             raise InstallError("Unknown managed program path.")
         if not checksum(digest):
             raise InstallError("Invalid program checksum.")
@@ -587,7 +592,7 @@ class Installer:
         self.directory(UPDATER_STATE, 0, 0, 0o755)
         for name, mode in (("trust", 0o755), ("journal", 0o755), ("trust/metadata", 0o700), ("staging", 0o700), ("copies", 0o700)):
             self.directory(UPDATER_STATE + "/" + name, 0, 0, mode)
-        for name in ("request.json", "check.json"):
+        for name in ("request.json", "check.json", "notice.json"):
             request = UPDATER_STATE + "/" + name
             if not self.exists(request):
                 self.write(request, b"", 0o644)

@@ -45,17 +45,23 @@ func prepareDocumentStorage(ctx context.Context, admin ledger.Admin, data string
 	}()
 	// Missing historic keys require recovery. Never silently generate new keys
 	// over a database that still refers to an existing original or upload.
-	rows, err := admin.DB.Query(ctx, "SELECT DISTINCT tenant_id::text,key_id FROM public.documents WHERE state<>'expired'")
+	// A document sealed with its Book's own key needs that Book's key.
+	rows, err := admin.DB.Query(ctx, "SELECT DISTINCT tenant_id::text,CASE WHEN key_id=$1 THEN book_id::text ELSE '' END,key_id FROM public.documents WHERE state<>'expired'", documents.BookKeyID)
 	if err != nil {
 		return nil, documents.ErrUnavailable
 	}
 	for rows.Next() {
-		var tenant, version string
-		if rows.Scan(&tenant, &version) != nil {
+		var tenant, book, version string
+		if rows.Scan(&tenant, &book, &version) != nil {
 			rows.Close()
 			return nil, documents.ErrUnavailable
 		}
-		if _, err = keys.Identity(ctx, tenant, version); err != nil {
+		if version == documents.BookKeyID {
+			_, err = keys.BookIdentity(ctx, tenant, book)
+		} else {
+			_, err = keys.Identity(ctx, tenant, version)
+		}
+		if err != nil {
 			rows.Close()
 			return nil, errors.New("document keys need recovery")
 		}

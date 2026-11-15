@@ -38,6 +38,16 @@ type PeriodCloseRequest struct {
 	Reason     string `json:"reason,omitempty"`
 }
 
+// BookDeleteRequest is the operator's deletion of a Book: the Book, its
+// exact name, and whether to erase it now instead of after the waiting
+// period. Cancel stops a deletion instead.
+type BookDeleteRequest struct {
+	BookID string `json:"book_id"`
+	Name   string `json:"name,omitempty"`
+	Now    bool   `json:"now,omitempty"`
+	Cancel bool   `json:"cancel,omitempty"`
+}
+
 type Request struct {
 	Method        string          `json:"method"`
 	Authorization string          `json:"authorization,omitempty"`

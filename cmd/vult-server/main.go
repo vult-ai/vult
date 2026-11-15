@@ -5,11 +5,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/vult-ai/vult/doccheck"
+	"github.com/vult-ai/vult/ledger"
 	"io"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/vult-ai/vult/internal/strictjson"
 	"github.com/vult-ai/vult/server"
@@ -39,6 +42,8 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	if strictjson.Decode(b, &config) != nil {
 		return server.ErrConfiguration
 	}
+	// What this release sets aside stays out of reach.
+	config.SetAside = true
 	// Validate network configuration before opening a database or listener.
 	if _, e = server.New(config, server.Options{}); e != nil {
 		return e
@@ -60,10 +65,25 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	if closer != nil {
 		defer closer.Close()
 	}
-	s, e := server.New(config, server.Options{Database: db, Access: auth, Documents: documents, Web: web.App()})
+	banks, e := server.OpenBanks(config, ledger.Store{Runtime: db}, nil)
 	if e != nil {
 		return e
 	}
+	agent := server.OpenAgent(ledger.Store{Runtime: db})
+	deletion := server.BookDeletionPolicy{BackupRetention: time.Duration(config.BackupRetentionDays) * 24 * time.Hour}
+	options := server.Options{Database: db, Access: auth, Documents: documents, Web: web.App(), Banks: banks, Agent: agent, BookDeletion: deletion}
+	// This program has no assistant of its own to help read documents.
+	options.DocumentAdded = doccheck.Hook(nil)
+	s, e := server.New(config, options)
+	if e != nil {
+		return e
+	}
+	if banks != nil {
+		go banks.Run(ctx)
+	}
+	// Books whose deletion waiting period is over are erased here.
+	eraser := &server.BookEraser{DB: db, Documents: documents, Policy: deletion}
+	go eraser.Run(ctx)
 	listener, e := net.Listen("tcp", s.Addr)
 	if e != nil {
 		return server.ErrUnavailable

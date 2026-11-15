@@ -156,7 +156,8 @@ func (s *Server) agentRequest(uid uint32, input json.RawMessage) (json.RawMessag
 	if !ok {
 		return nil, ledger.ErrInvalid
 	}
-	if s.Browser == nil || !s.Browser.configuration.valid() {
+	origin := s.Browser.agentOrigin()
+	if origin == "" {
 		return nil, errors.New("the local browser is not installed; reinstall Vult")
 	}
 	s.mu.Lock()
@@ -171,7 +172,7 @@ func (s *Server) agentRequest(uid uint32, input json.RawMessage) (json.RawMessag
 	}
 	id := secret()
 	s.agents[id] = &agentRequest{uid: uid, client: client, created: now, state: local.AgentWaiting}
-	return marshal(local.AgentTicket{Request: id, ApproveURL: s.Browser.configuration.origin() + "/auth/agent?request=" + id}), nil
+	return marshal(local.AgentTicket{Request: id, ApproveURL: origin + "/auth/agent?request=" + id}), nil
 }
 
 func (s *Server) agentStatus(uid uint32, input json.RawMessage) (json.RawMessage, error) {

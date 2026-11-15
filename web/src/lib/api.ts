@@ -76,6 +76,8 @@ export type Book = {
   accounting_today?: string;
   /** Accepted settings revision; 0 before the first change. */
   metadata_revision?: number;
+  /** Put away: out of the Book menu, with everything in it kept. */
+  archived?: boolean;
   currency: string;
   scale: number;
   /** The Book's logo or photo, when one is set (lib/book-logo). */

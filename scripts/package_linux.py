@@ -108,13 +108,13 @@ def main():
     p.add_argument("--output", type=Path, required=True, help="new directory for the image layouts")
     p.add_argument("--web-dist", type=Path, required=True, help="built interface from the same source")
     p.add_argument("--web-sha256", required=True, help="expected interface file-manifest checksum")
-    p.add_argument("--go", default="go", help="Go 1.27.3 executable")
+    p.add_argument("--go", default="go", help="Go 1.27.4 executable")
     args = p.parse_args()
     if interface_files(args.web_dist)[1] != args.web_sha256:
         p.error("interface build checksum mismatch")
     go = shutil.which(args.go)
     if not go:
-        p.error("Go 1.27.3 is required")
+        p.error("Go 1.27.4 is required")
     env = dict(ENV, HOME=str(Path.home()), CGO_ENABLED="0", GOOS="linux", GOARCH=ARCH, GOTOOLCHAIN="local", GOFLAGS="-mod=readonly", GOPROXY="https://proxy.golang.org,direct", GOSUMDB="sum.golang.org")
     version = subprocess.check_output([go, "version"], env=env, timeout=10).decode().split()[2]
     if version != GO_VERSION:

@@ -30,6 +30,43 @@ func oauthJSON(w http.ResponseWriter, status int, v any) {
 func oauthFailure(w http.ResponseWriter, status int, code string) {
 	oauthJSON(w, status, map[string]string{"error": code, "error_description": "Authorization could not be confirmed. Restart sign-in or reconnect the app."})
 }
+
+// authorizeFailure is what the person sees in their browser when an app's
+// connection request can't go ahead: a readable page, not a protocol error.
+func authorizeFailure(w http.ResponseWriter, status int, _ string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'")
+	w.WriteHeader(status)
+	_ = failurePage.Execute(w, nil)
+}
+
+var failurePage = template.Must(template.New("failure").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Couldn't connect the app · Vult</title>` + authHead + `</head><body>` + authBar + `<main><h1>Couldn't connect the app</h1><p>Vult couldn't confirm this connection request. It may have expired, or the app sent something Vult doesn't accept.</p><p>Go back to the app and connect Vult again. Nothing was shared.</p></main></body></html>`))
+
+// requestedAccess reads an authorization request's scope: any non-empty set
+// of the advertised scopes, or none. The request asks for the most it names;
+// the owner chooses what the app actually gets on the consent screen.
+func requestedAccess(scope string) (string, bool) {
+	fields := strings.Fields(scope)
+	if len(fields) == 0 && scope == "" {
+		return "write", true
+	}
+	if len(fields) == 0 || len(fields) > 2 || strings.Join(fields, " ") != scope {
+		return "", false
+	}
+	access, seen := "read", map[string]bool{}
+	for _, f := range fields {
+		if seen[f] || f != "ledger:read" && f != "ledger:write" {
+			return "", false
+		}
+		seen[f] = true
+		if f == "ledger:write" {
+			access = "write"
+		}
+	}
+	return access, true
+}
+
 func single(v url.Values) bool {
 	for _, values := range v {
 		if len(values) != 1 {
@@ -142,19 +179,20 @@ var consentPage = template.Must(template.New("consent").Parse(`<!doctype html><h
 func (h *OAuthHTTP) authorize(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	if !single(q) {
-		oauthFailure(w, 400, "invalid_request")
+		authorizeFailure(w, 400, "invalid_request")
 		return
 	}
 	request := q.Get("request")
 	if request == "" {
-		if q.Get("response_type") != "code" || q.Get("code_challenge_method") != "S256" || (q.Get("scope") != "ledger:read" && q.Get("scope") != "ledger:write") {
-			oauthFailure(w, 400, "invalid_request")
+		access, ok := requestedAccess(q.Get("scope"))
+		if q.Get("response_type") != "code" || q.Get("code_challenge_method") != "S256" || !ok {
+			authorizeFailure(w, 400, "invalid_request")
 			return
 		}
 		var e error
-		request, e = h.s.StartAuthorization(r.Context(), Authorization{q.Get("client_id"), q.Get("redirect_uri"), q.Get("resource"), q.Get("code_challenge"), q.Get("state"), strings.TrimPrefix(q.Get("scope"), "ledger:")})
+		request, e = h.s.StartAuthorization(r.Context(), Authorization{q.Get("client_id"), q.Get("redirect_uri"), q.Get("resource"), q.Get("code_challenge"), q.Get("state"), access})
 		if e != nil {
-			oauthFailure(w, 400, "invalid_request")
+			authorizeFailure(w, 400, "invalid_request")
 			return
 		}
 		cookie(w, pendingCookie, request, 300)
@@ -163,12 +201,12 @@ func (h *OAuthHTTP) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	pending, e := r.Cookie(pendingCookie)
 	if e != nil || !validToken(request) || subtle.ConstantTimeCompare([]byte(request), []byte(pending.Value)) != 1 {
-		oauthFailure(w, 400, "invalid_request")
+		authorizeFailure(w, 400, "invalid_request")
 		return
 	}
 	info, e := h.s.PendingAuthorization(r.Context(), request)
 	if e != nil {
-		oauthFailure(w, 400, "invalid_request")
+		authorizeFailure(w, 400, "invalid_request")
 		return
 	}
 	session, e := r.Cookie(SessionCookie)
@@ -185,14 +223,14 @@ func (h *OAuthHTTP) authorize(w http.ResponseWriter, r *http.Request) {
 	connections := []connectionChoice{}
 	rows, e := h.s.auth.Query(r.Context(), "SELECT tenant_id::text,book_id::text,name FROM access.consent_books($1,$2)", Hash(session.Value), h.s.origin)
 	if e != nil {
-		oauthFailure(w, 503, "temporarily_unavailable")
+		authorizeFailure(w, 503, "temporarily_unavailable")
 		return
 	}
 	for rows.Next() {
 		var tenant, id, name string
 		if rows.Scan(&tenant, &id, &name) != nil {
 			rows.Close()
-			oauthFailure(w, 503, "temporarily_unavailable")
+			authorizeFailure(w, 503, "temporarily_unavailable")
 			return
 		}
 		books = append(books, bookChoice{tenant + "/" + id, name})
@@ -200,19 +238,19 @@ func (h *OAuthHTTP) authorize(w http.ResponseWriter, r *http.Request) {
 	e = rows.Err()
 	rows.Close()
 	if e != nil || len(books) > 100 {
-		oauthFailure(w, 503, "temporarily_unavailable")
+		authorizeFailure(w, 503, "temporarily_unavailable")
 		return
 	}
 	rows, e = h.s.auth.Query(r.Context(), "SELECT connection_id::text,name FROM access.consent_connections($1,$2)", Hash(session.Value), h.s.origin)
 	if e != nil {
-		oauthFailure(w, 503, "temporarily_unavailable")
+		authorizeFailure(w, 503, "temporarily_unavailable")
 		return
 	}
 	for rows.Next() {
 		var choice connectionChoice
 		if rows.Scan(&choice.ID, &choice.Name) != nil {
 			rows.Close()
-			oauthFailure(w, 503, "temporarily_unavailable")
+			authorizeFailure(w, 503, "temporarily_unavailable")
 			return
 		}
 		connections = append(connections, choice)
@@ -220,11 +258,11 @@ func (h *OAuthHTTP) authorize(w http.ResponseWriter, r *http.Request) {
 	e = rows.Err()
 	rows.Close()
 	if e != nil || len(connections) > 100 {
-		oauthFailure(w, 503, "temporarily_unavailable")
+		authorizeFailure(w, 503, "temporarily_unavailable")
 		return
 	}
 	if len(books) == 0 {
-		oauthFailure(w, 403, "access_denied")
+		authorizeFailure(w, 403, "access_denied")
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -241,28 +279,28 @@ func (h *OAuthHTTP) authorize(w http.ResponseWriter, r *http.Request) {
 func (h *OAuthHTTP) consent(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 8192)
 	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") || r.ParseForm() != nil || !single(r.PostForm) {
-		oauthFailure(w, 400, "invalid_request")
+		authorizeFailure(w, 400, "invalid_request")
 		return
 	}
 	session, e := r.Cookie(SessionCookie)
 	pending, pendingError := r.Cookie(pendingCookie)
 	if e != nil || pendingError != nil || !validToken(pending.Value) || pending.Value != r.PostForm.Get("request") || len(r.Header.Values("Origin")) != 1 || r.Header.Get("Origin") != h.s.origin || subtle.ConstantTimeCompare([]byte(csrf(session.Value)), []byte(r.PostForm.Get("csrf"))) != 1 {
-		oauthFailure(w, 403, "access_denied")
+		authorizeFailure(w, 403, "access_denied")
 		return
 	}
 	decision := r.PostForm.Get("decision")
 	if decision != "allow" && decision != "deny" {
-		oauthFailure(w, 400, "invalid_request")
+		authorizeFailure(w, 400, "invalid_request")
 		return
 	}
 	book := strings.Split(r.PostForm.Get("book"), "/")
 	if len(book) != 2 || !ledger.ValidID(book[0]) || !ledger.ValidID(book[1]) {
-		oauthFailure(w, 400, "invalid_request")
+		authorizeFailure(w, 400, "invalid_request")
 		return
 	}
 	destination, e := h.s.ConsentAuthorization(r.Context(), session.Value, pending.Value, book[0], book[1], r.PostForm.Get("access"), r.PostForm.Get("connection"), decision == "deny")
 	if e != nil {
-		oauthFailure(w, 403, "access_denied")
+		authorizeFailure(w, 403, "access_denied")
 		return
 	}
 	cookie(w, pendingCookie, "", -1)

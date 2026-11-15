@@ -33,4 +33,16 @@ export const toast = {
   success: (message: string) => sonner.success(message),
   info: (message: string) => sonner.info(message),
   caution: (message: string) => sonner.warning(message),
+  /** One that stays until it's closed, with one action beside it. */
+  lasting: (id: string, message: string, action: { label: string; onClick: () => void }, onClose: () => void) => {
+    let done = false;
+    const close = () => { if (!done) { done = true; onClose(); } };
+    return sonner.info(message, {
+      id,
+      duration: Infinity,
+      closeButton: true,
+      action: { label: action.label, onClick: () => { close(); action.onClick(); } },
+      onDismiss: close,
+    });
+  },
 };

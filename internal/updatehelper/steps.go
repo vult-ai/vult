@@ -29,7 +29,11 @@ type Layout struct {
 	ArchivePrefix string
 	Data          string // the ledger's data directory
 	Copies        string // root-only copies of the data taken before updates
+	Recovery      string // the installer's recovery points, when it takes them
 	State         string // the helper's own directory
+	// Browser is the browser service's folder, whose keys folder every
+	// update prepares; empty where there's none.
+	Browser string
 }
 
 func (l Layout) Journal() string { return filepath.Join(l.State, "journal") }

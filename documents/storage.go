@@ -80,7 +80,7 @@ func (v Vault) Write(ctx context.Context, o Object, plain io.Reader) error {
 	if v.Storage == nil || v.Keys == nil {
 		return ErrUnavailable
 	}
-	key, err := v.Keys.Recipient(ctx, o.TenantID, o.KeyID)
+	key, err := v.recipient(ctx, o)
 	if err != nil || key == nil {
 		return ErrUnavailable
 	}
@@ -125,7 +125,7 @@ func (v Vault) Read(ctx context.Context, o Object, dst io.Writer) error {
 	if v.Storage == nil || v.Keys == nil {
 		return ErrUnavailable
 	}
-	key, err := v.Keys.Identity(ctx, o.TenantID, o.KeyID)
+	key, err := v.identity(ctx, o)
 	if err != nil || key == nil {
 		return ErrUnavailable
 	}

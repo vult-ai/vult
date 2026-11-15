@@ -1,5 +1,5 @@
 ---
-{"id":"agent-reference","title":"Agent and CLI reference","description":"The tools agents can use, how amounts and retries work, and the owner commands.","group":"Reference","order":11,"keywords":["mcp","tools","cli","commands","request key","retry","amount","minor unit","scale","post_journal","prepare_operation","vult"]}
+{"id":"agent-reference","title":"Agent and CLI reference","description":"The tools agents can use, how amounts and retries work, and the owner commands.","group":"Reference","order":13,"keywords":["mcp","tools","cli","commands","request key","retry","amount","minor unit","scale","post_journal","prepare_operation","vult"]}
 ---
 
 ## Agent tools {#tools}

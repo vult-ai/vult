@@ -263,16 +263,39 @@ func applyStarterChart(ctx context.Context, tx pgx.Tx, s Scope, q ApplyStarterCh
 	if !ok {
 		return nil, ErrInvalid
 	}
-	var occupied bool
-	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM public.accounts WHERE tenant_id=$1 AND book_id=$2)", s.TenantID, s.BookID).Scan(&occupied); err != nil {
-		return nil, dbError(err)
+	// A Book may already hold the accounts its bank accounts were linked
+	// to: the chart keeps them, and leaves out its own account of each of
+	// their roles and any code already used.
+	existing, err := bankLinkedAccounts(ctx, tx, s)
+	if err != nil {
+		return nil, err
 	}
-	if occupied {
-		return nil, ErrConflict
+	// Each linked bank account takes the place of the chart's account of its
+	// kind (checking, savings, card); one of an unknown kind, the first of
+	// its role.
+	types, roles, codes := map[string]int{}, map[string]int{}, map[string]bool{}
+	for _, a := range existing {
+		codes[a.code] = true
+		if a.bankType != "" && chartHasBankType(chart, a.bankType) {
+			types[a.bankType]++
+		} else {
+			roles[a.role]++
+		}
 	}
 	out := AppliedStarterChart{Template: chart.ID, Accounts: []Account{}}
 	ids := map[string]string{}
 	for _, item := range chart.Accounts {
+		if codes[item.Code] {
+			continue
+		}
+		if item.BankType != "" && types[item.BankType] > 0 {
+			types[item.BankType]--
+			continue
+		}
+		if (item.Role == "cash" || item.Role == "card") && roles[item.Role] > 0 {
+			roles[item.Role]--
+			continue
+		}
 		a := Account{ID: ID(), Class: item.Class, Code: item.Code, Name: item.Name, Revision: 1, Role: item.Role, ParentAccountID: ids[item.Parent], Heading: item.Heading}
 		if item.Role != "" {
 			a.RoleRevision = &a.Revision
@@ -282,6 +305,11 @@ func applyStarterChart(ctx context.Context, tx pgx.Tx, s Scope, q ApplyStarterCh
 		}
 		if err := recordAccountRevision(ctx, tx, s, a, receipt, ""); err != nil {
 			return nil, err
+		}
+		if item.TaxSensitive {
+			if _, err := tx.Exec(ctx, "INSERT INTO public.agent_tax_sensitive_accounts(tenant_id,book_id,account_id,actor_id) VALUES($1,$2,$3,$4)", s.TenantID, s.BookID, a.ID, s.ActorID); err != nil {
+				return nil, err
+			}
 		}
 		ids[item.Code] = a.ID
 		out.Accounts = append(out.Accounts, a)
@@ -295,6 +323,64 @@ func validStarterChartRequest(q ApplyStarterChart) error {
 	}
 	if _, ok := StarterChart(q.Template); !ok {
 		return fmt.Errorf("%w: unknown starter chart", ErrInvalid)
+	}
+	return nil
+}
+
+type linkedAccount struct{ id, code, role, bankType string }
+
+func chartHasBankType(chart StarterChartTemplate, bankType string) bool {
+	for _, a := range chart.Accounts {
+		if a.BankType == bankType {
+			return true
+		}
+	}
+	return false
+}
+
+// bankLinkedAccounts lists the Book's accounts, and reports whether each is
+// one a bank account is linked to.
+func bankLinkedAccounts(ctx context.Context, tx pgx.Tx, s Scope) ([]linkedAccount, error) {
+	rows, err := tx.Query(ctx, `SELECT a.id::text,coalesce(r.code,''),coalesce(a.role,''),
+ coalesce((SELECT lower(b.provider_subtype) FROM public.bank_accounts b WHERE b.tenant_id=a.tenant_id AND b.book_id=a.book_id AND b.account_id=a.id LIMIT 1),'')
+ FROM public.accounts a
+ LEFT JOIN LATERAL (SELECT x.code FROM public.account_revisions x WHERE x.tenant_id=a.tenant_id AND x.book_id=a.book_id AND x.account_id=a.id ORDER BY x.revision DESC LIMIT 1) r ON true
+ WHERE a.tenant_id=$1 AND a.book_id=$2 AND EXISTS(SELECT 1 FROM public.bank_accounts b WHERE b.tenant_id=a.tenant_id AND b.book_id=a.book_id AND b.account_id=a.id)`, s.TenantID, s.BookID)
+	if err != nil {
+		return nil, dbError(err)
+	}
+	defer rows.Close()
+	var out []linkedAccount
+	for rows.Next() {
+		var a linkedAccount
+		if err := rows.Scan(&a.id, &a.code, &a.role, &a.bankType); err != nil {
+			return nil, dbError(err)
+		}
+		out = append(out, a)
+	}
+	return out, dbError(rows.Err())
+}
+
+// starterChartFits refuses a starter chart, in words, for a Book that
+// already holds accounts other than those its bank accounts are linked to.
+func starterChartFits(ctx context.Context, tx pgx.Tx, s Scope, q ApplyStarterChart) error {
+	// A retry of the same request returns what it did.
+	var retry bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM public.requests WHERE tenant_id=$1 AND book_id=$2 AND actor_id=$3 AND request_key=$4)",
+		s.TenantID, s.BookID, s.ActorID, q.RequestKey).Scan(&retry); err != nil {
+		return dbError(err)
+	}
+	if retry {
+		return nil
+	}
+	var others int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM public.accounts a WHERE a.tenant_id=$1 AND a.book_id=$2
+ AND NOT EXISTS(SELECT 1 FROM public.bank_accounts b WHERE b.tenant_id=a.tenant_id AND b.book_id=a.book_id AND b.account_id=a.id)`,
+		s.TenantID, s.BookID).Scan(&others); err != nil {
+		return dbError(err)
+	}
+	if others > 0 {
+		return &RefusedError{Reason: "This Book already has accounts, so a starter chart can't be added; a chart goes into a new Book, or one with only its bank accounts. Add the accounts you need one at a time with create_account."}
 	}
 	return nil
 }

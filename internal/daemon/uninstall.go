@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -24,7 +25,21 @@ type removalManifest struct {
 	BrowserDaemonSHA256 string            `json:"browser_daemon_sha256,omitempty"`
 	ExternalFiles       map[string]string `json:"external_files,omitempty"`
 }
-type removalPaths struct{ Code, Startup, Policy, Shortcut, Retained string }
+type removalPaths struct{ Code, Startup, Updater, Policy, Shortcut, Retained string }
+
+// The update helper is installed beside the program on macOS: its launchd
+// job and its own program folder. The inventory names both by their
+// installed paths; tests place them under removalPaths.
+const (
+	updaterLabel   = "ai.vult.update-helper"
+	updaterStartup = "/Library/LaunchDaemons/ai.vult.update-helper.plist"
+	updaterProgram = "/Library/PrivilegedHelperTools/ai.vult.updater/vult-update-helper"
+)
+
+func updaterStartupPath(p removalPaths) string {
+	return filepath.Join(filepath.Dir(p.Startup), updaterLabel+".plist")
+}
+
 type removalResult struct {
 	Removed int
 	Kept    []string
@@ -52,7 +67,7 @@ func programPath(root, name string) (string, error) {
 		return "", errors.New("invalid managed program path")
 	}
 	switch name {
-	case "vult", "LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md",
+	case "vult", "vult-enclave", "vult-ocr", "LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md",
 		"Vult Browser Setup.app/Contents/Info.plist",
 		"Vult Browser Setup.app/Contents/MacOS/browser-setup",
 		"Vult Browser Setup.app/Contents/_CodeSignature/CodeResources":
@@ -163,8 +178,23 @@ func managedExternalFiles(p removalPaths, m removalManifest) (map[string]string,
 			files[destination] = m.ExternalFiles[source]
 		}
 	} else {
-		if len(m.ExternalFiles) != 0 || p.Policy != "" {
+		if p.Policy != "" {
 			return nil, errors.New("unexpected external program files")
+		}
+		if len(m.ExternalFiles) != 0 {
+			if p.Updater == "" || len(m.ExternalFiles) != 2 {
+				return nil, errors.New("unexpected external program files")
+			}
+			for source, destination := range map[string]string{
+				updaterStartup: updaterStartupPath(p),
+				updaterProgram: filepath.Join(p.Updater, filepath.Base(updaterProgram)),
+			} {
+				sum, ok := m.ExternalFiles[source]
+				if !ok {
+					return nil, errors.New("unexpected external program files")
+				}
+				files[destination] = sum
+			}
 		}
 		files[p.Startup] = m.LaunchDaemonSHA256
 		if m.BrowserDaemonSHA256 != "" {
@@ -243,6 +273,9 @@ func removeProgram(p removalPaths, uid uint32, stop func() error) (removalResult
 		if e = remove(path, external[path]); e != nil {
 			return r, e
 		}
+		if p.Updater != "" && filepath.Dir(path) == p.Updater {
+			directories[p.Updater] = true
+		}
 	}
 	for _, name := range names {
 		path, e := programPath(p.Code, name)
@@ -285,4 +318,26 @@ func removeProgram(p removalPaths, uid uint32, stop func() error) (removalResult
 		}
 	}
 	return r, nil
+}
+
+// CheckProgramInventory checks a program inventory the way stopping,
+// upgrading and uninstalling read it: its format, this program's version,
+// and that every file it names is one this program recognizes.
+func CheckProgramInventory(data []byte) error {
+	var m removalManifest
+	if strictjson.Decode(data, &m) != nil || m.Format != "vult-program-files-v1" && m.Format != "vult-program-files-linux-v1" || m.Version != Version || len(m.Files) == 0 {
+		return errors.New("unsupported program inventory")
+	}
+	// An empty folder stands in for the program folder: only names count.
+	root, err := os.MkdirTemp("", "vult-inventory-check-")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(root)
+	for name := range m.Files {
+		if _, err := programPath(root, name); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+	}
+	return nil
 }

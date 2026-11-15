@@ -538,9 +538,10 @@ test("Settings follows the heading/subtitle/tab layout with keyboard navigation 
       await selectTab("General");
       assert.equal(
         f.reads.length,
-        reads + 4,
-        "identity, closed periods and payees load once on first visit; revisiting tabs does not reread or reset mounted forms",
+        reads + 6,
+        "identity, closed periods, payees, whether the Book is archived and the latest backup load once on first visit; revisiting tabs does not reread or reset mounted forms",
       );
+      assert.equal(f.reads.filter((r) => r.path === "/api/v1/backups").length, 1, "Restore reads the latest backup once, when Data is opened");
       assert.equal(
         f.reads.filter((read) => read.path === "/api/v1/periods").length,
         1,
